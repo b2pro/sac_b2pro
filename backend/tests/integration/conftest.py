@@ -3,6 +3,8 @@ import os
 from collections.abc import AsyncIterator
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -10,6 +12,9 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+from sac.infrastructure.settings import Settings
+from sac.interface.app import create_app
 
 ADMIN_URL = "postgresql+asyncpg://sac:sac@localhost:5432/postgres"
 TEST_DB_URL = "postgresql+asyncpg://sac:sac@localhost:5432/sac_test"
@@ -54,3 +59,17 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
+
+
+@pytest.fixture
+async def app(engine: AsyncEngine, database: str) -> AsyncIterator[FastAPI]:
+    application = create_app(Settings(database_url=database))
+    yield application
+    await application.state.engine.dispose()
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
