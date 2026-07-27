@@ -8,8 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sac.application.ports import TokenPayload
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
+from sac.application.use_cases.platform_tenants import (
+    CreateTenantUseCase,
+    ListTenantsUseCase,
+    SetTenantModulesUseCase,
+    SetTenantStatusUseCase,
+)
 from sac.domain.errors import AuthError, PermissionDeniedError
 from sac.domain.permissions import Permission, has_permission
+from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
     SqlUserRepository,
@@ -67,6 +74,35 @@ def get_refresh_use_case(
         SqlUserTenantRepository(session),
         tokens,
     )
+
+
+def get_tenant_provisioner(request: Request) -> AlembicTenantProvisioner:
+    return AlembicTenantProvisioner(request.app.state.engine)
+
+
+def get_create_tenant_use_case(
+    session: AsyncSession = Depends(get_session),
+    provisioner: AlembicTenantProvisioner = Depends(get_tenant_provisioner),
+) -> CreateTenantUseCase:
+    return CreateTenantUseCase(SqlTenantRepository(session), provisioner)
+
+
+def get_list_tenants_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> ListTenantsUseCase:
+    return ListTenantsUseCase(SqlTenantRepository(session))
+
+
+def get_set_tenant_status_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> SetTenantStatusUseCase:
+    return SetTenantStatusUseCase(SqlTenantRepository(session))
+
+
+def get_set_tenant_modules_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> SetTenantModulesUseCase:
+    return SetTenantModulesUseCase(SqlTenantRepository(session))
 
 
 _bearer = HTTPBearer(auto_error=False)

@@ -1,8 +1,9 @@
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.use_cases.auth import AuthResult
+from sac.domain.entities import Tenant, TenantStatus
 
 
 class LoginIn(BaseModel):
@@ -45,4 +46,36 @@ def login_out(result: AuthResult) -> LoginOut:
         ),
         tenant_slug=result.tenant_slug,
         role=result.role.value if result.role else None,
+    )
+
+
+class TenantCreateIn(BaseModel):
+    slug: str
+    name: str
+    modules: dict[str, bool] = Field(default_factory=dict)
+
+
+class TenantStatusIn(BaseModel):
+    status: TenantStatus
+
+
+class TenantModulesIn(BaseModel):
+    modules: dict[str, bool]
+
+
+class TenantOut(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    status: TenantStatus
+    modules: dict[str, bool]
+
+
+def tenant_out(tenant: Tenant) -> TenantOut:
+    return TenantOut(
+        id=tenant.id,
+        slug=tenant.slug,
+        name=tenant.name,
+        status=tenant.status,
+        modules=tenant.modules,
     )

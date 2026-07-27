@@ -8,7 +8,7 @@ from sac.infrastructure.db import build_engine, build_session_factory
 from sac.infrastructure.settings import Settings
 from sac.interface.errors import register_error_handlers
 from sac.interface.rate_limit import SlidingWindowRateLimiter
-from sac.interface.routers import auth, health
+from sac.interface.routers import auth, health, platform_tenants
 
 
 @asynccontextmanager
@@ -34,4 +34,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(app)
     app.include_router(health.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
+    app.include_router(platform_tenants.router, prefix="/api")
     return app
