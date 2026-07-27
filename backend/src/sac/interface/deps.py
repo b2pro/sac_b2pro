@@ -1,10 +1,15 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
 from functools import lru_cache
+from typing import Any
 
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sac.application.ports import TokenPayload
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
+from sac.domain.errors import AuthError, PermissionDeniedError
+from sac.domain.permissions import Permission, has_permission
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
     SqlUserRepository,
@@ -62,3 +67,51 @@ def get_refresh_use_case(
         SqlUserTenantRepository(session),
         tokens,
     )
+
+
+_bearer = HTTPBearer(auto_error=False)
+
+IdentityDependency = Callable[..., Coroutine[Any, Any, TokenPayload]]
+
+
+async def get_current_identity(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    tokens: JwtTokenService = Depends(get_token_service),
+) -> TokenPayload:
+    if credentials is None:
+        raise AuthError("credenciais ausentes")
+    return tokens.decode(credentials.credentials, expected_type="access")
+
+
+async def require_super_admin(
+    identity: TokenPayload = Depends(get_current_identity),
+) -> TokenPayload:
+    if not identity.is_super_admin:
+        raise PermissionDeniedError("acesso restrito ao painel da plataforma")
+    return identity
+
+
+def require_permission(permission: Permission) -> IdentityDependency:
+    async def dependency(
+        identity: TokenPayload = Depends(get_current_identity),
+    ) -> TokenPayload:
+        if identity.role is None or not has_permission(identity.role, permission):
+            raise PermissionDeniedError("permissao insuficiente")
+        return identity
+
+    return dependency
+
+
+def require_module(module: str) -> IdentityDependency:
+    async def dependency(
+        identity: TokenPayload = Depends(get_current_identity),
+        session: AsyncSession = Depends(get_session),
+    ) -> TokenPayload:
+        if identity.tenant_slug is None:
+            raise PermissionDeniedError("modulo indisponivel fora de um tenant")
+        tenant = await SqlTenantRepository(session).get_by_slug(identity.tenant_slug)
+        if tenant is None or not tenant.modules.get(module, False):
+            raise PermissionDeniedError(f"modulo nao habilitado: {module}")
+        return identity
+
+    return dependency
