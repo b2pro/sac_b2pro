@@ -19,6 +19,8 @@ Sistema de SAC para automatizar o controle de trocas e defeitos hoje feito em pl
 - **Clean Architecture** no backend: domínio independente de framework; camadas domain / application (use cases) / infrastructure (ORM, FastAPI) / interface (routers). Dependências apontam para dentro.
 - **TDD no backend**: escrever teste antes da implementação (red-green-refactor). Pytest.
 - Front pode ser testado com **Playwright** quando necessário.
+- **Sem CI**: verificações rodam localmente antes de cada commit — backend `ruff check`, `ruff format --check`, `mypy`, `pytest`; frontend `tsc --noEmit`, `eslint`, `build` quando relevante.
+- **Todo trabalho de frontend usa o skill `frontend-design`** e segue a identidade visual de `docs/identidade-visual.md`.
 
 ## Stack
 

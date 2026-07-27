@@ -4,13 +4,15 @@ Data: 2026-07-27. Fonte de requisitos: `docs/PRD.md` (prevalece em divergência)
 
 ## Objetivo da Fase 0
 
-Entregar a fundação do sistema: monorepo, infraestrutura local (Postgres via docker-compose), esqueleto Clean Architecture, migrations multi-schema, autenticação completa (login com slug, JWT, papéis), sistema de módulos por tenant, painel da plataforma mínimo e CI. Nenhuma tabela de negócio (cadastros/tickets) nesta fase.
+Entregar a fundação do sistema: monorepo, infraestrutura local (Postgres via docker-compose), esqueleto Clean Architecture, migrations multi-schema, autenticação completa (login com slug, JWT, papéis), sistema de módulos por tenant e painel da plataforma mínimo. Nenhuma tabela de negócio (cadastros/tickets) nesta fase. Sem CI: as verificações rodam localmente antes de cada commit (seção 8).
 
 ## Decisões de tooling (fechadas com o usuário em 2026-07-27)
 
 - Planejamento por fase: um design geral + plano detalhado apenas da fase corrente.
 - Frontend: Tailwind CSS 4 + shadcn/ui (Radix), ícones Lucide, pnpm, TanStack Query, React Router.
 - Backend: uv (dependências/venv), ruff (lint + format), mypy (tipos), pytest.
+- Sem CI: lint, tipos e testes rodam localmente antes de cada commit.
+- Todo trabalho de frontend usa o skill frontend-design e segue `docs/identidade-visual.md`.
 
 ## 1. Estrutura do monorepo
 
@@ -29,7 +31,6 @@ backend/
 frontend/
   src/
 docker-compose.yml   # Postgres 16
-.github/workflows/ci.yml
 ```
 
 Regra de dependência: `interface -> application -> domain`; `infrastructure` implementa os ports declarados em `application` e nunca é importada por `domain`/`application`. O grafo de objetos é montado nas dependencies do FastAPI (composition root em `interface`).
@@ -71,7 +72,8 @@ Indicadores da plataforma ficam para fase posterior.
 
 - Vite + React + TypeScript, Tailwind CSS 4 + shadcn/ui, Lucide, TanStack Query, React Router, pnpm.
 - Entregas: tela de login (email + senha + slug, "manter sessão"), layout base (sidebar agrupada por módulos, header com menu de usuário), guarda de rotas por papel, telas mínimas do painel da plataforma (tenants, usuários, vínculos).
-- Design tokens via CSS variables do shadcn/ui; dark mode preparado (classe `dark`), sem toggle obrigatório nesta fase.
+- Identidade visual conforme `docs/identidade-visual.md`: paleta Floral White / Silver / Charcoal Brown / Carbon Black / Spicy Paprika (Paprika só como sinalização), sans humanista + mono para dados técnicos, raio 4-6px, bordas em vez de sombras, sidebar escura. Os tokens do shadcn/ui são sobrescritos por esses valores.
+- Design tokens via CSS variables; dark mode preparado (classe `dark`), sem toggle obrigatório nesta fase.
 - Proibido emoji; modais e toasts próprios (shadcn/ui), nunca confirm/alert nativos.
 
 ## 7. Erros
@@ -79,12 +81,12 @@ Indicadores da plataforma ficam para fase posterior.
 - Domínio lança erros tipados (`DomainError` e subclasses: `NotFoundError`, `PermissionDeniedError`, `ValidationError`, `ConflictError`, `AuthError`).
 - Exception handler único em `interface` mapeia para HTTP (404/403/422/409/401) com corpo padronizado `{code, message, details}`. Nenhum handler ad hoc por rota.
 
-## 8. Testes e CI
+## 8. Testes e verificação local
 
 - TDD (red-green-refactor) obrigatório no backend.
 - Unit: domínio e use cases com repositórios fake em memória; sem banco.
-- Integração: httpx AsyncClient contra a app + Postgres real (docker-compose); cada teste/módulo usa schema descartável criado e destruído na hora (sem testcontainers, funciona no Windows local e no CI).
-- CI (GitHub Actions): job backend (uv sync, ruff check + format --check, mypy, pytest com service Postgres) e job frontend (pnpm install, tsc --noEmit, eslint, build). Ambos obrigatórios.
+- Integração: httpx AsyncClient contra a app + Postgres real (docker-compose); cada teste/módulo usa schema descartável criado e destruído na hora (sem testcontainers, funciona no Windows local).
+- Sem CI. Antes de cada commit rodar localmente: backend `ruff check`, `ruff format --check`, `mypy`, `pytest`; frontend `tsc --noEmit`, `eslint`, `build` quando relevante.
 
 ## 9. Fora da Fase 0
 
