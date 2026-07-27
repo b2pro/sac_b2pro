@@ -40,3 +40,12 @@ A maquina de estados do ticket vira a peca visual central: uma trilha de status 
 - Sidebar escura sem glow e sem indicador ativo neon: indicador ativo em Paprika solido de 2px, sem blur.
 - Nenhum empty state com ilustracao fofa: texto direto ("Nenhum ticket aberto para este filtro").
 - Nenhum emoji
+
+## Ícones
+
+- Biblioteca: `lucide-react` — já é a base usada pelos componentes shadcn/ui, não usar nenhuma outra lib de ícones no projeto.
+- `strokeWidth` fixo em `1.5` em todos os ícones do sistema, sem exceção. Se um componente shadcn vier com outro valor, sobrescrever para manter consistência.
+- Tamanho padrão: `16px` em contextos de tabela/lista (badges, ações inline) e `20px` em botões e headers. Não usar tamanhos intermediários.
+- Nunca usar ícones preenchidos (`fill`) — sempre outline, mesmo em estados ativos/selecionados (usar cor, não preenchimento, para indicar estado).
+- Cor padrão herda do texto ao redor (`currentColor`); só usar a cor de acento (Paprika) em ícones de ação primária, alerta de SLA ou status crítico — nunca como decoração.
+- Se não existir um ícone específico de domínio (ex: logística reversa, garantia) na lib, compor com 2 ícones simples do Lucide em vez de importar outra biblioteca com estilo diferente.
