@@ -14,6 +14,15 @@ from sac.application.use_cases.platform_tenants import (
     SetTenantModulesUseCase,
     SetTenantStatusUseCase,
 )
+from sac.application.use_cases.platform_users import (
+    CreateUserUseCase,
+    LinkUserToTenantUseCase,
+    ListTenantLinksUseCase,
+    ListUsersUseCase,
+    ResetPasswordUseCase,
+    SetUserActiveUseCase,
+    UnlinkUserFromTenantUseCase,
+)
 from sac.domain.errors import AuthError, PermissionDeniedError
 from sac.domain.permissions import Permission, has_permission
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
@@ -103,6 +112,52 @@ def get_set_tenant_modules_use_case(
     session: AsyncSession = Depends(get_session),
 ) -> SetTenantModulesUseCase:
     return SetTenantModulesUseCase(SqlTenantRepository(session))
+
+
+def get_create_user_use_case(
+    session: AsyncSession = Depends(get_session),
+    hasher: Argon2PasswordHasher = Depends(get_hasher),
+) -> CreateUserUseCase:
+    return CreateUserUseCase(SqlUserRepository(session), hasher)
+
+
+def get_list_users_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> ListUsersUseCase:
+    return ListUsersUseCase(SqlUserRepository(session))
+
+
+def get_set_user_active_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> SetUserActiveUseCase:
+    return SetUserActiveUseCase(SqlUserRepository(session))
+
+
+def get_reset_password_use_case(
+    session: AsyncSession = Depends(get_session),
+    hasher: Argon2PasswordHasher = Depends(get_hasher),
+) -> ResetPasswordUseCase:
+    return ResetPasswordUseCase(SqlUserRepository(session), hasher)
+
+
+def get_link_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> LinkUserToTenantUseCase:
+    return LinkUserToTenantUseCase(
+        SqlUserRepository(session), SqlTenantRepository(session), SqlUserTenantRepository(session)
+    )
+
+
+def get_unlink_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> UnlinkUserFromTenantUseCase:
+    return UnlinkUserFromTenantUseCase(SqlUserTenantRepository(session))
+
+
+def get_list_links_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> ListTenantLinksUseCase:
+    return ListTenantLinksUseCase(SqlUserTenantRepository(session))
 
 
 _bearer = HTTPBearer(auto_error=False)

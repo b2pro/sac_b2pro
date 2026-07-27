@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.use_cases.auth import AuthResult
 from sac.domain.entities import Tenant, TenantStatus
+from sac.domain.permissions import Role
 
 
 class LoginIn(BaseModel):
@@ -79,3 +80,30 @@ def tenant_out(tenant: Tenant) -> TenantOut:
         status=tenant.status,
         modules=tenant.modules,
     )
+
+
+class UserCreateIn(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    is_super_admin: bool = False
+
+
+class UserActiveIn(BaseModel):
+    active: bool
+
+
+class PasswordResetIn(BaseModel):
+    password: str
+
+
+class LinkCreateIn(BaseModel):
+    user_id: UUID
+    role: Role
+
+
+class LinkOut(BaseModel):
+    user_id: UUID
+    tenant_id: UUID
+    role: Role
+    active: bool
