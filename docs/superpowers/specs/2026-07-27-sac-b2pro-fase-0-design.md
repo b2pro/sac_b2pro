@@ -51,7 +51,7 @@ Regra de dependência: `interface -> application -> domain`; `infrastructure` im
 
 ## 4. Autenticação e autorização
 
-- `POST /auth/login` (email + senha + slug): valida tenant ativo -> vínculo em `user_tenants` -> usuário ativo -> senha argon2 (argon2-cffi). Erros de credencial não revelam qual etapa falhou. Rate limiting por IP+slug (slowapi).
+- `POST /auth/login` (email + senha + slug): valida tenant ativo -> vínculo em `user_tenants` -> usuário ativo -> senha argon2 (argon2-cffi). Erros de credencial não revelam qual etapa falhou. Rate limiting por IP+slug (limitador em memória de janela deslizante, testável com relógio fake).
 - Tokens: access JWT curto (15 min) com `sub` (user id), `tenant` (slug), `role`; refresh token (7 dias, rota `/auth/refresh`). "Manter sessão" controla persistência do refresh no front. Sem registro público; reset de senha por admin (rota de admin define nova senha).
 - Login de super_admin: mesmo endpoint sem slug (ou slug vazio) emite token global sem tenant, válido apenas nas rotas da plataforma.
 - Papéis: `super_admin` (global); por tenant: `admin`, `supervisor`, `atendente`, `visualizador`. Matriz de permissões do PRD seção 3.
@@ -85,7 +85,7 @@ Indicadores da plataforma ficam para fase posterior.
 
 - TDD (red-green-refactor) obrigatório no backend.
 - Unit: domínio e use cases com repositórios fake em memória; sem banco.
-- Integração: httpx AsyncClient contra a app + Postgres real (docker-compose); cada teste/módulo usa schema descartável criado e destruído na hora (sem testcontainers, funciona no Windows local).
+- Integração: httpx AsyncClient contra a app + Postgres real (docker-compose); banco de teste dedicado `sac_test` recriado por sessão de teste, tabelas truncadas e schemas de tenant descartados entre testes (sem testcontainers, funciona no Windows local).
 - Sem CI. Antes de cada commit rodar localmente: backend `ruff check`, `ruff format --check`, `mypy`, `pytest`; frontend `tsc --noEmit`, `eslint`, `build` quando relevante.
 
 ## 9. Fora da Fase 0
