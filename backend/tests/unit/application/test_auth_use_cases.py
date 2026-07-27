@@ -88,21 +88,30 @@ async def test_login_super_admin_sem_slug() -> None:
         "sem_vinculo",
         "vinculo_inativo",
         "tenant_suspenso",
+        "tenant_inexistente",
+        "tenant_inativo",
         "comum_sem_slug",
     ],
 )
 async def test_falhas_de_login_sao_indistinguiveis(caso: str) -> None:
     c = Cenario()
     user = await c.com_usuario(active=caso != "usuario_inativo")
-    tenant = await c.com_tenant(
-        status=TenantStatus.SUSPENSA if caso == "tenant_suspenso" else TenantStatus.ATIVA
-    )
-    if caso not in ("sem_vinculo",):
+    tenant_status = TenantStatus.ATIVA
+    if caso == "tenant_suspenso":
+        tenant_status = TenantStatus.SUSPENSA
+    elif caso == "tenant_inativo":
+        tenant_status = TenantStatus.INATIVA
+    tenant = await c.com_tenant(status=tenant_status)
+    if caso not in ("sem_vinculo", "tenant_inexistente"):
         await c.com_vinculo(user, tenant, active=caso != "vinculo_inativo")
 
     email = "nao@existe.com" if caso == "usuario_inexistente" else "ana@b2.com"
     password = "errada" if caso == "senha_errada" else "senha123"
-    slug = None if caso == "comum_sem_slug" else "b2pro"
+    slug = (
+        None
+        if caso == "comum_sem_slug"
+        else ("nao-existe" if caso == "tenant_inexistente" else "b2pro")
+    )
 
     with pytest.raises(AuthError) as exc:
         await c.login.execute(email, password, slug)
@@ -146,3 +155,36 @@ async def test_refresh_falha_se_usuario_desativado() -> None:
     await c.users.update(user)
     with pytest.raises(AuthError):
         await c.refresh.execute(login.refresh_token)
+
+
+async def test_refresh_falha_se_tenant_suspenso_apos_login() -> None:
+    c = Cenario()
+    user = await c.com_usuario()
+    tenant = await c.com_tenant()
+    await c.com_vinculo(user, tenant)
+    login = await c.login.execute("ana@b2.com", "senha123", "b2pro")
+
+    tenant.status = TenantStatus.SUSPENSA
+    await c.tenants.update(tenant)
+
+    with pytest.raises(AuthError) as exc:
+        await c.refresh.execute(login.refresh_token)
+    assert str(exc.value) == "sessao invalida"
+
+
+async def test_refresh_falha_se_vinculo_desativado_apos_login() -> None:
+    c = Cenario()
+    user = await c.com_usuario()
+    tenant = await c.com_tenant()
+    await c.com_vinculo(user, tenant)
+    login = await c.login.execute("ana@b2.com", "senha123", "b2pro")
+
+    link = await c.links.get(user.id, tenant.id)
+    assert link is not None
+    await c.links.remove(user.id, tenant.id)
+    link.active = False
+    await c.links.add(link)
+
+    with pytest.raises(AuthError) as exc:
+        await c.refresh.execute(login.refresh_token)
+    assert str(exc.value) == "sessao invalida"
