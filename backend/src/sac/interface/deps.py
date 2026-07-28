@@ -38,6 +38,7 @@ from sac.infrastructure.repositories_cadastros import (
     SqlCustomerRepository,
     SqlProductRepository,
 )
+from sac.infrastructure.repositories_tickets import TicketRepos, build_ticket_repos
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
 
@@ -220,6 +221,10 @@ def get_product_repository(
     return SqlProductRepository(session)
 
 
+def get_ticket_repos(session: AsyncSession = Depends(get_tenant_session)) -> TicketRepos:
+    return build_ticket_repos(session)
+
+
 def get_cep_gateway() -> ViaCepGateway:
     return ViaCepGateway()
 
@@ -237,6 +242,17 @@ def require_permission(permission: Permission) -> IdentityDependency:
         identity: TokenPayload = Depends(get_current_identity),
     ) -> TokenPayload:
         if identity.role is None or not has_permission(identity.role, permission):
+            raise PermissionDeniedError("permissao insuficiente")
+        return identity
+
+    return dependency
+
+
+def require_any_permission(*permissions: Permission) -> IdentityDependency:
+    async def dependency(
+        identity: TokenPayload = Depends(get_current_identity),
+    ) -> TokenPayload:
+        if identity.role is None or not any(has_permission(identity.role, p) for p in permissions):
             raise PermissionDeniedError("permissao insuficiente")
         return identity
 

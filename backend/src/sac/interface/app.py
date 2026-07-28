@@ -17,6 +17,7 @@ from sac.interface.routers import (
     health,
     platform_tenants,
     platform_users,
+    tickets,
 )
 
 
@@ -52,4 +53,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cadastros_customers.router, prefix="/api")
     app.include_router(cadastros_products.router, prefix="/api")
     app.include_router(cep.router, prefix="/api")
+    app.include_router(tickets.router, prefix="/api")
     return app
