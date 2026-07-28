@@ -278,13 +278,13 @@ export default function TicketsListPage() {
                         item.unread && "bg-primary/[0.04]",
                       )}
                     >
-                      <TableCell className="relative font-mono">
+                      <TableCell className="font-mono">
                         <Link
                           to={`/tickets/${item.id}`}
                           className="absolute inset-0"
                           aria-label={`Abrir ticket numero ${item.number}`}
                         />
-                        <span className="relative flex items-center gap-2">
+                        <span className="relative z-10 flex items-center gap-2">
                           {item.unread && (
                             <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
                           )}
