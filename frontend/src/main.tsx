@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
 import { RequireAuth, RequireSuperAdmin, RequireTenant } from "@/lib/guards"
 import CatalogPage from "@/pages/cadastros/CatalogPage"
+import ClientesPage from "@/pages/cadastros/ClientesPage"
 import ProdutosPage from "@/pages/cadastros/ProdutosPage"
 import LoginPage from "@/pages/LoginPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
@@ -49,7 +50,7 @@ const router = createBrowserRouter([
                 path: "/cadastros/canais",
                 element: <CatalogPage title="Canais de compra" path="canais" />,
               },
-              { path: "/cadastros/clientes", element: <p>Clientes</p> },
+              { path: "/cadastros/clientes", element: <ClientesPage /> },
             ],
           },
         ],
