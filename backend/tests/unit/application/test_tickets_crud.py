@@ -12,7 +12,12 @@ from sac.application.use_cases.tickets_crud import (
     UpdateTicketInput,
     UpdateTicketUseCase,
 )
-from sac.domain.errors import ConflictError, NotFoundError, ValidationError
+from sac.domain.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
 from sac.domain.permissions import Role
 from sac.domain.tickets import TicketPriority, TicketStatus, TimelineEventType
 from tests.unit.fakes import InMemoryCustomerRepository
@@ -122,6 +127,20 @@ async def test_customer_id_inexistente_e_quantidade_invalida() -> None:
         )
 
 
+async def test_customer_inline_e_customer_id_juntos_e_invalido() -> None:
+    use_case, _, _, _, _, _ = make_create_use_case()
+    with pytest.raises(ValidationError):
+        await use_case.execute(
+            ADMIN,
+            CreateTicketInput(
+                brand_id=uuid4(),
+                priority=TicketPriority.MEDIA,
+                customer=CustomerInput(name="Maria", document=VALID_CPF),
+                customer_id=uuid4(),
+            ),
+        )
+
+
 async def test_atendente_nao_cria_para_outro_admin_sim() -> None:
     use_case, _, _, _, _, _ = make_create_use_case()
     outro = uuid4()
@@ -182,4 +201,19 @@ async def test_atendente_nao_edita_ticket_alheio_nem_fora_de_estado_editavel() -
             ADMIN,
             de_outro.id,
             UpdateTicketInput(brand_id=de_outro.brand_id, priority=TicketPriority.MEDIA),
+        )
+
+
+async def test_visualizador_ve_mas_nao_edita() -> None:
+    create, tickets, _, _, _, _ = make_create_use_case()
+    ticket = await create.execute(
+        ADMIN, CreateTicketInput(brand_id=uuid4(), priority=TicketPriority.MEDIA)
+    )
+    update = make_update_use_case(tickets)
+    visualizador = TicketActor(user_id=uuid4(), role=Role.VISUALIZADOR)
+    with pytest.raises(PermissionDeniedError):
+        await update.execute(
+            visualizador,
+            ticket.id,
+            UpdateTicketInput(brand_id=ticket.brand_id, priority=TicketPriority.MEDIA),
         )
