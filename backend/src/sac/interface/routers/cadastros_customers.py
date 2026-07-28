@@ -8,6 +8,7 @@ from sac.application.use_cases.customers import (
     ListCustomersUseCase,
     SetCustomerActiveUseCase,
     UpdateCustomerUseCase,
+    clamp_page,
 )
 from sac.domain.permissions import Permission
 from sac.infrastructure.repositories_cadastros import SqlCustomerRepository
@@ -51,6 +52,7 @@ async def list_customers(
     per_page: int = 20,
     repo: SqlCustomerRepository = Depends(get_customer_repository),
 ) -> CustomersPageOut:
+    page, per_page = clamp_page(page, per_page)
     items, total = await ListCustomersUseCase(repo).execute(search, active, page, per_page)
     return CustomersPageOut(
         items=[customer_out(c) for c in items], total=total, page=page, per_page=per_page

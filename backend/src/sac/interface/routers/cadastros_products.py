@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from sac.application.use_cases.customers import clamp_page
 from sac.application.use_cases.products import (
     CreateProductUseCase,
     ListProductsUseCase,
@@ -35,6 +36,7 @@ async def list_products(
     per_page: int = 20,
     repo: SqlProductRepository = Depends(get_product_repository),
 ) -> ProductsPageOut:
+    page, per_page = clamp_page(page, per_page)
     items, total = await ListProductsUseCase(repo).execute(search, active, page, per_page)
     return ProductsPageOut(
         items=[product_out(p) for p in items], total=total, page=page, per_page=per_page

@@ -88,3 +88,15 @@ async def test_paginacao_de_clientes(
     pagina = await client.get("/api/cadastros/clientes?page=1&per_page=2", headers=headers)
     body = pagina.json()
     assert body["total"] == 3 and len(body["items"]) == 2 and body["per_page"] == 2
+
+
+async def test_paginacao_de_clientes_com_valores_fora_do_intervalo_e_clampada(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers = await _admin_headers(session, engine, "cli_d")
+
+    pagina = await client.get("/api/cadastros/clientes?page=0&per_page=500", headers=headers)
+    assert pagina.status_code == 200
+    body = pagina.json()
+    assert body["page"] == 1
+    assert body["per_page"] == 100
