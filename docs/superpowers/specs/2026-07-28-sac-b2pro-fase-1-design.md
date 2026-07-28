@@ -20,7 +20,7 @@ Catalogo generico + especificos: Marca, Defeito, Solucao e Canal sao todos "nome
 
 - Models de negocio em `models_tenant.py` sobre `TenantBase`, com `__table_args__ = {"schema": "tenant"}` (schema simbolico).
 - Migration `0002` na arvore tenant cria as 6 tabelas; `migrate tenants` aplica em todos os schemas `t_*` existentes; tenant novo ja nasce com elas (provisionamento roda head).
-- Nova dependency `get_tenant_session`: exige `tenant_slug` no JWT (401 se ausente) e monta a session com `execution_options(schema_translate_map={"tenant": "t_<slug>"})`. Toda rota de cadastro usa essa session.
+- Nova dependency `get_tenant_session`: exige `tenant_slug` no JWT (erro de autenticacao se ausente) e monta a session com `execution_options(schema_translate_map={"tenant": "t_<slug>"})`. Toda rota de cadastro usa essa session.
 
 ## 2. Modelo de dados (schema do tenant)
 
@@ -68,7 +68,7 @@ Aplicados ao provisionar tenant novo e via comando idempotente `uv run python -m
 
 ## 7. Erros e testes
 
-- Mesmo handler unico da Fase 0: 409 nome/SKU/documento duplicado; 422 documento/CEP/UF invalidos; 404 registro inexistente; 403 permissao; 401 sem tenant no token.
+- Mesmo handler unico da Fase 0: 409 nome/SKU/documento duplicado; 422 documento/CEP/UF invalidos; 404 registro inexistente; 403 sem permissao (inclui token sem papel de tenant, ex.: super admin); 401 sem token.
 - TDD. Unit: validador de CPF/CNPJ (casos validos, invalidos, digitos repetidos), use cases com fakes (catalogo generico, cliente, produto), normalizacoes.
 - Integracao: fixtures novas — helper que provisiona tenant real + emite token de tenant por papel; testes por router (CRUD feliz, conflitos, permissoes por papel: visualizador nao cria, atendente nao edita); **teste de isolamento**: registro criado no tenant A nao aparece listado no tenant B; `/api/cep` testado com stub do ViaCEP (sem rede em teste).
 
