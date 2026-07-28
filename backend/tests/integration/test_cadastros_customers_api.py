@@ -100,3 +100,30 @@ async def test_paginacao_de_clientes_com_valores_fora_do_intervalo_e_clampada(
     body = pagina.json()
     assert body["page"] == 1
     assert body["per_page"] == 100
+
+
+async def test_nome_muito_longo_e_rejeitado_com_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers = await _admin_headers(session, engine, "cli_e")
+
+    response = await client.post(
+        "/api/cadastros/clientes",
+        json={"name": "A" * 300, "document": "529.982.247-25"},
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
+async def test_email_invalido_e_rejeitado_com_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers = await _admin_headers(session, engine, "cli_f")
+
+    response = await client.post(
+        "/api/cadastros/clientes",
+        json={"name": "Ana", "document": "153.509.460-56", "email": "nao-e-email"},
+        headers=headers,
+    )
+    assert response.status_code == 422

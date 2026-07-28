@@ -113,7 +113,7 @@ class LinkOut(BaseModel):
 
 
 class CatalogItemIn(BaseModel):
-    name: str
+    name: str = Field(max_length=120)
     description: str | None = None
 
 
@@ -135,17 +135,17 @@ def catalog_out(item: CatalogItem) -> CatalogItemOut:
 
 
 class CustomerIn(BaseModel):
-    name: str
-    document: str
-    phone: str | None = None
-    email: str | None = None
-    cep: str | None = None
-    street: str | None = None
-    number: str | None = None
-    complement: str | None = None
-    neighborhood: str | None = None
-    city: str | None = None
-    state: str | None = None
+    name: str = Field(max_length=200)
+    document: str = Field(max_length=18)
+    phone: str | None = Field(default=None, max_length=20)
+    email: EmailStr | None = None
+    cep: str | None = Field(default=None, max_length=9)
+    street: str | None = Field(default=None, max_length=200)
+    number: str | None = Field(default=None, max_length=20)
+    complement: str | None = Field(default=None, max_length=100)
+    neighborhood: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    state: str | None = Field(default=None, max_length=2)
 
 
 class CustomerOut(BaseModel):
@@ -172,9 +172,9 @@ class CustomersPageOut(BaseModel):
 
 
 class ProductIn(BaseModel):
-    name: str
-    sku: str
-    segment: str | None = None
+    name: str = Field(max_length=200)
+    sku: str = Field(max_length=80)
+    segment: str | None = Field(default=None, max_length=80)
     description: str | None = None
 
 

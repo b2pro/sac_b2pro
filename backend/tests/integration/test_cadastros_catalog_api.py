@@ -81,6 +81,18 @@ async def test_sem_token_recebe_401(client: AsyncClient) -> None:
     assert (await client.get("/api/cadastros/marcas")).status_code == 401
 
 
+async def test_nome_de_marca_muito_longo_e_rejeitado_com_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    user = await seed_user(session, email="admin-longo@b2.com")
+    await seed_provisioned_tenant(session, engine, slug="longo")
+    headers = token_for(user, tenant_slug="longo", role=Role.ADMIN)
+
+    response = await client.post("/api/cadastros/marcas", json={"name": "A" * 200}, headers=headers)
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
 async def test_isolamento_entre_tenants(
     client: AsyncClient, session: AsyncSession, engine: AsyncEngine
 ) -> None:
