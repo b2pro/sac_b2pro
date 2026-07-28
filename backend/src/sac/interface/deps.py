@@ -32,7 +32,11 @@ from sac.infrastructure.repositories import (
     SqlUserRepository,
     SqlUserTenantRepository,
 )
-from sac.infrastructure.repositories_cadastros import SqlCatalogRepository
+from sac.infrastructure.repositories_cadastros import (
+    SqlCatalogRepository,
+    SqlCustomerRepository,
+    SqlProductRepository,
+)
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
 
@@ -201,6 +205,18 @@ def get_catalog_repository(
         return SqlCatalogRepository(session, kind)
 
     return factory
+
+
+def get_customer_repository(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> SqlCustomerRepository:
+    return SqlCustomerRepository(session)
+
+
+def get_product_repository(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> SqlProductRepository:
+    return SqlProductRepository(session)
 
 
 async def require_super_admin(

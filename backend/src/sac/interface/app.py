@@ -8,7 +8,15 @@ from sac.infrastructure.db import build_engine, build_session_factory
 from sac.infrastructure.settings import Settings
 from sac.interface.errors import register_error_handlers
 from sac.interface.rate_limit import SlidingWindowRateLimiter
-from sac.interface.routers import auth, cadastros_catalog, health, platform_tenants, platform_users
+from sac.interface.routers import (
+    auth,
+    cadastros_catalog,
+    cadastros_customers,
+    cadastros_products,
+    health,
+    platform_tenants,
+    platform_users,
+)
 
 
 @asynccontextmanager
@@ -40,4 +48,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cadastros_catalog.defeitos_router, prefix="/api")
     app.include_router(cadastros_catalog.solucoes_router, prefix="/api")
     app.include_router(cadastros_catalog.canais_router, prefix="/api")
+    app.include_router(cadastros_customers.router, prefix="/api")
+    app.include_router(cadastros_products.router, prefix="/api")
     return app

@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.use_cases.auth import AuthResult
+from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, TenantStatus
 from sac.domain.permissions import Role
@@ -130,3 +131,72 @@ def catalog_out(item: CatalogItem) -> CatalogItemOut:
     return CatalogItemOut(
         id=item.id, name=item.name, description=item.description, active=item.active
     )
+
+
+class CustomerIn(BaseModel):
+    name: str
+    document: str
+    phone: str | None = None
+    email: str | None = None
+    cep: str | None = None
+    street: str | None = None
+    number: str | None = None
+    complement: str | None = None
+    neighborhood: str | None = None
+    city: str | None = None
+    state: str | None = None
+
+
+class CustomerOut(BaseModel):
+    id: UUID
+    name: str
+    document: str
+    phone: str | None
+    email: str | None
+    cep: str | None
+    street: str | None
+    number: str | None
+    complement: str | None
+    neighborhood: str | None
+    city: str | None
+    state: str | None
+    active: bool
+
+
+class CustomersPageOut(BaseModel):
+    items: list[CustomerOut]
+    total: int
+    page: int
+    per_page: int
+
+
+class ProductIn(BaseModel):
+    name: str
+    sku: str
+    segment: str | None = None
+    description: str | None = None
+
+
+class ProductOut(BaseModel):
+    id: UUID
+    name: str
+    sku: str
+    segment: str | None
+    description: str | None
+    photo_key: str | None
+    active: bool
+
+
+class ProductsPageOut(BaseModel):
+    items: list[ProductOut]
+    total: int
+    page: int
+    per_page: int
+
+
+def customer_out(customer: Customer) -> CustomerOut:
+    return CustomerOut.model_validate(customer, from_attributes=True)
+
+
+def product_out(product: Product) -> ProductOut:
+    return ProductOut.model_validate(product, from_attributes=True)
