@@ -26,6 +26,7 @@ from sac.application.use_cases.platform_users import (
 from sac.domain.catalog import CatalogKind
 from sac.domain.errors import AuthError, PermissionDeniedError
 from sac.domain.permissions import Permission, has_permission
+from sac.infrastructure.cep import ViaCepGateway
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
@@ -217,6 +218,10 @@ def get_product_repository(
     session: AsyncSession = Depends(get_tenant_session),
 ) -> SqlProductRepository:
     return SqlProductRepository(session)
+
+
+def get_cep_gateway() -> ViaCepGateway:
+    return ViaCepGateway()
 
 
 async def require_super_admin(

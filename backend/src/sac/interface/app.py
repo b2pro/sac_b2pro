@@ -13,6 +13,7 @@ from sac.interface.routers import (
     cadastros_catalog,
     cadastros_customers,
     cadastros_products,
+    cep,
     health,
     platform_tenants,
     platform_users,
@@ -50,4 +51,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cadastros_catalog.canais_router, prefix="/api")
     app.include_router(cadastros_customers.router, prefix="/api")
     app.include_router(cadastros_products.router, prefix="/api")
+    app.include_router(cep.router, prefix="/api")
     return app

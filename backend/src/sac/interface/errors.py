@@ -10,6 +10,7 @@ STATUS_BY_CODE = {
     "permission_denied": 403,
     "auth_error": 401,
     "rate_limited": 429,
+    "cep_indisponivel": 503,
 }
 
 

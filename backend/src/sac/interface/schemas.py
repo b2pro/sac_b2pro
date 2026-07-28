@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
+from sac.application.ports_cadastros import CepAddress
 from sac.application.use_cases.auth import AuthResult
 from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
@@ -200,3 +201,21 @@ def customer_out(customer: Customer) -> CustomerOut:
 
 def product_out(product: Product) -> ProductOut:
     return ProductOut.model_validate(product, from_attributes=True)
+
+
+class CepOut(BaseModel):
+    cep: str
+    street: str
+    neighborhood: str
+    city: str
+    state: str
+
+
+def cep_out(address: CepAddress) -> CepOut:
+    return CepOut(
+        cep=address.cep,
+        street=address.street,
+        neighborhood=address.neighborhood,
+        city=address.city,
+        state=address.state,
+    )

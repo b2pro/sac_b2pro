@@ -24,3 +24,7 @@ class PermissionDeniedError(DomainError):
 
 class AuthError(DomainError):
     code = "auth_error"
+
+
+class CepUnavailableError(DomainError):
+    code = "cep_indisponivel"

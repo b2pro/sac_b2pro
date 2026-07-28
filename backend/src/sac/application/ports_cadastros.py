@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
@@ -31,3 +32,16 @@ class ProductRepository(Protocol):
     async def get_by_sku(self, sku: str) -> Product | None: ...
     async def add(self, product: Product) -> None: ...
     async def update(self, product: Product) -> None: ...
+
+
+@dataclass(frozen=True)
+class CepAddress:
+    cep: str
+    street: str
+    neighborhood: str
+    city: str
+    state: str
+
+
+class CepGatewayPort(Protocol):
+    async def lookup(self, cep: str) -> CepAddress | None: ...
