@@ -3,6 +3,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 
+import { AppShell } from "@/components/layout/AppShell"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
 import { RequireAuth } from "@/lib/guards"
@@ -15,7 +16,12 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   {
     element: <RequireAuth />,
-    children: [{ path: "/", element: <p className="p-8">Bem-vindo ao SAC-B2PRO</p> }],
+    children: [
+      {
+        element: <AppShell />,
+        children: [{ path: "/", element: <p>Bem-vindo ao SAC-B2PRO</p> }],
+      },
+    ],
   },
 ])
 
