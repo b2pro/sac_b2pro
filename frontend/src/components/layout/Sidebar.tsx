@@ -1,4 +1,14 @@
-import { Building2, ClipboardCheck, Contact, Package, Store, Tags, Users, Wrench } from "lucide-react"
+import {
+  Building2,
+  ClipboardCheck,
+  Contact,
+  Package,
+  Store,
+  Tags,
+  Ticket,
+  Users,
+  Wrench,
+} from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 import { cn } from "@/lib/utils"
@@ -20,6 +30,10 @@ export function Sidebar() {
     })
   }
   if (session?.tenantSlug) {
+    groups.push({
+      label: "Operacao",
+      items: [{ to: "/tickets", label: "Tickets", icon: Ticket }],
+    })
     groups.push({
       label: "Cadastros",
       items: [
