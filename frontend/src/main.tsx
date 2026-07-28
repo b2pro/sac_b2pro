@@ -6,8 +6,9 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
-import { RequireAuth } from "@/lib/guards"
+import { RequireAuth, RequireSuperAdmin } from "@/lib/guards"
 import LoginPage from "@/pages/LoginPage"
+import TenantsPage from "@/pages/platform/TenantsPage"
 import "./index.css"
 
 const queryClient = new QueryClient()
@@ -19,7 +20,13 @@ const router = createBrowserRouter([
     children: [
       {
         element: <AppShell />,
-        children: [{ path: "/", element: <p>Bem-vindo ao SAC-B2PRO</p> }],
+        children: [
+          { path: "/", element: <p>Bem-vindo ao SAC-B2PRO</p> },
+          {
+            element: <RequireSuperAdmin />,
+            children: [{ path: "/plataforma/tenants", element: <TenantsPage /> }],
+          },
+        ],
       },
     ],
   },
