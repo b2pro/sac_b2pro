@@ -37,6 +37,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.OPERAR_LOGISTICA_PROPRIOS,
             Permission.COMENTAR_ANEXAR,
             Permission.CRIAR_LISTAR_CADASTROS,
+            Permission.LISTAR_CADASTROS,
         }
     ),
     Role.VISUALIZADOR: frozenset(

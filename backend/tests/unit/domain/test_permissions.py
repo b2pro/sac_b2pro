@@ -16,6 +16,7 @@ def test_atendente_nao_decide_nem_gerencia_cadastros() -> None:
     assert has_permission(Role.ATENDENTE, Permission.CRIAR_TICKET)
     assert has_permission(Role.ATENDENTE, Permission.ENVIAR_PARA_ANALISE)
     assert has_permission(Role.ATENDENTE, Permission.CRIAR_LISTAR_CADASTROS)
+    assert has_permission(Role.ATENDENTE, Permission.LISTAR_CADASTROS)
 
 
 def test_visualizador_so_leitura() -> None:
