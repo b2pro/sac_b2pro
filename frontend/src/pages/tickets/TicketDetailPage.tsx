@@ -6,16 +6,9 @@ import { toast } from "sonner"
 
 import { ActionPanel, ReversesCard } from "@/components/tickets/ActionPanel"
 import { PriorityBadge, SlaBadge, StatusBadge } from "@/components/tickets/badges"
+import { ItemsCard } from "@/components/tickets/ItemsCard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
@@ -23,6 +16,7 @@ import { listCatalog } from "@/lib/cadastros"
 import { formatDocument, formatPhone } from "@/lib/format"
 import {
   addComment,
+  canComment,
   getTicket,
   isClosed,
   STATUS_LABELS,
@@ -119,7 +113,7 @@ export default function TicketDetailPage() {
     return <p className="text-sm text-muted-foreground">Ticket nao encontrado.</p>
   }
 
-  const { ticket, customer, attendant_name, supervisor_name, items, comments, timeline } = data
+  const { ticket, customer, attendant_name, supervisor_name, comments, timeline } = data
 
   const commentsById = new Map(comments.map((c) => [c.id, c]))
   const sortedTimeline = [...timeline].sort((a, b) => {
@@ -130,6 +124,14 @@ export default function TicketDetailPage() {
   const brandName = brands?.find((b) => b.id === ticket.brand_id)?.name
   const channelName = channels?.find((c) => c.id === ticket.purchase_channel_id)?.name
   const closed = isClosed(ticket.status)
+  const role = session?.role ?? null
+  const isOwner = ticket.attendant_user_id === session?.user.id
+  const commentsAllowed = canComment(role)
+  const readOnlyReason = closed
+    ? "Ticket encerrado — chat somente leitura."
+    : !commentsAllowed
+      ? "Somente leitura."
+      : null
 
   function onSubmitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -304,37 +306,7 @@ export default function TicketDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Itens</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum item registrado.</p>
-              ) : (
-                <div className="rounded-md border border-border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Defeito</TableHead>
-                        <TableHead className="text-right">Quantidade</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.product_name}</TableCell>
-                          <TableCell>{item.defect_type_name}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ItemsCard detail={data} role={role} isOwner={isOwner} onChanged={invalidate} />
 
           <Card>
             <CardHeader>
@@ -387,7 +359,7 @@ export default function TicketDetailPage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span>{comment.author_name ?? "Atendente"}</span>
                           <span>{formatDateTime(comment.created_at)}</span>
-                          {!closed && (
+                          {!closed && commentsAllowed && (
                             <button
                               type="button"
                               onClick={() => setReplyTo(comment)}
@@ -404,9 +376,9 @@ export default function TicketDetailPage() {
                 </div>
               )}
 
-              {closed ? (
+              {readOnlyReason ? (
                 <p className="border-t border-border pt-4 text-sm text-muted-foreground">
-                  Ticket encerrado — chat somente leitura.
+                  {readOnlyReason}
                 </p>
               ) : (
                 <form onSubmit={onSubmitComment} className="flex flex-col gap-2 border-t border-border pt-4">
