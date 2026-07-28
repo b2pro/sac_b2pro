@@ -28,4 +28,12 @@ export default tseslint.config([
       'react-refresh/only-export-components': 'warn',
     },
   },
+  {
+    // Badges de ticket exportam mapas de estilo (STATUS_ACCENTS etc.) junto
+    // dos componentes por design; regra de fast-refresh vira aviso, nao erro.
+    files: ['src/components/tickets/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'warn',
+    },
+  },
 ])
