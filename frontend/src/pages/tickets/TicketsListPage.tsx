@@ -391,7 +391,13 @@ export default function TicketsListPage() {
                         />
                         <span className="relative z-10 flex items-center gap-2">
                           {item.unread && (
-                            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                            <>
+                              <span
+                                className="size-1.5 shrink-0 rounded-full bg-primary"
+                                aria-hidden
+                              />
+                              <span className="sr-only">Nao lido</span>
+                            </>
                           )}
                           #{item.number}
                         </span>

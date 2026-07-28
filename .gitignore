@@ -8,3 +8,9 @@ __pycache__/
 node_modules/
 dist/
 flowhub/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/

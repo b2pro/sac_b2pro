@@ -240,7 +240,9 @@ export function ActionPanel({
   })
   const markUnreadMutation = useMutation({
     mutationFn: () => markUnread(ticket.id),
-    onSuccess: onImmediateSuccess("Marcado como nao lido"),
+    // Sem onChanged() de proposito: refazer o GET do detalhe marca o ticket como
+    // lido novamente no servidor, anulando a acao. A lista recarrega ao voltar.
+    onSuccess: () => toast.success("Marcado como nao lido"),
     onError: onMutationError,
   })
 
