@@ -253,6 +253,37 @@ class TicketIn(BaseModel):
     items: list[TicketItemIn] = Field(default_factory=list)
 
 
+class ApproveIn(BaseModel):
+    notes: str | None = None
+
+
+class DeclineIn(BaseModel):
+    reason: str = Field(min_length=1)
+
+
+class CancelIn(BaseModel):
+    reason: str | None = None
+
+
+class FinalizeIn(BaseModel):
+    solution_type_id: UUID
+    notes: str | None = None
+
+
+class ReverseIn(BaseModel):
+    code: str = Field(min_length=1, max_length=60)
+
+
+class WarrantyIn(BaseModel):
+    order_code: str = Field(min_length=1, max_length=60)
+    tracking_code: str | None = Field(default=None, max_length=60)
+
+
+class CommentIn(BaseModel):
+    body: str = Field(min_length=1)
+    reply_to_id: UUID | None = None
+
+
 class TicketUpdateIn(BaseModel):
     brand_id: UUID
     priority: TicketPriority

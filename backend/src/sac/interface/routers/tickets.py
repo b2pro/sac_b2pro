@@ -6,6 +6,7 @@ from sac.application.ports import TokenPayload
 from sac.application.ports_tickets import TicketActor, TicketFilters
 from sac.application.use_cases.customers import CustomerInput
 from sac.application.use_cases.tickets_crud import (
+    AddCommentUseCase,
     AddTicketItemUseCase,
     CreateTicketInput,
     CreateTicketUseCase,
@@ -15,7 +16,25 @@ from sac.application.use_cases.tickets_crud import (
     UpdateTicketItemUseCase,
     UpdateTicketUseCase,
 )
-from sac.application.use_cases.tickets_queries import GetTicketDetailUseCase, ListTicketsUseCase
+from sac.application.use_cases.tickets_queries import (
+    GetTicketDetailUseCase,
+    ListTicketsUseCase,
+    MarkTicketUnreadUseCase,
+)
+from sac.application.use_cases.tickets_workflow import (
+    ApproveTicketUseCase,
+    CancelTicketUseCase,
+    DeclineTicketUseCase,
+    DeleteReverseUseCase,
+    FinalizeTicketUseCase,
+    HoldForCustomerUseCase,
+    ReceiveProductUseCase,
+    RegisterReverseUseCase,
+    ReopenTicketUseCase,
+    ResumeTicketUseCase,
+    SetWarrantyUseCase,
+    SubmitTicketUseCase,
+)
 from sac.domain.permissions import Permission
 from sac.domain.tickets import TicketPriority, TicketStatus
 from sac.infrastructure.repositories_tickets import TicketRepos
@@ -25,6 +44,14 @@ from sac.interface.deps import (
     require_permission,
 )
 from sac.interface.schemas import (
+    ApproveIn,
+    CancelIn,
+    CommentIn,
+    DeclineIn,
+    FinalizeIn,
+    ReverseCodeOut,
+    ReverseIn,
+    TicketCommentOut,
     TicketDetailOut,
     TicketIn,
     TicketItemIn,
@@ -32,6 +59,7 @@ from sac.interface.schemas import (
     TicketOut,
     TicketsPageOut,
     TicketUpdateIn,
+    WarrantyIn,
     ticket_detail_out,
     ticket_item_out,
     ticket_list_item_out,
@@ -43,6 +71,12 @@ router = APIRouter(prefix="/tickets", tags=["tickets"])
 _create = require_permission(Permission.CRIAR_TICKET)
 _read = require_any_permission(Permission.VER_TODOS_TICKETS, Permission.VER_PROPRIOS_TICKETS)
 _edit = require_any_permission(Permission.EDITAR_QUALQUER_TICKET, Permission.EDITAR_PROPRIO_TICKET)
+_submit = require_permission(Permission.ENVIAR_PARA_ANALISE)
+_decide = require_permission(Permission.DECIDIR_TICKET)
+_operate = require_any_permission(
+    Permission.OPERAR_LOGISTICA_TODOS, Permission.OPERAR_LOGISTICA_PROPRIOS
+)
+_comment = require_permission(Permission.COMENTAR_ANEXAR)
 
 
 def _actor(identity: TokenPayload) -> TicketActor:
@@ -221,4 +255,186 @@ async def remove_ticket_item(
     await RemoveTicketItemUseCase(repos.tickets, repos.items, repos.timeline).execute(
         _actor(identity), ticket_id, item_id
     )
+    return Response(status_code=204)
+
+
+@router.post("/{ticket_id}/enviar-analise", response_model=TicketOut)
+async def submit_ticket(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_submit),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = SubmitTicketUseCase(repos.tickets, repos.items, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id))
+
+
+@router.post("/{ticket_id}/aprovar", response_model=TicketOut)
+async def approve_ticket(
+    ticket_id: UUID,
+    body: ApproveIn,
+    identity: TokenPayload = Depends(_decide),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = ApproveTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id, notes=body.notes))
+
+
+@router.post("/{ticket_id}/declinar", response_model=TicketOut)
+async def decline_ticket(
+    ticket_id: UUID,
+    body: DeclineIn,
+    identity: TokenPayload = Depends(_decide),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = DeclineTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id, reason=body.reason))
+
+
+@router.post("/{ticket_id}/cancelar", response_model=TicketOut)
+async def cancel_ticket(
+    ticket_id: UUID,
+    body: CancelIn,
+    identity: TokenPayload = Depends(_decide),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = CancelTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id, reason=body.reason))
+
+
+@router.post("/{ticket_id}/reabrir", response_model=TicketOut)
+async def reopen_ticket(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_decide),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = ReopenTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id))
+
+
+@router.post("/{ticket_id}/aguardar-cliente", response_model=TicketOut)
+async def hold_for_customer(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_edit),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = HoldForCustomerUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id))
+
+
+@router.post("/{ticket_id}/retomar", response_model=TicketOut)
+async def resume_ticket(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_edit),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = ResumeTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id))
+
+
+@router.post("/{ticket_id}/produto-recebido", response_model=TicketOut)
+async def receive_product(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_operate),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = ReceiveProductUseCase(repos.tickets, repos.timeline)
+    return ticket_out(await use_case.execute(_actor(identity), ticket_id))
+
+
+@router.post("/{ticket_id}/finalizar", response_model=TicketOut)
+async def finalize_ticket(
+    ticket_id: UUID,
+    body: FinalizeIn,
+    identity: TokenPayload = Depends(_operate),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = FinalizeTicketUseCase(repos.tickets, repos.timeline)
+    return ticket_out(
+        await use_case.execute(
+            _actor(identity), ticket_id, solution_type_id=body.solution_type_id, notes=body.notes
+        )
+    )
+
+
+@router.post("/{ticket_id}/reversos", response_model=ReverseCodeOut, status_code=201)
+async def register_reverse(
+    ticket_id: UUID,
+    body: ReverseIn,
+    identity: TokenPayload = Depends(_operate),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> ReverseCodeOut:
+    use_case = RegisterReverseUseCase(repos.tickets, repos.reverses, repos.timeline)
+    reverse = await use_case.execute(_actor(identity), ticket_id, code=body.code)
+    names = await repos.users.names_by_ids(
+        {reverse.author_user_id} if reverse.author_user_id else set()
+    )
+    return ReverseCodeOut(
+        id=reverse.id,
+        code=reverse.code,
+        author_user_id=reverse.author_user_id,
+        author_name=names.get(reverse.author_user_id) if reverse.author_user_id else None,
+        created_at=reverse.created_at,
+    )
+
+
+@router.delete("/{ticket_id}/reversos/{reverso_id}", status_code=204)
+async def delete_reverse(
+    ticket_id: UUID,
+    reverso_id: UUID,
+    identity: TokenPayload = Depends(_operate),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> Response:
+    use_case = DeleteReverseUseCase(repos.tickets, repos.reverses, repos.timeline)
+    await use_case.execute(_actor(identity), ticket_id, reverso_id)
+    return Response(status_code=204)
+
+
+@router.put("/{ticket_id}/garantia", response_model=TicketOut)
+async def set_warranty(
+    ticket_id: UUID,
+    body: WarrantyIn,
+    identity: TokenPayload = Depends(_operate),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketOut:
+    use_case = SetWarrantyUseCase(repos.tickets, repos.timeline)
+    return ticket_out(
+        await use_case.execute(
+            _actor(identity),
+            ticket_id,
+            order_code=body.order_code,
+            tracking_code=body.tracking_code,
+        )
+    )
+
+
+@router.post("/{ticket_id}/comentarios", response_model=TicketCommentOut, status_code=201)
+async def add_comment(
+    ticket_id: UUID,
+    body: CommentIn,
+    identity: TokenPayload = Depends(_comment),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketCommentOut:
+    use_case = AddCommentUseCase(repos.tickets, repos.comments, repos.reads)
+    comment = await use_case.execute(
+        _actor(identity), ticket_id, body=body.body, reply_to_id=body.reply_to_id
+    )
+    names = await repos.users.names_by_ids({comment.author_user_id})
+    return TicketCommentOut(
+        id=comment.id,
+        author_user_id=comment.author_user_id,
+        author_name=names.get(comment.author_user_id),
+        body=comment.body,
+        reply_to_id=comment.reply_to_id,
+        created_at=comment.created_at,
+    )
+
+
+@router.post("/{ticket_id}/nao-lido", status_code=204)
+async def mark_unread(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_read),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> Response:
+    use_case = MarkTicketUnreadUseCase(repos.tickets, repos.reads)
+    await use_case.execute(_actor(identity), ticket_id)
     return Response(status_code=204)
