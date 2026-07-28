@@ -222,6 +222,7 @@ export default function TicketCreatePage() {
 
   const [document, setDocument] = useState("")
   const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null)
+  const [matchedDocument, setMatchedDocument] = useState<string | null>(null)
   const [customerFields, setCustomerFields] = useState<CustomerFieldValues>(emptyCustomerFields)
   const [customerLookupLoading, setCustomerLookupLoading] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
@@ -262,6 +263,7 @@ export default function TicketCreatePage() {
       const match = result.items.find((customer) => customer.document === digits)
       if (match) {
         setLinkedCustomerId(match.id)
+        setMatchedDocument(digits)
         setCustomerFields({
           name: match.name,
           phone: match.phone ? formatPhone(match.phone) : "",
@@ -277,6 +279,7 @@ export default function TicketCreatePage() {
       } else {
         if (linkedCustomerId) setCustomerFields(emptyCustomerFields)
         setLinkedCustomerId(null)
+        setMatchedDocument(null)
       }
     } catch (error) {
       toast.error(errorMessage(error))
@@ -288,6 +291,12 @@ export default function TicketCreatePage() {
   function onDocumentChange(rawValue: string) {
     const digits = onlyDigits(rawValue)
     setDocument(digits)
+    if (matchedDocument && digits !== matchedDocument) {
+      // documento diverge do cliente vinculado: derruba o vinculo/banner antes de
+      // qualquer novo lookup, para nao submeter dados de outro cliente.
+      setLinkedCustomerId(null)
+      setMatchedDocument(null)
+    }
     if (digits.length === 11 || digits.length === 14) {
       void lookupCustomer(digits)
     }
@@ -353,6 +362,12 @@ export default function TicketCreatePage() {
         discarded === 1
           ? "1 item sem produto ou defeito foi descartado"
           : `${discarded} itens sem produto ou defeito foram descartados`,
+      )
+    }
+
+    if (channelQuery.trim() && !channelId) {
+      toast.message(
+        "Canal nao selecionado — escolha uma sugestao da lista; o ticket sera criado sem canal.",
       )
     }
 
