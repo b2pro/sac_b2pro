@@ -1,9 +1,10 @@
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from sac.domain.entities import Tenant, TenantStatus, User, UserTenant
 from sac.domain.permissions import Role
+from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
     SqlUserRepository,
@@ -48,6 +49,14 @@ async def seed_tenant(
     tenant = Tenant(id=uuid4(), slug=slug, name=slug.upper(), status=status, modules=modules or {})
     await SqlTenantRepository(session).add(tenant)
     await session.commit()
+    return tenant
+
+
+async def seed_provisioned_tenant(
+    session: AsyncSession, engine: AsyncEngine, *, slug: str
+) -> Tenant:
+    tenant = await seed_tenant(session, slug=slug)
+    await AlembicTenantProvisioner(engine).provision(tenant.schema_name)
     return tenant
 
 

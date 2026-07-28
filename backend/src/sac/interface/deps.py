@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sac.application.ports import TokenPayload
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
@@ -23,6 +23,7 @@ from sac.application.use_cases.platform_users import (
     SetUserActiveUseCase,
     UnlinkUserFromTenantUseCase,
 )
+from sac.domain.catalog import CatalogKind
 from sac.domain.errors import AuthError, PermissionDeniedError
 from sac.domain.permissions import Permission, has_permission
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
@@ -31,6 +32,7 @@ from sac.infrastructure.repositories import (
     SqlUserRepository,
     SqlUserTenantRepository,
 )
+from sac.infrastructure.repositories_cadastros import SqlCatalogRepository
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
 
@@ -172,6 +174,33 @@ async def get_current_identity(
     if credentials is None:
         raise AuthError("credenciais ausentes")
     return tokens.decode(credentials.credentials, expected_type="access")
+
+
+async def get_tenant_session(
+    request: Request,
+    identity: TokenPayload = Depends(get_current_identity),
+) -> AsyncIterator[AsyncSession]:
+    if identity.tenant_slug is None:
+        raise AuthError("token sem tenant")
+    schema = f"t_{identity.tenant_slug}"
+    engine = request.app.state.engine.execution_options(schema_translate_map={"tenant": schema})
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+def get_catalog_repository(
+    kind: CatalogKind,
+) -> Callable[..., SqlCatalogRepository]:
+    def factory(session: AsyncSession = Depends(get_tenant_session)) -> SqlCatalogRepository:
+        return SqlCatalogRepository(session, kind)
+
+    return factory
 
 
 async def require_super_admin(

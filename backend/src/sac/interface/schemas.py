@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.use_cases.auth import AuthResult
+from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, TenantStatus
 from sac.domain.permissions import Role
 
@@ -107,3 +108,25 @@ class LinkOut(BaseModel):
     tenant_id: UUID
     role: Role
     active: bool
+
+
+class CatalogItemIn(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class CatalogItemOut(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    active: bool
+
+
+class ActiveIn(BaseModel):
+    active: bool
+
+
+def catalog_out(item: CatalogItem) -> CatalogItemOut:
+    return CatalogItemOut(
+        id=item.id, name=item.name, description=item.description, active=item.active
+    )
