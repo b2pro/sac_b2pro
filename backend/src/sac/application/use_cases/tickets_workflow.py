@@ -140,6 +140,11 @@ class ResumeTicketUseCase(_TransitionUseCase):
 class ReopenTicketUseCase(_TransitionUseCase):
     async def execute(self, actor: TicketActor, ticket_id: UUID) -> Ticket:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        if not is_closed(ticket):
+            raise InvalidTransitionError(
+                "apenas tickets encerrados podem ser reabertos",
+                details={"status": ticket.status},
+            )
         target = TicketStatus.APROVADO if ticket.approved_at else TicketStatus.ABERTO
         now = datetime.now(UTC)
         ticket.closed_at = None

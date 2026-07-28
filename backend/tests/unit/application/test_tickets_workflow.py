@@ -9,6 +9,7 @@ from sac.application.use_cases.tickets_workflow import (
     CancelTicketUseCase,
     DeclineTicketUseCase,
     HoldForCustomerUseCase,
+    RegisterReverseUseCase,
     ReopenTicketUseCase,
     ResumeTicketUseCase,
     SubmitTicketUseCase,
@@ -18,6 +19,7 @@ from sac.domain.permissions import Role
 from sac.domain.tickets import Ticket, TicketPriority, TicketStatus, TimelineEventType
 from tests.unit.fakes import InMemoryCustomerRepository
 from tests.unit.fakes_tickets import (
+    InMemoryReverseCodeRepository,
     InMemorySlaPolicyRepository,
     InMemoryTicketItemRepository,
     InMemoryTicketReadRepository,
@@ -33,6 +35,7 @@ class Env:
         self.tickets = InMemoryTicketRepository()
         self.items = InMemoryTicketItemRepository()
         self.timeline = InMemoryTimelineRepository()
+        self.reverses = InMemoryReverseCodeRepository()
 
     async def novo_ticket(self, **kwargs: object) -> Ticket:
         create = CreateTicketUseCase(
@@ -149,3 +152,22 @@ async def test_reopen_volta_para_aprovado_se_ja_aprovado_senao_aberto() -> None:
     await CancelTicketUseCase(env.tickets, env.timeline).execute(ADMIN, nunca_aprovado.id)
     ticket2 = await reopen.execute(ADMIN, nunca_aprovado.id)
     assert ticket2.status is TicketStatus.ABERTO
+
+
+async def test_reopen_falha_se_ticket_nao_encerrado() -> None:
+    env = Env()
+    reopen = ReopenTicketUseCase(env.tickets, env.timeline)
+
+    ticket = await env.ticket_completo()
+    await SubmitTicketUseCase(env.tickets, env.items, env.timeline).execute(ADMIN, ticket.id)
+    await ApproveTicketUseCase(env.tickets, env.timeline).execute(ADMIN, ticket.id)
+    await RegisterReverseUseCase(env.tickets, env.reverses, env.timeline).execute(
+        ADMIN, ticket.id, code="REV-1"
+    )
+    assert ticket.status is TicketStatus.AGUARDANDO_ENVIO_REVERSO
+    with pytest.raises(InvalidTransitionError):
+        await reopen.execute(ADMIN, ticket.id)
+
+    aberto = await env.novo_ticket()
+    with pytest.raises(InvalidTransitionError):
+        await reopen.execute(ADMIN, aberto.id)
