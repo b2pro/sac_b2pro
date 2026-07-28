@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Loader2, MoreVertical, Trash2 } from "lucide-react"
+import { CircleCheck, Loader2, MoreVertical, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
 import { StatusTrail } from "@/components/tickets/StatusTrail"
@@ -33,7 +34,8 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
-import { listCatalog } from "@/lib/cadastros"
+import { listCatalog, listCustomers } from "@/lib/cadastros"
+import { formatDocument, onlyDigits } from "@/lib/format"
 import {
   approveTicket,
   cancelTicket,
@@ -115,6 +117,13 @@ export function ActionPanel({
   const [editPurchaseDate, setEditPurchaseDate] = useState(ticket.purchase_date?.slice(0, 10) ?? "")
   const [editDeliveryDate, setEditDeliveryDate] = useState(ticket.delivery_date?.slice(0, 10) ?? "")
   const [editDescription, setEditDescription] = useState(ticket.description ?? "")
+  const [editDocument, setEditDocument] = useState("")
+  const [editCustomerId, setEditCustomerId] = useState<string | null>(ticket.customer_id)
+  const [editCustomerName, setEditCustomerName] = useState<string | null>(
+    detail.customer?.name ?? null,
+  )
+  const [customerLookupLoading, setCustomerLookupLoading] = useState(false)
+  const [customerNotFound, setCustomerNotFound] = useState(false)
 
   const { data: brands } = useQuery({
     queryKey: ["marcas"],
@@ -153,12 +162,44 @@ export function ActionPanel({
       setEditPurchaseDate(ticket.purchase_date?.slice(0, 10) ?? "")
       setEditDeliveryDate(ticket.delivery_date?.slice(0, 10) ?? "")
       setEditDescription(ticket.description ?? "")
+      setEditDocument("")
+      setEditCustomerId(ticket.customer_id)
+      setEditCustomerName(detail.customer?.name ?? null)
+      setCustomerNotFound(false)
     }
     setDialog(kind)
   }
 
   function closeDialog() {
     setDialog(null)
+  }
+
+  async function lookupEditCustomer(digits: string) {
+    setCustomerLookupLoading(true)
+    try {
+      const result = await listCustomers({ search: digits })
+      const match = result.items.find((customer) => customer.document === digits)
+      if (match) {
+        setEditCustomerId(match.id)
+        setEditCustomerName(match.name)
+        setCustomerNotFound(false)
+      } else {
+        setCustomerNotFound(true)
+      }
+    } catch (error) {
+      toast.error(errorMessage(error))
+    } finally {
+      setCustomerLookupLoading(false)
+    }
+  }
+
+  function onEditDocumentChange(rawValue: string) {
+    const digits = onlyDigits(rawValue)
+    setEditDocument(digits)
+    setCustomerNotFound(false)
+    if (digits.length === 11 || digits.length === 14) {
+      void lookupEditCustomer(digits)
+    }
   }
 
   const onImmediateSuccess = (message: string) => () => {
@@ -239,7 +280,7 @@ export function ActionPanel({
       const input: TicketUpdateInput = {
         brand_id: editBrandId,
         priority: editPriority,
-        customer_id: ticket.customer_id,
+        customer_id: editCustomerId,
         supervisor_user_id: ticket.supervisor_user_id,
         purchase_channel_id: editChannelId === CHANNEL_NONE ? null : editChannelId,
         order_code: editOrderCode.trim() || null,
@@ -642,6 +683,39 @@ export function ActionPanel({
             }}
             className="flex flex-col gap-4"
           >
+            <div className="flex flex-col gap-2 border-b border-border pb-4">
+              <Label htmlFor="editar-documento" className="flex items-center gap-2">
+                CPF/CNPJ do cliente
+                {customerLookupLoading && (
+                  <span className="flex items-center gap-1 text-xs font-normal text-muted-foreground">
+                    <Loader2 size={16} strokeWidth={1.5} className="animate-spin" />
+                    buscando
+                  </span>
+                )}
+              </Label>
+              <Input
+                id="editar-documento"
+                placeholder="Digite para vincular outro cliente"
+                value={formatDocument(editDocument)}
+                onChange={(e) => onEditDocumentChange(e.target.value)}
+                className="font-mono"
+              />
+              {customerNotFound ? (
+                <p className="text-xs text-muted-foreground">
+                  Cliente nao encontrado —{" "}
+                  <Link to="/cadastros/clientes" className="text-primary hover:underline">
+                    cadastre em Cadastros &gt; Clientes
+                  </Link>
+                  . O vinculo atual foi mantido.
+                </p>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CircleCheck size={16} strokeWidth={1.5} className="shrink-0" />
+                  Cliente vinculado: {editCustomerName ?? "nenhum"}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="editar-marca">Marca</Label>
