@@ -72,6 +72,26 @@ pnpm lint
 pnpm build
 ```
 
+### Passeio end-to-end (Playwright)
+
+Cobre os fluxos de ticket na UI real: login, lista com filtros e ordenação, criação
+completa com cliente inline, máquina de estados até finalizado, declínio com motivo,
+ticket parcial completado pelo detalhe, comentários com resposta, ciclo de não lido e
+os escopos de atendente e visualizador.
+
+```bash
+cd frontend
+pnpm exec playwright install chromium   # apenas na primeira vez
+pnpm e2e
+```
+
+Exige o Postgres e o backend de pé (`docker compose up -d db backend`); o Vite sobe
+sozinho. Os testes usam o tenant `e2e` com quatro usuários (`e2e-admin@`,
+`e2e-supervisor@`, `e2e-atendente@` e `e2e-viewer@b2pro.com`, senha
+`senha-e2e-12345`) — recrie-os pelo painel da plataforma se o banco de dev for
+descartado. O login do backend limita 5 tentativas por minuto por IP e tenant, por
+isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
+
 ## Fases entregues
 
 - **Fase 0 — Fundação**: monorepo, Clean Architecture, Alembic multi-schema, autenticação (login com slug + JWT), sistema de módulos por tenant, painel mínimo da plataforma.
