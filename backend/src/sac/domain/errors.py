@@ -28,3 +28,7 @@ class AuthError(DomainError):
 
 class CepUnavailableError(DomainError):
     code = "cep_indisponivel"
+
+
+class InvalidTransitionError(DomainError):
+    code = "transicao_invalida"

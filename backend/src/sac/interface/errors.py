@@ -13,6 +13,7 @@ STATUS_BY_CODE = {
     "auth_error": 401,
     "rate_limited": 429,
     "cep_indisponivel": 503,
+    "transicao_invalida": 409,
 }
 
 
