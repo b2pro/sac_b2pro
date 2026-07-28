@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, User, UserTenant
 from sac.domain.errors import ConflictError, NotFoundError
@@ -123,3 +124,76 @@ class InMemoryCatalogRepository:
         if item.id not in self.items:
             raise NotFoundError("registro nao encontrado")
         self.items[item.id] = item
+
+
+class InMemoryCustomerRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, Customer] = {}
+
+    async def list(
+        self, search: str | None, active: bool | None, page: int, per_page: int
+    ) -> tuple[list[Customer], int]:
+        result = [c for c in self.items.values() if c.deleted_at is None]
+        if search:
+            lowered = search.lower()
+            result = [c for c in result if lowered in c.name.lower() or lowered in c.document]
+        if active is not None:
+            result = [c for c in result if c.active == active]
+        result.sort(key=lambda c: c.name)
+        start = (page - 1) * per_page
+        return result[start : start + per_page], len(result)
+
+    async def get(self, customer_id: UUID) -> Customer | None:
+        customer = self.items.get(customer_id)
+        return customer if customer and customer.deleted_at is None else None
+
+    async def get_by_document(self, document: str) -> Customer | None:
+        return next(
+            (c for c in self.items.values() if c.document == document and c.deleted_at is None),
+            None,
+        )
+
+    async def add(self, customer: Customer) -> None:
+        if await self.get_by_document(customer.document):
+            raise ConflictError("documento ja cadastrado")
+        self.items[customer.id] = customer
+
+    async def update(self, customer: Customer) -> None:
+        if customer.id not in self.items:
+            raise NotFoundError("cliente nao encontrado")
+        self.items[customer.id] = customer
+
+
+class InMemoryProductRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, Product] = {}
+
+    async def list(
+        self, search: str | None, active: bool | None, page: int, per_page: int
+    ) -> tuple[list[Product], int]:
+        result = [p for p in self.items.values() if p.deleted_at is None]
+        if search:
+            lowered = search.lower()
+            result = [p for p in result if lowered in p.name.lower() or lowered in p.sku.lower()]
+        if active is not None:
+            result = [p for p in result if p.active == active]
+        result.sort(key=lambda p: p.name)
+        start = (page - 1) * per_page
+        return result[start : start + per_page], len(result)
+
+    async def get(self, product_id: UUID) -> Product | None:
+        product = self.items.get(product_id)
+        return product if product and product.deleted_at is None else None
+
+    async def get_by_sku(self, sku: str) -> Product | None:
+        return next((p for p in self.items.values() if p.sku == sku and p.deleted_at is None), None)
+
+    async def add(self, product: Product) -> None:
+        if await self.get_by_sku(product.sku):
+            raise ConflictError("SKU ja cadastrado")
+        self.items[product.id] = product
+
+    async def update(self, product: Product) -> None:
+        if product.id not in self.items:
+            raise NotFoundError("produto nao encontrado")
+        self.items[product.id] = product
