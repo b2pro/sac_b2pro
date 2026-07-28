@@ -6,6 +6,7 @@ from sac.application.ports_cadastros import CustomerRepository
 from sac.application.ports_tickets import (
     SlaPolicyRepository,
     TicketActor,
+    TicketCommentRepository,
     TicketItemRepository,
     TicketReadRepository,
     TicketRepository,
@@ -22,18 +23,20 @@ from sac.application.use_cases.tickets_shared import (
     touch,
 )
 from sac.domain.documents import validate_document
-from sac.domain.errors import ValidationError
+from sac.domain.errors import ConflictError, NotFoundError, ValidationError
 from sac.domain.permissions import Permission, has_permission
 from sac.domain.tickets import (
     DEFAULT_SLA_POLICIES,
     SlaPolicy,
     Ticket,
+    TicketComment,
     TicketItem,
     TicketPriority,
     TicketStatus,
     TicketTimelineEvent,
     TimelineEventType,
     compute_due_at,
+    is_closed,
 )
 
 
@@ -102,6 +105,27 @@ async def _resolve_customer_id(
 
 async def _resolve_sla(policies: SlaPolicyRepository, priority: TicketPriority) -> SlaPolicy:
     return await policies.get(priority) or DEFAULT_SLA_POLICIES[priority]
+
+
+async def _record_item_event(
+    tickets: TicketRepository,
+    timeline: TimelineRepository,
+    ticket: Ticket,
+    actor: TicketActor,
+    type_: TimelineEventType,
+    title: str,
+) -> None:
+    await timeline.add(
+        TicketTimelineEvent(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            type=type_,
+            title=title,
+            author_user_id=actor.user_id,
+        )
+    )
+    touch(ticket, datetime.now(UTC))
+    await tickets.update(ticket)
 
 
 class CreateTicketUseCase:
@@ -228,3 +252,145 @@ class UpdateTicketUseCase:
         touch(ticket, now)
         await self._tickets.update(ticket)
         return ticket
+
+
+class AddTicketItemUseCase:
+    def __init__(
+        self,
+        tickets: TicketRepository,
+        items: TicketItemRepository,
+        timeline: TimelineRepository,
+    ) -> None:
+        self._tickets = tickets
+        self._items = items
+        self._timeline = timeline
+
+    async def execute(
+        self, actor: TicketActor, ticket_id: UUID, data: TicketItemInput
+    ) -> TicketItem:
+        ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        ensure_can_edit(actor, ticket)
+        _validate_quantity(data.quantity)
+        item = TicketItem(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            product_id=data.product_id,
+            defect_type_id=data.defect_type_id,
+            quantity=data.quantity,
+        )
+        await self._items.add(item)
+        await _record_item_event(
+            self._tickets,
+            self._timeline,
+            ticket,
+            actor,
+            TimelineEventType.ITEM_ADICIONADO,
+            "Item adicionado",
+        )
+        return item
+
+
+class UpdateTicketItemUseCase:
+    def __init__(
+        self,
+        tickets: TicketRepository,
+        items: TicketItemRepository,
+        timeline: TimelineRepository,
+    ) -> None:
+        self._tickets = tickets
+        self._items = items
+        self._timeline = timeline
+
+    async def execute(
+        self, actor: TicketActor, ticket_id: UUID, item_id: UUID, data: TicketItemInput
+    ) -> TicketItem:
+        ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        ensure_can_edit(actor, ticket)
+        _validate_quantity(data.quantity)
+        item = await self._items.get(item_id)
+        if item is None or item.ticket_id != ticket.id:
+            raise NotFoundError("item nao encontrado")
+        item.product_id = data.product_id
+        item.defect_type_id = data.defect_type_id
+        item.quantity = data.quantity
+        await self._items.update(item)
+        await _record_item_event(
+            self._tickets,
+            self._timeline,
+            ticket,
+            actor,
+            TimelineEventType.ITEM_ALTERADO,
+            "Item alterado",
+        )
+        return item
+
+
+class RemoveTicketItemUseCase:
+    def __init__(
+        self,
+        tickets: TicketRepository,
+        items: TicketItemRepository,
+        timeline: TimelineRepository,
+    ) -> None:
+        self._tickets = tickets
+        self._items = items
+        self._timeline = timeline
+
+    async def execute(self, actor: TicketActor, ticket_id: UUID, item_id: UUID) -> None:
+        ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        ensure_can_edit(actor, ticket)
+        item = await self._items.get(item_id)
+        if item is None or item.ticket_id != ticket.id:
+            raise NotFoundError("item nao encontrado")
+        await self._items.remove(item.id)
+        await _record_item_event(
+            self._tickets,
+            self._timeline,
+            ticket,
+            actor,
+            TimelineEventType.ITEM_REMOVIDO,
+            "Item removido",
+        )
+
+
+class AddCommentUseCase:
+    def __init__(
+        self,
+        tickets: TicketRepository,
+        comments: TicketCommentRepository,
+        reads: TicketReadRepository,
+    ) -> None:
+        self._tickets = tickets
+        self._comments = comments
+        self._reads = reads
+
+    async def execute(
+        self,
+        actor: TicketActor,
+        ticket_id: UUID,
+        body: str,
+        reply_to_id: UUID | None = None,
+    ) -> TicketComment:
+        ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        if is_closed(ticket):
+            raise ConflictError("ticket encerrado nao aceita comentarios")
+        text = body.strip()
+        if not text:
+            raise ValidationError("comentario vazio")
+        if reply_to_id is not None:
+            parent = await self._comments.get(reply_to_id)
+            if parent is None or parent.ticket_id != ticket.id:
+                raise ValidationError("comentario respondido nao pertence a este ticket")
+        comment = TicketComment(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            author_user_id=actor.user_id,
+            body=text,
+            reply_to_id=reply_to_id,
+        )
+        await self._comments.add(comment)
+        now = datetime.now(UTC)
+        touch(ticket, now)
+        await self._tickets.update(ticket)
+        await self._reads.mark_read(ticket.id, actor.user_id, now)
+        return comment
