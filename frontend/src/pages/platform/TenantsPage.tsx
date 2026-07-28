@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Building2, MoreHorizontal, Plus, SlidersHorizontal } from "lucide-react"
+import { Building2, Link2, MoreHorizontal, Plus, SlidersHorizontal } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
   Table,
@@ -33,13 +40,20 @@ import {
 import { ApiError } from "@/lib/api"
 import {
   KNOWN_MODULES,
+  createLink,
   createTenant,
+  deleteLink,
+  listLinks,
   listTenants,
+  listUsers,
   setTenantModules,
   setTenantStatus,
   type Tenant,
+  type TenantLink,
   type TenantStatus,
 } from "@/lib/platform"
+
+const ROLES: TenantLink["role"][] = ["admin", "supervisor", "atendente", "visualizador"]
 
 const STATUSES: TenantStatus[] = ["ativa", "teste", "suspensa", "inativa"]
 
@@ -52,6 +66,7 @@ export default function TenantsPage() {
   const { data: tenants, isLoading } = useQuery({ queryKey: ["tenants"], queryFn: listTenants })
   const [createOpen, setCreateOpen] = useState(false)
   const [modulesTenant, setModulesTenant] = useState<Tenant | null>(null)
+  const [linksTenant, setLinksTenant] = useState<Tenant | null>(null)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tenants"] })
 
@@ -186,6 +201,10 @@ export default function TenantsPage() {
                           <SlidersHorizontal size={16} strokeWidth={1.5} />
                           Modulos
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setLinksTenant(tenant)}>
+                          <Link2 size={16} strokeWidth={1.5} />
+                          Vinculos
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -208,6 +227,15 @@ export default function TenantsPage() {
               onSave={(modules) => modulesMutation.mutate({ id: modulesTenant.id, modules })}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={linksTenant != null} onOpenChange={(open) => !open && setLinksTenant(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vinculos de {linksTenant?.name}</DialogTitle>
+          </DialogHeader>
+          {linksTenant && <LinksDialogContent tenant={linksTenant} />}
         </DialogContent>
       </Dialog>
     </section>
@@ -245,6 +273,104 @@ function ModulesForm({
       <Button onClick={() => onSave(modules)} disabled={pending} className="mt-3">
         Salvar
       </Button>
+    </div>
+  )
+}
+
+function LinksDialogContent({ tenant }: { tenant: Tenant }) {
+  const queryClient = useQueryClient()
+  const { data: links, isLoading } = useQuery({
+    queryKey: ["links", tenant.id],
+    queryFn: () => listLinks(tenant.id),
+  })
+  const { data: users } = useQuery({ queryKey: ["platform-users"], queryFn: listUsers })
+  const [userId, setUserId] = useState("")
+  const [role, setRole] = useState<TenantLink["role"]>("atendente")
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["links", tenant.id] })
+
+  const addMutation = useMutation({
+    mutationFn: () => createLink(tenant.id, { user_id: userId, role }),
+    onSuccess: () => {
+      invalidate()
+      setUserId("")
+      setRole("atendente")
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const removeMutation = useMutation({
+    mutationFn: (linkUserId: string) => deleteLink(tenant.id, linkUserId),
+    onSuccess: invalidate,
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  const emailById = new Map((users ?? []).map((u) => [u.id, u.email]))
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-1">
+        {isLoading ? (
+          <li className="text-sm text-muted-foreground">Carregando vinculos...</li>
+        ) : (links ?? []).length === 0 ? (
+          <li className="text-sm text-muted-foreground">Nenhum vinculo para este tenant</li>
+        ) : (
+          (links ?? []).map((link) => (
+            <li
+              key={link.user_id}
+              className="flex items-center justify-between border-b border-border py-2.5 last:border-0"
+            >
+              <span className="font-mono text-sm text-foreground">
+                {emailById.get(link.user_id) ?? link.user_id}
+              </span>
+              <span className="flex items-center gap-3">
+                <Badge variant="outline">{link.role}</Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeMutation.mutate(link.user_id)}
+                >
+                  Remover
+                </Button>
+              </span>
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="flex items-end gap-2">
+        <div className="flex flex-1 flex-col gap-2">
+          <Label>Usuario</Label>
+          <Select value={userId} onValueChange={setUserId}>
+            <SelectTrigger>
+              <SelectValue placeholder="selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              {(users ?? []).map((u) => (
+                <SelectItem key={u.id} value={u.id} className="font-mono">
+                  {u.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label>Papel</Label>
+          <Select value={role} onValueChange={(v) => setRole(v as TenantLink["role"])}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLES.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => addMutation.mutate()} disabled={!userId || addMutation.isPending}>
+          Vincular
+        </Button>
+      </div>
     </div>
   )
 }

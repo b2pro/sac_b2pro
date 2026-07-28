@@ -9,6 +9,7 @@ import { AuthProvider } from "@/lib/auth"
 import { RequireAuth, RequireSuperAdmin } from "@/lib/guards"
 import LoginPage from "@/pages/LoginPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
+import UsersPage from "@/pages/platform/UsersPage"
 import "./index.css"
 
 const queryClient = new QueryClient()
@@ -24,7 +25,10 @@ const router = createBrowserRouter([
           { path: "/", element: <p>Bem-vindo ao SAC-B2PRO</p> },
           {
             element: <RequireSuperAdmin />,
-            children: [{ path: "/plataforma/tenants", element: <TenantsPage /> }],
+            children: [
+              { path: "/plataforma/tenants", element: <TenantsPage /> },
+              { path: "/plataforma/usuarios", element: <UsersPage /> },
+            ],
           },
         ],
       },
