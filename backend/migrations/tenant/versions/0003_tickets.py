@@ -21,6 +21,8 @@ def upgrade() -> None:
     op.create_table(
         "tickets",
         sa.Column("id", sa.Uuid(), primary_key=True),
+        # sem default de coluna no DDL de proposito: o valor vem do Sequence
+        # ticket_number_seq aplicado pelo ORM (default fica em models_tenant.py).
         sa.Column("number", sa.BigInteger(), nullable=False),
         sa.Column("brand_id", sa.Uuid(), nullable=False),
         sa.Column("customer_id", sa.Uuid(), nullable=True),

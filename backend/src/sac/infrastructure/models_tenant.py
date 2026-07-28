@@ -95,6 +95,13 @@ class TicketModel(TenantBase):
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    # server_default aqui e apenas um marcador para o mapper incluir "number" no
+    # RETURNING do INSERT (eager_defaults="auto" so considera server_default/clause
+    # element). Sem isso, o atributo fica nao carregado apos o flush e o proximo
+    # acesso dispara um reload sincrono, incompativel com AsyncSession
+    # (MissingGreenlet). O valor em si sempre vem da Sequence embutida no INSERT
+    # (TICKET_NUMBER_SEQ); o DDL real (migration 0003_tickets) NAO cria um DEFAULT
+    # de coluna no banco.
     number: Mapped[int] = mapped_column(
         BigInteger, TICKET_NUMBER_SEQ, server_default=TICKET_NUMBER_SEQ.next_value(), nullable=False
     )
