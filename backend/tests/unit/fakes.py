@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, User, UserTenant
 from sac.domain.errors import ConflictError, NotFoundError
 
@@ -90,3 +91,35 @@ class FakeHasher:
 
     def verify(self, password_hash: str, password: str) -> bool:
         return password_hash == f"h:{password}"
+
+
+class InMemoryCatalogRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, CatalogItem] = {}
+
+    async def list(self, search: str | None, active: bool | None) -> list[CatalogItem]:
+        result = [i for i in self.items.values() if i.deleted_at is None]
+        if search:
+            result = [i for i in result if search.lower() in i.name.lower()]
+        if active is not None:
+            result = [i for i in result if i.active == active]
+        return sorted(result, key=lambda i: i.name)
+
+    async def get(self, item_id: UUID) -> CatalogItem | None:
+        item = self.items.get(item_id)
+        return item if item and item.deleted_at is None else None
+
+    async def get_by_name(self, name: str) -> CatalogItem | None:
+        return next(
+            (i for i in self.items.values() if i.name == name and i.deleted_at is None), None
+        )
+
+    async def add(self, item: CatalogItem) -> None:
+        if await self.get_by_name(item.name):
+            raise ConflictError("nome ja cadastrado")
+        self.items[item.id] = item
+
+    async def update(self, item: CatalogItem) -> None:
+        if item.id not in self.items:
+            raise NotFoundError("registro nao encontrado")
+        self.items[item.id] = item
