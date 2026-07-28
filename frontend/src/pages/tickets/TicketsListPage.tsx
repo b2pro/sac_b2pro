@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { Plus } from "lucide-react"
+import { ArrowDown, ArrowUp, Plus } from "lucide-react"
 import { useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 
+import { AutocompleteField } from "@/components/tickets/AutocompleteField"
 import { PriorityBadge, SlaBadge, StatusBadge, STATUS_ACCENTS } from "@/components/tickets/badges"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/lib/auth"
-import { listCatalog } from "@/lib/cadastros"
+import { listCatalog, listProducts } from "@/lib/cadastros"
 import {
   canCreateTicket,
   listTickets,
@@ -40,6 +41,15 @@ import { cn } from "@/lib/utils"
 const PER_PAGE = 20
 const ALL = "all"
 
+type SortField = "last_activity_at" | "number" | "opened_at" | "due_at"
+
+const SORT_OPTIONS: { value: SortField; label: string }[] = [
+  { value: "last_activity_at", label: "Ultima atividade" },
+  { value: "number", label: "Numero" },
+  { value: "opened_at", label: "Abertura" },
+  { value: "due_at", label: "Prazo SLA" },
+]
+
 export default function TicketsListPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -52,6 +62,10 @@ export default function TicketsListPage() {
   const [orderCode, setOrderCode] = useState("")
   const [priority, setPriority] = useState<TicketPriority | "">("")
   const [overdue, setOverdue] = useState(searchParams.get("overdue") === "1")
+  const [productId, setProductId] = useState("")
+  const [productQuery, setProductQuery] = useState("")
+  const [sort, setSort] = useState<SortField>("last_activity_at")
+  const [order, setOrder] = useState<"asc" | "desc">("desc")
   const [page, setPage] = useState(1)
   const customerId = searchParams.get("customer_id") ?? undefined
 
@@ -68,7 +82,19 @@ export default function TicketsListPage() {
   const { data, isLoading } = useQuery({
     queryKey: [
       "tickets",
-      { status, brandId, debouncedCustomer, debouncedOrder, priority, overdue, page, customerId },
+      {
+        status,
+        brandId,
+        debouncedCustomer,
+        debouncedOrder,
+        priority,
+        overdue,
+        productId,
+        sort,
+        order,
+        page,
+        customerId,
+      },
     ],
     queryFn: () =>
       listTickets({
@@ -78,6 +104,9 @@ export default function TicketsListPage() {
         orderCode: debouncedOrder || undefined,
         priority: priority || undefined,
         overdue: overdue || undefined,
+        productId: productId || undefined,
+        sort,
+        order,
         customerId,
         page,
         perPage: PER_PAGE,
@@ -117,6 +146,22 @@ export default function TicketsListPage() {
     setPage(1)
   }
 
+  function onProductClear() {
+    setProductId("")
+    setProductQuery("")
+    setPage(1)
+  }
+
+  function onSortChange(value: string) {
+    setSort(value as SortField)
+    setPage(1)
+  }
+
+  function onToggleOrder() {
+    setOrder((current) => (current === "asc" ? "desc" : "asc"))
+    setPage(1)
+  }
+
   function onClear() {
     setStatus("")
     setBrandId("")
@@ -124,6 +169,7 @@ export default function TicketsListPage() {
     setOrderCode("")
     setPriority("")
     setOverdue(false)
+    onProductClear()
     setPage(1)
   }
 
@@ -179,6 +225,34 @@ export default function TicketsListPage() {
           </div>
 
           <div className="flex flex-col gap-2">
+            <Label htmlFor="filtro-produto">Produto</Label>
+            <AutocompleteField
+              id="filtro-produto"
+              placeholder="Buscar produto por nome ou SKU"
+              value={productQuery}
+              onValueChange={(value) => {
+                setProductQuery(value)
+                setProductId("")
+                setPage(1)
+              }}
+              onSelect={(option) => {
+                setProductId(option.id)
+                setProductQuery(option.label)
+                setPage(1)
+              }}
+              queryKey="filtro-produto"
+              fetchOptions={async (search) => {
+                const results = await listProducts({ search, perPage: 10 })
+                return results.items.map((product) => ({
+                  id: product.id,
+                  label: product.name,
+                  sublabel: product.sku,
+                }))
+              }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
             <Label htmlFor="filtro-pedido">Pedido</Label>
             <Input
               id="filtro-pedido"
@@ -204,6 +278,37 @@ export default function TicketsListPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="filtro-ordenar">Ordenar por</Label>
+            <div className="flex gap-2">
+              <Select value={sort} onValueChange={onSortChange}>
+                <SelectTrigger id="filtro-ordenar" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onToggleOrder}
+                aria-label={order === "asc" ? "Ordem crescente" : "Ordem decrescente"}
+              >
+                {order === "asc" ? (
+                  <ArrowUp size={16} strokeWidth={1.5} />
+                ) : (
+                  <ArrowDown size={16} strokeWidth={1.5} />
+                )}
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 self-end pb-2">
