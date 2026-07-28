@@ -16,6 +16,16 @@ Plataforma de SAC para automatizar o controle de trocas, defeitos e garantias ho
 
 ## Quickstart
 
+### Um comando (recomendado para dev)
+
+```powershell
+./dev.ps1
+```
+
+O script builda e sobe o Postgres e o backend em containers (migrations e seed rodam automaticamente; hot-reload ativo via volume montado) e depois inicia o frontend com `pnpm dev` no terminal atual. Super admin de dev: `admin@b2pro.com` / `admin-dev-12345` (deixe o slug vazio no login). Para parar os containers depois: `docker compose down`. As credenciais podem ser sobrescritas pelas variáveis de ambiente `SAC_SEED_ADMIN_EMAIL` e `SAC_SEED_ADMIN_PASSWORD` antes de rodar o script.
+
+### Passo a passo manual
+
 Suba o banco de dados:
 
 ```bash

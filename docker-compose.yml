@@ -9,6 +9,28 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sac -d sac"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SAC_DATABASE_URL: postgresql+asyncpg://sac:sac@db:5432/sac
+      SAC_SEED_ADMIN_EMAIL: ${SAC_SEED_ADMIN_EMAIL:-admin@b2pro.com}
+      SAC_SEED_ADMIN_PASSWORD: ${SAC_SEED_ADMIN_PASSWORD:-admin-dev-12345}
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
 
 volumes:
   pgdata:
+  backend_venv:
