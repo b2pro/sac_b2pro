@@ -13,6 +13,7 @@ import ProdutosPage from "@/pages/cadastros/ProdutosPage"
 import LoginPage from "@/pages/LoginPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
+import TicketDetailPage from "@/pages/tickets/TicketDetailPage"
 import TicketsListPage from "@/pages/tickets/TicketsListPage"
 import "./index.css"
 
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
             element: <RequireTenant />,
             children: [
               { path: "/tickets", element: <TicketsListPage /> },
+              { path: "/tickets/:id", element: <TicketDetailPage /> },
               { path: "/cadastros/marcas", element: <CatalogPage title="Marcas" path="marcas" /> },
               { path: "/cadastros/produtos", element: <ProdutosPage /> },
               {
