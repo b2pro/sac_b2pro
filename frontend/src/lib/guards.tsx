@@ -14,3 +14,10 @@ export function RequireSuperAdmin() {
   if (!session.user.is_super_admin) return <Navigate to="/" replace />
   return <Outlet />
 }
+
+export function RequireTenant() {
+  const { session } = useAuth()
+  if (!session) return <Navigate to="/login" replace />
+  if (!session.tenantSlug) return <Navigate to="/" replace />
+  return <Outlet />
+}

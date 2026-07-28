@@ -1,4 +1,4 @@
-import { Building2, Users } from "lucide-react"
+import { Building2, ClipboardCheck, Contact, Package, Store, Tags, Users, Wrench } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 import { cn } from "@/lib/utils"
@@ -16,6 +16,19 @@ export function Sidebar() {
       items: [
         { to: "/plataforma/tenants", label: "Tenants", icon: Building2 },
         { to: "/plataforma/usuarios", label: "Usuarios", icon: Users },
+      ],
+    })
+  }
+  if (session?.tenantSlug) {
+    groups.push({
+      label: "Cadastros",
+      items: [
+        { to: "/cadastros/marcas", label: "Marcas", icon: Tags },
+        { to: "/cadastros/produtos", label: "Produtos", icon: Package },
+        { to: "/cadastros/defeitos", label: "Defeitos", icon: Wrench },
+        { to: "/cadastros/solucoes", label: "Solucoes", icon: ClipboardCheck },
+        { to: "/cadastros/canais", label: "Canais", icon: Store },
+        { to: "/cadastros/clientes", label: "Clientes", icon: Contact },
       ],
     })
   }

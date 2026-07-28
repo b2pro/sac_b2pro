@@ -6,7 +6,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
-import { RequireAuth, RequireSuperAdmin } from "@/lib/guards"
+import { RequireAuth, RequireSuperAdmin, RequireTenant } from "@/lib/guards"
 import LoginPage from "@/pages/LoginPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
@@ -28,6 +28,17 @@ const router = createBrowserRouter([
             children: [
               { path: "/plataforma/tenants", element: <TenantsPage /> },
               { path: "/plataforma/usuarios", element: <UsersPage /> },
+            ],
+          },
+          {
+            element: <RequireTenant />,
+            children: [
+              { path: "/cadastros/marcas", element: <p>Marcas</p> },
+              { path: "/cadastros/produtos", element: <p>Produtos</p> },
+              { path: "/cadastros/defeitos", element: <p>Defeitos</p> },
+              { path: "/cadastros/solucoes", element: <p>Solucoes</p> },
+              { path: "/cadastros/canais", element: <p>Canais</p> },
+              { path: "/cadastros/clientes", element: <p>Clientes</p> },
             ],
           },
         ],
