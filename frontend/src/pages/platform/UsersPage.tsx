@@ -52,7 +52,7 @@ export default function UsersPage() {
     mutationFn: createUser,
     onSuccess: () => {
       invalidate()
-      setCreateOpen(false)
+      onCreateOpenChange(false)
       toast.success("Usuario criado")
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -165,7 +165,7 @@ export default function UsersPage() {
             ) : (users ?? []).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  Nenhum usuario cadastrado.
+                  Nenhum usuario cadastrado
                 </TableCell>
               </TableRow>
             ) : (

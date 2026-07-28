@@ -162,7 +162,7 @@ export default function TenantsPage() {
             ) : (tenants ?? []).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  Nenhum tenant cadastrado.
+                  Nenhum tenant cadastrado
                 </TableCell>
               </TableRow>
             ) : (
