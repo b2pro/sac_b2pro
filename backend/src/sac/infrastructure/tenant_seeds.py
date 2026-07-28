@@ -1,8 +1,10 @@
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sac.domain.catalog import CatalogItem, CatalogKind
+from sac.infrastructure.models_tenant import SlaPolicyModel
 from sac.infrastructure.repositories_cadastros import SqlCatalogRepository
 
 DEFAULT_BRANDS: list[tuple[str, str | None]] = [("KODI", None), ("STALEKS", None)]
@@ -54,6 +56,13 @@ CATALOG_DEFAULTS: dict[CatalogKind, list[tuple[str, str | None]]] = {
     CatalogKind.PURCHASE_CHANNEL: DEFAULT_PURCHASE_CHANNELS,
 }
 
+DEFAULT_SLA_POLICIES_ROWS: list[tuple[str, int, int]] = [
+    ("urgente", 24, 12),
+    ("alta", 48, 12),
+    ("media", 72, 12),
+    ("baixa", 120, 12),
+]
+
 
 async def seed_tenant_defaults(session: AsyncSession) -> int:
     created = 0
@@ -63,4 +72,14 @@ async def seed_tenant_defaults(session: AsyncSession) -> int:
             if await repo.get_by_name(name) is None:
                 await repo.add(CatalogItem(id=uuid4(), name=name, description=description))
                 created += 1
+
+    existing_priorities = set((await session.scalars(select(SlaPolicyModel.priority))).all())
+    for priority, hours, warn_hours in DEFAULT_SLA_POLICIES_ROWS:
+        if priority in existing_priorities:
+            continue
+        session.add(
+            SlaPolicyModel(id=uuid4(), priority=priority, hours=hours, warn_hours=warn_hours)
+        )
+        created += 1
+
     return created
