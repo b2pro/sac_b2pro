@@ -290,7 +290,10 @@ export function ActionPanel({
 
   function onSubmitDeclinar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!declineReason.trim()) return
+    if (!declineReason.trim()) {
+      toast.error("Informe o motivo do declinio")
+      return
+    }
     declineMutation.mutate()
   }
 
@@ -305,13 +308,19 @@ export function ActionPanel({
 
   function onSubmitReverso(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!reverseCode.trim()) return
+    if (!reverseCode.trim()) {
+      toast.error("Informe o codigo reverso")
+      return
+    }
     reverseMutation.mutate()
   }
 
   function onSubmitGarantia(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!warrantyOrderCode.trim()) return
+    if (!warrantyOrderCode.trim()) {
+      toast.error("Informe o codigo do pedido de garantia")
+      return
+    }
     warrantyMutation.mutate()
   }
 
@@ -362,7 +371,10 @@ export function ActionPanel({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {showHold && (
-                <DropdownMenuItem onClick={() => holdMutation.mutate()}>
+                <DropdownMenuItem
+                  disabled={holdMutation.isPending}
+                  onClick={() => holdMutation.mutate()}
+                >
                   Aguardar cliente
                 </DropdownMenuItem>
               )}
@@ -391,7 +403,10 @@ export function ActionPanel({
                 </DropdownMenuItem>
               )}
               {showMarkUnread && (
-                <DropdownMenuItem onClick={() => markUnreadMutation.mutate()}>
+                <DropdownMenuItem
+                  disabled={markUnreadMutation.isPending}
+                  onClick={() => markUnreadMutation.mutate()}
+                >
                   Marcar como nao lido
                 </DropdownMenuItem>
               )}
