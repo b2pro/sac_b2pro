@@ -77,5 +77,7 @@ pnpm build
 - `docs/PRD.md` — fonte de verdade de requisitos, domínio e fases do produto.
 - `docs/superpowers/specs/2026-07-27-sac-b2pro-fase-0-design.md` — design técnico da Fase 0.
 - `docs/superpowers/plans/2026-07-27-fase-0-fundacao.md` — plano de implementação da Fase 0.
+- `docs/superpowers/specs/2026-07-28-sac-b2pro-fase-1-design.md` — design técnico da Fase 1 (cadastros).
+- `docs/superpowers/plans/2026-07-28-fase-1-cadastros.md` — plano de implementação da Fase 1.
 - `docs/identidade-visual.md` — identidade visual do frontend.
 - `CLAUDE.md` — decisões de arquitetura e regras obrigatórias do projeto.
