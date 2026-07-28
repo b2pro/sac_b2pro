@@ -1,0 +1,830 @@
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { Loader2, MoreVertical, Trash2 } from "lucide-react"
+import { useState, type FormEvent } from "react"
+import { toast } from "sonner"
+
+import { StatusTrail } from "@/components/tickets/StatusTrail"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
+import { listCatalog } from "@/lib/cadastros"
+import {
+  approveTicket,
+  cancelTicket,
+  canComment,
+  canDecide,
+  canEditTicket,
+  canOperate,
+  declineTicket,
+  deleteReverse,
+  finalizeTicket,
+  holdTicket,
+  isClosed,
+  markUnread,
+  PRIORITY_LABELS,
+  primaryActionFor,
+  receiveProduct,
+  registerReverse,
+  reopenTicket,
+  resumeTicket,
+  setWarranty,
+  submitTicket,
+  updateTicket,
+  type ReverseCode,
+  type TicketDetail,
+  type TicketPriority,
+  type TicketUpdateInput,
+} from "@/lib/tickets"
+
+type DialogKind =
+  | "aprovar"
+  | "declinar"
+  | "cancelar"
+  | "finalizar"
+  | "reverso"
+  | "garantia"
+  | "editar"
+  | null
+
+const CHANNEL_NONE = "nenhum"
+
+function errorMessage(error: unknown): string {
+  return error instanceof ApiError ? error.message : "erro inesperado"
+}
+
+function formatDateTime(value: string | null): string {
+  return value
+    ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+    : "-"
+}
+
+export function ActionPanel({
+  detail,
+  onChanged,
+}: {
+  detail: TicketDetail
+  onChanged: () => void
+}) {
+  const { session } = useAuth()
+  const role = session?.role ?? null
+  const userId = session?.user.id
+  const { ticket } = detail
+  const owner = ticket.attendant_user_id === userId
+  const closed = isClosed(ticket.status)
+  const primary = primaryActionFor(ticket, role, userId)
+
+  const [dialog, setDialog] = useState<DialogKind>(null)
+  const [notes, setNotes] = useState("")
+  const [declineReason, setDeclineReason] = useState("")
+  const [cancelReason, setCancelReason] = useState("")
+  const [reverseCode, setReverseCode] = useState("")
+  const [solutionTypeId, setSolutionTypeId] = useState("")
+  const [finalNotes, setFinalNotes] = useState("")
+  const [warrantyOrderCode, setWarrantyOrderCode] = useState("")
+  const [warrantyTracking, setWarrantyTracking] = useState("")
+  const [editBrandId, setEditBrandId] = useState(ticket.brand_id)
+  const [editChannelId, setEditChannelId] = useState(ticket.purchase_channel_id ?? CHANNEL_NONE)
+  const [editPriority, setEditPriority] = useState<TicketPriority>(ticket.priority)
+  const [editOrderCode, setEditOrderCode] = useState(ticket.order_code ?? "")
+  const [editPurchaseDate, setEditPurchaseDate] = useState(ticket.purchase_date?.slice(0, 10) ?? "")
+  const [editDeliveryDate, setEditDeliveryDate] = useState(ticket.delivery_date?.slice(0, 10) ?? "")
+  const [editDescription, setEditDescription] = useState(ticket.description ?? "")
+
+  const { data: brands } = useQuery({
+    queryKey: ["marcas"],
+    queryFn: () => listCatalog("marcas"),
+    enabled: dialog === "editar",
+  })
+  const { data: channels } = useQuery({
+    queryKey: ["canais"],
+    queryFn: () => listCatalog("canais"),
+    enabled: dialog === "editar",
+  })
+  const { data: solutions } = useQuery({
+    queryKey: ["solucoes"],
+    queryFn: () => listCatalog("solucoes"),
+    enabled: dialog === "finalizar",
+  })
+
+  function openDialog(kind: DialogKind) {
+    if (kind === "aprovar") setNotes("")
+    if (kind === "declinar") setDeclineReason("")
+    if (kind === "cancelar") setCancelReason("")
+    if (kind === "reverso") setReverseCode("")
+    if (kind === "finalizar") {
+      setSolutionTypeId("")
+      setFinalNotes("")
+    }
+    if (kind === "garantia") {
+      setWarrantyOrderCode(ticket.warranty_order_code ?? "")
+      setWarrantyTracking(ticket.warranty_tracking_code ?? "")
+    }
+    if (kind === "editar") {
+      setEditBrandId(ticket.brand_id)
+      setEditChannelId(ticket.purchase_channel_id ?? CHANNEL_NONE)
+      setEditPriority(ticket.priority)
+      setEditOrderCode(ticket.order_code ?? "")
+      setEditPurchaseDate(ticket.purchase_date?.slice(0, 10) ?? "")
+      setEditDeliveryDate(ticket.delivery_date?.slice(0, 10) ?? "")
+      setEditDescription(ticket.description ?? "")
+    }
+    setDialog(kind)
+  }
+
+  function closeDialog() {
+    setDialog(null)
+  }
+
+  const onImmediateSuccess = (message: string) => () => {
+    toast.success(message)
+    onChanged()
+  }
+  const onDialogSuccess = (message: string) => () => {
+    toast.success(message)
+    closeDialog()
+    onChanged()
+  }
+  const onMutationError = (error: unknown) => toast.error(errorMessage(error))
+
+  const submitMutation = useMutation({
+    mutationFn: () => submitTicket(ticket.id),
+    onSuccess: onImmediateSuccess("Enviado para analise"),
+    onError: onMutationError,
+  })
+  const resumeMutation = useMutation({
+    mutationFn: () => resumeTicket(ticket.id),
+    onSuccess: onImmediateSuccess("Atendimento retomado"),
+    onError: onMutationError,
+  })
+  const receiveMutation = useMutation({
+    mutationFn: () => receiveProduct(ticket.id),
+    onSuccess: onImmediateSuccess("Produto recebido"),
+    onError: onMutationError,
+  })
+  const reopenMutation = useMutation({
+    mutationFn: () => reopenTicket(ticket.id),
+    onSuccess: onImmediateSuccess("Ticket reaberto"),
+    onError: onMutationError,
+  })
+  const holdMutation = useMutation({
+    mutationFn: () => holdTicket(ticket.id),
+    onSuccess: onImmediateSuccess("Aguardando retorno do cliente"),
+    onError: onMutationError,
+  })
+  const markUnreadMutation = useMutation({
+    mutationFn: () => markUnread(ticket.id),
+    onSuccess: onImmediateSuccess("Marcado como nao lido"),
+    onError: onMutationError,
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: () => approveTicket(ticket.id, notes.trim() || undefined),
+    onSuccess: onDialogSuccess("Ticket aprovado"),
+    onError: onMutationError,
+  })
+  const declineMutation = useMutation({
+    mutationFn: () => declineTicket(ticket.id, declineReason.trim()),
+    onSuccess: onDialogSuccess("Ticket declinado"),
+    onError: onMutationError,
+  })
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelTicket(ticket.id, cancelReason.trim() || undefined),
+    onSuccess: onDialogSuccess("Ticket cancelado"),
+    onError: onMutationError,
+  })
+  const reverseMutation = useMutation({
+    mutationFn: () => registerReverse(ticket.id, reverseCode.trim()),
+    onSuccess: onDialogSuccess("Reverso registrado"),
+    onError: onMutationError,
+  })
+  const finalizeMutation = useMutation({
+    mutationFn: () => finalizeTicket(ticket.id, solutionTypeId, finalNotes.trim() || undefined),
+    onSuccess: onDialogSuccess("Ticket finalizado"),
+    onError: onMutationError,
+  })
+  const warrantyMutation = useMutation({
+    mutationFn: () =>
+      setWarranty(ticket.id, warrantyOrderCode.trim(), warrantyTracking.trim() || undefined),
+    onSuccess: onDialogSuccess("Garantia registrada"),
+    onError: onMutationError,
+  })
+  const editMutation = useMutation({
+    mutationFn: () => {
+      const input: TicketUpdateInput = {
+        brand_id: editBrandId,
+        priority: editPriority,
+        customer_id: ticket.customer_id,
+        supervisor_user_id: ticket.supervisor_user_id,
+        purchase_channel_id: editChannelId === CHANNEL_NONE ? null : editChannelId,
+        order_code: editOrderCode.trim() || null,
+        purchase_date: editPurchaseDate || null,
+        delivery_date: editDeliveryDate || null,
+        description: editDescription.trim() || null,
+      }
+      return updateTicket(ticket.id, input)
+    },
+    onSuccess: onDialogSuccess("Dados atualizados"),
+    onError: onMutationError,
+  })
+
+  const immediateBusy =
+    submitMutation.isPending ||
+    resumeMutation.isPending ||
+    receiveMutation.isPending ||
+    reopenMutation.isPending
+
+  function onPrimaryClick() {
+    if (!primary) return
+    switch (primary.action) {
+      case "enviar_analise":
+        submitMutation.mutate()
+        break
+      case "retomar":
+        resumeMutation.mutate()
+        break
+      case "produto_recebido":
+        receiveMutation.mutate()
+        break
+      case "reabrir":
+        reopenMutation.mutate()
+        break
+      case "registrar_reverso":
+        openDialog("reverso")
+        break
+      case "finalizar":
+        openDialog("finalizar")
+        break
+      case "aprovar":
+        openDialog("aprovar")
+        break
+      default:
+        break
+    }
+  }
+
+  function onSubmitDeclinar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!declineReason.trim()) return
+    declineMutation.mutate()
+  }
+
+  function onSubmitFinalizar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!solutionTypeId) {
+      toast.error("Selecione a solucao")
+      return
+    }
+    finalizeMutation.mutate()
+  }
+
+  function onSubmitReverso(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!reverseCode.trim()) return
+    reverseMutation.mutate()
+  }
+
+  function onSubmitGarantia(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!warrantyOrderCode.trim()) return
+    warrantyMutation.mutate()
+  }
+
+  const showHold = ticket.status === "aberto" && canEditTicket(role, owner, ticket.status)
+  const showFinalizeDirect = ticket.status === "aprovado" && canOperate(role, owner)
+  const showWarranty = !closed && canOperate(role, owner)
+  const showEdit = canEditTicket(role, owner, ticket.status)
+  const showCancel = !closed && canDecide(role)
+  const showMarkUnread = canComment(role)
+  const hasMenu =
+    showHold || showFinalizeDirect || showWarranty || showEdit || showCancel || showMarkUnread
+
+  function renderActionArea() {
+    if (ticket.status === "aguardando_analise") {
+      if (!canDecide(role)) {
+        return <p className="text-sm text-muted-foreground">Aguardando decisao do supervisor.</p>
+      }
+      return (
+        <div className="flex gap-2">
+          <Button className="flex-1" onClick={() => openDialog("aprovar")}>
+            Aprovar
+          </Button>
+          <Button variant="outline" className="flex-1" onClick={() => openDialog("declinar")}>
+            Declinar
+          </Button>
+        </div>
+      )
+    }
+    if (!primary) return null
+    return (
+      <Button className="w-full" disabled={immediateBusy} onClick={onPrimaryClick}>
+        {immediateBusy && <Loader2 size={20} strokeWidth={1.5} className="animate-spin" />}
+        {primary.label}
+      </Button>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle>Status</CardTitle>
+        {hasMenu && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Mais acoes do ticket">
+                <MoreVertical size={20} strokeWidth={1.5} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {showHold && (
+                <DropdownMenuItem onClick={() => holdMutation.mutate()}>
+                  Aguardar cliente
+                </DropdownMenuItem>
+              )}
+              {showFinalizeDirect && (
+                <DropdownMenuItem onClick={() => openDialog("finalizar")}>
+                  Finalizar direto
+                </DropdownMenuItem>
+              )}
+              {showWarranty && (
+                <DropdownMenuItem onClick={() => openDialog("garantia")}>
+                  Registrar garantia
+                </DropdownMenuItem>
+              )}
+              {showEdit && (
+                <DropdownMenuItem onClick={() => openDialog("editar")}>
+                  Editar dados
+                </DropdownMenuItem>
+              )}
+              {(showCancel || showMarkUnread) &&
+                (showHold || showFinalizeDirect || showWarranty || showEdit) && (
+                  <DropdownMenuSeparator />
+                )}
+              {showCancel && (
+                <DropdownMenuItem variant="destructive" onClick={() => openDialog("cancelar")}>
+                  Cancelar ticket
+                </DropdownMenuItem>
+              )}
+              {showMarkUnread && (
+                <DropdownMenuItem onClick={() => markUnreadMutation.mutate()}>
+                  Marcar como nao lido
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <StatusTrail status={ticket.status} sla={ticket.sla} />
+        {renderActionArea()}
+      </CardContent>
+
+      <Dialog open={dialog === "aprovar"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aprovar ticket</DialogTitle>
+            <DialogDescription>
+              Notas sao opcionais e ficam registradas no historico.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              approveMutation.mutate()
+            }}
+            className="flex flex-col gap-4"
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="aprovar-notes">Notas (opcional)</Label>
+              <Textarea
+                id="aprovar-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={approveMutation.isPending}>
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "declinar"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Declinar ticket</DialogTitle>
+            <DialogDescription>Informe o motivo da recusa.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onSubmitDeclinar} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="declinar-reason">Motivo</Label>
+              <Textarea
+                id="declinar-reason"
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                rows={3}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="destructive" disabled={declineMutation.isPending}>
+                Declinar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "cancelar"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar ticket</DialogTitle>
+            <DialogDescription>
+              Esta acao encerra o ticket e nao pode ser desfeita. Informe um motivo, se desejar.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              cancelMutation.mutate()
+            }}
+            className="flex flex-col gap-4"
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="cancelar-reason">Motivo (opcional)</Label>
+              <Textarea
+                id="cancelar-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Voltar
+              </Button>
+              <Button type="submit" variant="destructive" disabled={cancelMutation.isPending}>
+                Cancelar ticket
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "finalizar"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalizar ticket</DialogTitle>
+            <DialogDescription>Selecione a solucao aplicada.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onSubmitFinalizar} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="finalizar-solucao">Solucao</Label>
+              <Select value={solutionTypeId} onValueChange={setSolutionTypeId}>
+                <SelectTrigger id="finalizar-solucao" className="w-full">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(solutions ?? []).map((solution) => (
+                    <SelectItem key={solution.id} value={solution.id}>
+                      {solution.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="finalizar-notes">Notas (opcional)</Label>
+              <Textarea
+                id="finalizar-notes"
+                value={finalNotes}
+                onChange={(e) => setFinalNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={finalizeMutation.isPending}>
+                Finalizar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "reverso"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar reverso</DialogTitle>
+            <DialogDescription>Informe o codigo de rastreio do envio reverso.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onSubmitReverso} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reverso-code">Codigo</Label>
+              <Input
+                id="reverso-code"
+                className="font-mono"
+                value={reverseCode}
+                onChange={(e) => setReverseCode(e.target.value)}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={reverseMutation.isPending}>
+                Registrar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "garantia"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar garantia</DialogTitle>
+            <DialogDescription>Pedido de garantia junto ao fabricante.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onSubmitGarantia} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="garantia-order">Pedido</Label>
+              <Input
+                id="garantia-order"
+                className="font-mono"
+                value={warrantyOrderCode}
+                onChange={(e) => setWarrantyOrderCode(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="garantia-tracking">Rastreio (opcional)</Label>
+              <Input
+                id="garantia-tracking"
+                className="font-mono"
+                value={warrantyTracking}
+                onChange={(e) => setWarrantyTracking(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={warrantyMutation.isPending}>
+                Registrar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "editar"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar dados do ticket</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              editMutation.mutate()
+            }}
+            className="flex flex-col gap-4"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-marca">Marca</Label>
+                <Select value={editBrandId} onValueChange={setEditBrandId}>
+                  <SelectTrigger id="editar-marca" className="w-full">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(brands ?? []).map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-canal">Canal</Label>
+                <Select value={editChannelId} onValueChange={setEditChannelId}>
+                  <SelectTrigger id="editar-canal" className="w-full">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={CHANNEL_NONE}>Nao informado</SelectItem>
+                    {(channels ?? []).map((channel) => (
+                      <SelectItem key={channel.id} value={channel.id}>
+                        {channel.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-prioridade">Prioridade</Label>
+                <Select
+                  value={editPriority}
+                  onValueChange={(value) => setEditPriority(value as TicketPriority)}
+                >
+                  <SelectTrigger id="editar-prioridade" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-pedido">Pedido</Label>
+                <Input
+                  id="editar-pedido"
+                  className="font-mono"
+                  value={editOrderCode}
+                  onChange={(e) => setEditOrderCode(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-compra">Data da compra</Label>
+                <Input
+                  id="editar-compra"
+                  type="date"
+                  value={editPurchaseDate}
+                  onChange={(e) => setEditPurchaseDate(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-entrega">Data de entrega</Label>
+                <Input
+                  id="editar-entrega"
+                  type="date"
+                  value={editDeliveryDate}
+                  onChange={(e) => setEditDeliveryDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="editar-descricao">Descricao</Label>
+              <Textarea
+                id="editar-descricao"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={editMutation.isPending}>
+                Salvar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+export function ReversesCard({
+  detail,
+  onChanged,
+}: {
+  detail: TicketDetail
+  onChanged: () => void
+}) {
+  const { session } = useAuth()
+  const role = session?.role ?? null
+  const userId = session?.user.id
+  const { ticket, reverses } = detail
+  const owner = ticket.attendant_user_id === userId
+  const canRemove =
+    canOperate(role, owner) &&
+    (ticket.status === "aguardando_envio_reverso" || ticket.status === "produto_recebido")
+
+  const [toRemove, setToRemove] = useState<ReverseCode | null>(null)
+
+  const removeMutation = useMutation({
+    mutationFn: (reverseId: string) => deleteReverse(ticket.id, reverseId),
+    onSuccess: () => {
+      toast.success("Reverso removido")
+      setToRemove(null)
+      onChanged()
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Reversos</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {reverses.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum codigo reverso.</p>
+        ) : (
+          <ul className="space-y-3 text-sm">
+            {reverses.map((reverse) => (
+              <li key={reverse.id} className="flex items-start justify-between gap-2">
+                <div className="flex flex-col">
+                  <span className="font-mono text-foreground">{reverse.code}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {reverse.author_name ?? "-"} · {formatDateTime(reverse.created_at)}
+                  </span>
+                </div>
+                {canRemove && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setToRemove(reverse)}
+                    aria-label={`Remover reverso ${reverse.code}`}
+                  >
+                    <Trash2 size={16} strokeWidth={1.5} />
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+
+      <Dialog open={toRemove != null} onOpenChange={(open) => !open && setToRemove(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remover reverso</DialogTitle>
+            <DialogDescription>
+              {toRemove
+                ? `Remover o codigo ${toRemove.code}? Esta acao nao pode ser desfeita.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setToRemove(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={removeMutation.isPending}
+              onClick={() => toRemove && removeMutation.mutate(toRemove.id)}
+            >
+              Remover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}

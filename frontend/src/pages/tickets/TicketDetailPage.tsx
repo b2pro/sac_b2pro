@@ -4,8 +4,8 @@ import { useState, type FormEvent, type KeyboardEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
+import { ActionPanel, ReversesCard } from "@/components/tickets/ActionPanel"
 import { PriorityBadge, SlaBadge, StatusBadge } from "@/components/tickets/badges"
-import { StatusTrail } from "@/components/tickets/StatusTrail"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -119,8 +119,7 @@ export default function TicketDetailPage() {
     return <p className="text-sm text-muted-foreground">Ticket nao encontrado.</p>
   }
 
-  const { ticket, customer, attendant_name, supervisor_name, items, comments, timeline, reverses } =
-    data
+  const { ticket, customer, attendant_name, supervisor_name, items, comments, timeline } = data
 
   const commentsById = new Map(comments.map((c) => [c.id, c]))
   const sortedTimeline = [...timeline].sort((a, b) => {
@@ -449,36 +448,9 @@ export default function TicketDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <StatusTrail status={ticket.status} sla={ticket.sla} />
-            </CardContent>
-          </Card>
+          <ActionPanel detail={data} onChanged={invalidate} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Reversos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {reverses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum codigo reverso.</p>
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {reverses.map((reverse) => (
-                    <li key={reverse.id} className="flex flex-col">
-                      <span className="font-mono text-foreground">{reverse.code}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {reverse.author_name ?? "-"} · {formatDateTime(reverse.created_at)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          <ReversesCard detail={data} onChanged={invalidate} />
 
           <Card>
             <CardHeader>
