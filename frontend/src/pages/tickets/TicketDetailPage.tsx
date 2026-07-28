@@ -35,8 +35,10 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
 }
 
-function formatDate(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString("pt-BR") : "-"
+function formatDateOnly(value: string | null): string {
+  if (!value) return "-"
+  const [year, month, day] = value.slice(0, 10).split("-")
+  return `${day}/${month}/${year}`
 }
 
 function formatDateTime(value: string | null): string {
@@ -182,6 +184,12 @@ export default function TicketDetailPage() {
                   <dd className="text-foreground">{supervisor_name ?? "—"}</dd>
                 </div>
                 <div>
+                  <dt className="text-muted-foreground">Prioridade</dt>
+                  <dd>
+                    <PriorityBadge priority={ticket.priority} />
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-muted-foreground">Abertura</dt>
                   <dd className="text-foreground">{formatDateTime(ticket.opened_at)}</dd>
                 </div>
@@ -287,11 +295,11 @@ export default function TicketDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Data da compra</dt>
-                  <dd className="text-foreground">{formatDate(ticket.purchase_date)}</dd>
+                  <dd className="text-foreground">{formatDateOnly(ticket.purchase_date)}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Data de entrega</dt>
-                  <dd className="text-foreground">{formatDate(ticket.delivery_date)}</dd>
+                  <dd className="text-foreground">{formatDateOnly(ticket.delivery_date)}</dd>
                 </div>
               </dl>
             </CardContent>
