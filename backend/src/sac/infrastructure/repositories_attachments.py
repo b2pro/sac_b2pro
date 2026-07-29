@@ -1,0 +1,259 @@
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from sac.application.ports_attachments import TenantMember
+from sac.domain.attachments import (
+    AttachmentKind,
+    AttachmentStatus,
+    PreviewJob,
+    PreviewJobStatus,
+    PreviewStatus,
+    TicketAttachment,
+)
+from sac.domain.errors import NotFoundError
+from sac.domain.permissions import Role
+from sac.infrastructure.models import PreviewJobModel, TenantModel, UserModel, UserTenantModel
+from sac.infrastructure.models_tenant import ProductModel, TicketAttachmentModel
+from sac.infrastructure.repositories_tickets import flush_tickets
+
+
+def _entity(m: TicketAttachmentModel) -> TicketAttachment:
+    return TicketAttachment(
+        id=m.id,
+        ticket_id=m.ticket_id,
+        filename=m.filename,
+        content_type=m.content_type,
+        size_bytes=m.size_bytes,
+        object_key=m.object_key,
+        kind=AttachmentKind(m.kind),
+        status=AttachmentStatus(m.status),
+        preview_status=PreviewStatus(m.preview_status),
+        author_user_id=m.author_user_id,
+        preview_key=m.preview_key,
+        preview_medium_key=m.preview_medium_key,
+        created_at=m.created_at,
+        confirmed_at=m.confirmed_at,
+        deleted_at=m.deleted_at,
+    )
+
+
+class SqlAttachmentRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, attachment: TicketAttachment) -> None:
+        self._session.add(
+            TicketAttachmentModel(
+                id=attachment.id,
+                ticket_id=attachment.ticket_id,
+                filename=attachment.filename,
+                content_type=attachment.content_type,
+                size_bytes=attachment.size_bytes,
+                object_key=attachment.object_key,
+                kind=str(attachment.kind),
+                status=str(attachment.status),
+                preview_key=attachment.preview_key,
+                preview_medium_key=attachment.preview_medium_key,
+                preview_status=str(attachment.preview_status),
+                author_user_id=attachment.author_user_id,
+                confirmed_at=attachment.confirmed_at,
+                deleted_at=attachment.deleted_at,
+            )
+        )
+        await flush_tickets(self._session)
+
+    async def get(self, attachment_id: UUID) -> TicketAttachment | None:
+        m = await self._session.get(TicketAttachmentModel, attachment_id)
+        return _entity(m) if m is not None else None
+
+    async def list_by_ticket(self, ticket_id: UUID) -> list[TicketAttachment]:
+        rows = await self._session.scalars(
+            select(TicketAttachmentModel)
+            .where(
+                TicketAttachmentModel.ticket_id == ticket_id,
+                TicketAttachmentModel.status == str(AttachmentStatus.DISPONIVEL),
+                TicketAttachmentModel.deleted_at.is_(None),
+            )
+            .order_by(TicketAttachmentModel.created_at)
+        )
+        return [_entity(m) for m in rows]
+
+    async def count_active(self, ticket_id: UUID) -> int:
+        total = await self._session.scalar(
+            select(func.count()).where(
+                TicketAttachmentModel.ticket_id == ticket_id,
+                TicketAttachmentModel.status.in_(
+                    [str(AttachmentStatus.PENDENTE), str(AttachmentStatus.DISPONIVEL)]
+                ),
+                TicketAttachmentModel.deleted_at.is_(None),
+            )
+        )
+        return int(total or 0)
+
+    async def update(self, attachment: TicketAttachment) -> None:
+        m = await self._session.get(TicketAttachmentModel, attachment.id)
+        if m is None:
+            raise NotFoundError("anexo nao encontrado")
+        m.status = str(attachment.status)
+        m.preview_status = str(attachment.preview_status)
+        m.preview_key = attachment.preview_key
+        m.preview_medium_key = attachment.preview_medium_key
+        m.confirmed_at = attachment.confirmed_at
+        m.deleted_at = attachment.deleted_at
+        m.size_bytes = attachment.size_bytes
+        m.content_type = attachment.content_type
+        await flush_tickets(self._session)
+
+    async def list_pending_before(self, moment: datetime) -> list[TicketAttachment]:
+        rows = await self._session.scalars(
+            select(TicketAttachmentModel).where(
+                TicketAttachmentModel.status == str(AttachmentStatus.PENDENTE),
+                TicketAttachmentModel.created_at < moment,
+            )
+        )
+        return [_entity(m) for m in rows]
+
+
+def _job_entity(m: PreviewJobModel) -> PreviewJob:
+    return PreviewJob(
+        id=m.id,
+        tenant_slug=m.tenant_slug,
+        object_key=m.object_key,
+        kind=AttachmentKind(m.kind),
+        status=PreviewJobStatus(m.status),
+        attempts=m.attempts,
+        next_attempt_at=m.next_attempt_at,
+        attachment_id=m.attachment_id,
+        product_id=m.product_id,
+        last_error=m.last_error,
+    )
+
+
+class SqlPreviewJobRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, job: PreviewJob) -> None:
+        self._session.add(
+            PreviewJobModel(
+                id=job.id,
+                tenant_slug=job.tenant_slug,
+                attachment_id=job.attachment_id,
+                product_id=job.product_id,
+                object_key=job.object_key,
+                kind=str(job.kind),
+                status=str(job.status),
+                attempts=job.attempts,
+                next_attempt_at=job.next_attempt_at,
+                last_error=job.last_error,
+            )
+        )
+        await self._session.flush()
+
+    async def get(self, job_id: UUID) -> PreviewJob | None:
+        m = await self._session.get(PreviewJobModel, job_id)
+        return _job_entity(m) if m is not None else None
+
+    async def claim_next(self, now: datetime) -> PreviewJob | None:
+        m = await self._session.scalar(
+            select(PreviewJobModel)
+            .where(
+                PreviewJobModel.status == str(PreviewJobStatus.PENDENTE),
+                PreviewJobModel.next_attempt_at <= now,
+            )
+            .order_by(PreviewJobModel.next_attempt_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if m is None:
+            return None
+        m.status = str(PreviewJobStatus.PROCESSANDO)
+        await self._session.flush()
+        return _job_entity(m)
+
+    async def mark_done(self, job_id: UUID) -> None:
+        await self._session.execute(
+            update(PreviewJobModel)
+            .where(PreviewJobModel.id == job_id)
+            .values(status=str(PreviewJobStatus.PRONTO), last_error=None)
+        )
+        await self._session.flush()
+
+    async def mark_failed(
+        self, job_id: UUID, error: str, next_attempt_at: datetime, exhausted: bool
+    ) -> None:
+        status = PreviewJobStatus.FALHOU if exhausted else PreviewJobStatus.PENDENTE
+        await self._session.execute(
+            update(PreviewJobModel)
+            .where(PreviewJobModel.id == job_id)
+            .values(
+                status=str(status),
+                attempts=PreviewJobModel.attempts + 1,
+                next_attempt_at=next_attempt_at,
+                last_error=error[:500],
+            )
+        )
+        await self._session.flush()
+
+
+class SqlProductPhotoRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def set_photo(
+        self, product_id: UUID, photo_key: str | None, preview_key: str | None
+    ) -> None:
+        m = await self._session.get(ProductModel, product_id)
+        if m is None:
+            raise NotFoundError("produto nao encontrado")
+        m.photo_key = photo_key
+        m.photo_preview_key = preview_key
+        await self._session.flush()
+
+    async def get_photo(self, product_id: UUID) -> tuple[str | None, str | None] | None:
+        m = await self._session.get(ProductModel, product_id)
+        if m is None:
+            return None
+        return m.photo_key, m.photo_preview_key
+
+
+class SqlTenantMemberDirectory:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_members(self, tenant_slug: str) -> list[TenantMember]:
+        rows = await self._session.execute(
+            select(UserModel.id, UserModel.name, UserTenantModel.role, UserTenantModel.active)
+            .join(UserTenantModel, UserTenantModel.user_id == UserModel.id)
+            .join(TenantModel, TenantModel.id == UserTenantModel.tenant_id)
+            .where(
+                TenantModel.slug == tenant_slug,
+                UserTenantModel.active.is_(True),
+                UserModel.active.is_(True),
+                UserModel.deleted_at.is_(None),
+            )
+            .order_by(UserModel.name)
+        )
+        return [
+            TenantMember(id=row[0], name=row[1], role=Role(row[2]), active=row[3])
+            for row in rows.all()
+        ]
+
+
+@dataclass
+class AttachmentRepos:
+    attachments: SqlAttachmentRepository
+    jobs: SqlPreviewJobRepository
+    photos: SqlProductPhotoRepository
+
+
+def build_attachment_repos(session: AsyncSession) -> AttachmentRepos:
+    return AttachmentRepos(
+        attachments=SqlAttachmentRepository(session),
+        jobs=SqlPreviewJobRepository(session),
+        photos=SqlProductPhotoRepository(session),
+    )
