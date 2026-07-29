@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
 import { ActionPanel, ReversesCard } from "@/components/tickets/ActionPanel"
+import { AttachmentsCard } from "@/components/tickets/AttachmentsCard"
 import { PriorityBadge, SlaBadge, StatusBadge } from "@/components/tickets/badges"
 import { ItemsCard } from "@/components/tickets/ItemsCard"
 import { Button } from "@/components/ui/button"
@@ -308,16 +309,7 @@ export default function TicketDetailPage() {
 
           <ItemsCard detail={data} role={role} isOwner={isOwner} onChanged={invalidate} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Anexos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                Anexos chegam na Fase 2B (armazenamento Wasabi).
-              </div>
-            </CardContent>
-          </Card>
+          <AttachmentsCard ticketId={ticket.id} status={ticket.status} onChanged={invalidate} />
 
           <Card>
             <CardHeader>
