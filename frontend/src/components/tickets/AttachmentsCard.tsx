@@ -110,7 +110,7 @@ function AttachmentTile({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={`Mais acoes de ${attachment.filename}`}
+              aria-label={`Acoes do anexo ${attachment.filename}`}
             >
               <MoreVertical size={16} strokeWidth={1.5} />
             </Button>

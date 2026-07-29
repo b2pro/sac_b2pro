@@ -118,6 +118,39 @@ export async function firstProductId(request: APIRequestContext): Promise<string
   return list.items[0].id
 }
 
+/** Cria um produto dedicado pela API. Usado quando o teste precisa de um
+ *  produto isolado (ex.: foto/preview), em vez de reaproveitar o catalogo
+ *  compartilhado do tenant e2e — evita interferencia entre execucoes. */
+export async function apiCreateProduct(
+  request: APIRequestContext,
+  who: Who,
+  body: { name: string; sku: string; segment?: string; description?: string },
+): Promise<{ id: string; name: string; sku: string }> {
+  const res = await request.post(`${API}/cadastros/produtos`, {
+    headers: { Authorization: `Bearer ${await token(request, who)}` },
+    data: body,
+  })
+  expect(res.ok(), `criacao de produto falhou: ${await res.text()}`).toBeTruthy()
+  return (await res.json()) as { id: string; name: string; sku: string }
+}
+
+/** Le o photo_key atual do produto direto do backend (nao do cache do React
+ *  Query da pagina) — usado para provar que uma acao de UI realmente mudou
+ *  (ou nao mudou) o estado no servidor, e nao so fechou um dialog. */
+export async function apiProductPhotoKey(
+  request: APIRequestContext,
+  sku: string,
+): Promise<string | null> {
+  const list = await authGet<{ items: Array<{ sku: string; photo_key: string | null }> }>(
+    request,
+    "admin",
+    `/cadastros/produtos?search=${encodeURIComponent(sku)}`,
+  )
+  const found = list.items.find((item) => item.sku === sku)
+  expect(found, `produto com sku ${sku} nao encontrado`).toBeTruthy()
+  return found!.photo_key
+}
+
 type TicketPayload = Record<string, unknown>
 
 export async function apiCreateTicket(
