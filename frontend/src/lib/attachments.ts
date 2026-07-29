@@ -101,12 +101,23 @@ export function putToStorage(
   })
 }
 
+export type UploadCallbacks = {
+  /** Chamado assim que a intencao existe no servidor, ANTES do PUT comecar.
+   *  E o unico momento em que quem chama consegue saber o attachment_id de um
+   *  upload que talvez nunca resolva: a intencao ja criou uma linha `pendente`
+   *  que ocupa vaga na cota do ticket, e um upload cancelado no meio do PUT
+   *  rejeita a promise sem nunca devolver esse id. */
+  onIntent?: (attachmentId: string) => void
+  onProgress?: UploadProgress
+  signal?: AbortSignal
+}
+
 export async function uploadAttachment(
   ticketId: string,
   file: File,
-  onProgress?: UploadProgress,
-  signal?: AbortSignal,
+  callbacks: UploadCallbacks = {},
 ): Promise<Attachment> {
+  const { onIntent, onProgress, signal } = callbacks
   const preparado = await compressImage(file)
   const thumb = await captureVideoThumb(preparado)
   const intent = await requestIntent(ticketId, {
@@ -115,6 +126,7 @@ export async function uploadAttachment(
     size_bytes: preparado.size,
     with_preview: thumb !== null,
   })
+  onIntent?.(intent.attachment_id)
   await putToStorage(intent.upload_url, preparado, preparado.type, onProgress, signal)
   if (thumb && intent.preview_upload_url) {
     try {

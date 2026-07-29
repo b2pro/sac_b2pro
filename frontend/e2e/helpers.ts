@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { basename } from "node:path"
+
 import { expect, type APIRequestContext, type Page } from "@playwright/test"
 
 export const SLUG = "e2e"
@@ -134,21 +137,86 @@ export async function apiCreateProduct(
   return (await res.json()) as { id: string; name: string; sku: string }
 }
 
-/** Le o photo_key atual do produto direto do backend (nao do cache do React
+/** Le o estado da foto do produto direto do backend (nao do cache do React
  *  Query da pagina) — usado para provar que uma acao de UI realmente mudou
- *  (ou nao mudou) o estado no servidor, e nao so fechou um dialog. */
+ *  (ou nao mudou) o estado no servidor, e nao so fechou um dialog. `photo_url`
+ *  so vem preenchido quando o original E o preview existem. */
+export async function apiProductPhoto(
+  request: APIRequestContext,
+  sku: string,
+): Promise<{ photo_key: string | null; photo_url: string | null }> {
+  const list = await authGet<{
+    items: Array<{ sku: string; photo_key: string | null; photo_url: string | null }>
+  }>(request, "admin", `/cadastros/produtos?search=${encodeURIComponent(sku)}`)
+  const found = list.items.find((item) => item.sku === sku)
+  expect(found, `produto com sku ${sku} nao encontrado`).toBeTruthy()
+  return { photo_key: found!.photo_key, photo_url: found!.photo_url }
+}
+
 export async function apiProductPhotoKey(
   request: APIRequestContext,
   sku: string,
 ): Promise<string | null> {
-  const list = await authGet<{ items: Array<{ sku: string; photo_key: string | null }> }>(
-    request,
-    "admin",
-    `/cadastros/produtos?search=${encodeURIComponent(sku)}`,
+  return (await apiProductPhoto(request, sku)).photo_key
+}
+
+/** Cria intencoes de upload sem confirmar. Cada uma deixa no servidor uma linha
+ *  de anexo `pendente`, que ocupa vaga na cota de 10 do ticket mas nao aparece
+ *  na listagem (que so devolve `disponivel`) — exatamente o estado em que a UI
+ *  mostra 0/10 e o servidor responde 409. Usado para levar o ticket a beira do
+ *  limite sem depender de dez uploads reais. */
+export async function apiPendingIntents(
+  request: APIRequestContext,
+  who: Who,
+  ticketId: string,
+  quantidade: number,
+): Promise<string[]> {
+  const ids: string[] = []
+  for (let i = 0; i < quantidade; i += 1) {
+    const res = await request.post(`${API}/tickets/${ticketId}/anexos/intencao`, {
+      headers: { Authorization: `Bearer ${await token(request, who)}` },
+      data: { filename: `pendente-${i}.png`, content_type: "image/png", size_bytes: 1024 },
+    })
+    expect(res.ok(), `intencao ${i} falhou: ${await res.text()}`).toBeTruthy()
+    ids.push(((await res.json()) as { attachment_id: string }).attachment_id)
+  }
+  return ids
+}
+
+/** Sobe um anexo pela API do jeito que o navegador faz: intencao, PUT direto na
+ *  URL assinada e confirmacao. Usado para montar um ticket com anexo de OUTRO
+ *  autor — cenario que a UI de um unico usuario logado nao consegue produzir. */
+export async function apiUploadAttachment(
+  request: APIRequestContext,
+  who: Who,
+  ticketId: string,
+  caminho: string,
+): Promise<string> {
+  const bytes = readFileSync(caminho)
+  const headers = { Authorization: `Bearer ${await token(request, who)}` }
+  const intentRes = await request.post(`${API}/tickets/${ticketId}/anexos/intencao`, {
+    headers,
+    data: {
+      filename: basename(caminho),
+      content_type: "image/png",
+      size_bytes: bytes.length,
+    },
+  })
+  expect(intentRes.ok(), `intencao de anexo falhou: ${await intentRes.text()}`).toBeTruthy()
+  const intent = (await intentRes.json()) as { attachment_id: string; upload_url: string }
+
+  const put = await request.put(intent.upload_url, {
+    headers: { "Content-Type": "image/png" },
+    data: bytes,
+  })
+  expect(put.ok(), `PUT no storage falhou: ${put.status()}`).toBeTruthy()
+
+  const confirmar = await request.post(
+    `${API}/tickets/${ticketId}/anexos/${intent.attachment_id}/confirmar`,
+    { headers },
   )
-  const found = list.items.find((item) => item.sku === sku)
-  expect(found, `produto com sku ${sku} nao encontrado`).toBeTruthy()
-  return found!.photo_key
+  expect(confirmar.ok(), `confirmacao de anexo falhou: ${await confirmar.text()}`).toBeTruthy()
+  return intent.attachment_id
 }
 
 type TicketPayload = Record<string, unknown>

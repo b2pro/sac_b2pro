@@ -246,7 +246,16 @@ export default function ProdutosPage() {
 
   const deletePhotoMutation = useMutation({
     mutationFn: (id: string) => deleteProductPhoto(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      // sem foto nao ha preview para esperar: limpa a marca de "preview
+      // indisponivel" para que um envio futuro comece com o estado limpo.
+      pollStartedAtRef.current.delete(id)
+      setPreviewTimedOut((atual) => {
+        if (!atual.has(id)) return atual
+        const proximo = new Set(atual)
+        proximo.delete(id)
+        return proximo
+      })
       invalidate()
       setConfirmingPhotoDelete(null)
       toast.success("Foto removida")

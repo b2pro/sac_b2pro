@@ -24,10 +24,21 @@ import { ApiError } from "@/lib/api"
 import { attachmentUrl, deleteAttachment, listAttachments, type Attachment } from "@/lib/attachments"
 import { useAuth } from "@/lib/auth"
 import { ACCEPTED_MIME } from "@/lib/media"
-import { canComment, isClosed, type TicketStatus } from "@/lib/tickets"
+import { canComment, canDecide, isClosed, type TicketStatus } from "@/lib/tickets"
 import { cn } from "@/lib/utils"
 
 const MAX_ATTACHMENTS = 10
+
+const POLL_INTERVAL_MS = 4000
+// Mesmo orcamento por item usado na foto de produto (POLL_BUDGET_MS em
+// ProdutosPage): cobre o turnaround normal (segundos) e a janela de retry do
+// worker de preview — backoff de 1+2+4+8 min entre as 5 tentativas antes de o
+// job ser dado por esgotado (MAX_PREVIEW_ATTEMPTS=5 em sac.domain.attachments),
+// cerca de 15 min no pior caso. Com o worker de pe o proprio status "falhou"
+// encerra o polling; o orcamento e o que impede o repoll infinito a cada 4s
+// (re-assinando uma URL por anexo em cada resposta) quando o worker esta parado
+// e o "pendente" nunca resolve.
+const POLL_BUDGET_MS = 20 * 60 * 1000
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
@@ -39,7 +50,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function AttachmentPreview({ attachment }: { attachment: Attachment }) {
+function AttachmentPreview({
+  attachment,
+  previewEsgotado,
+}: {
+  attachment: Attachment
+  previewEsgotado: boolean
+}) {
   if (attachment.preview_status === "pronto" && attachment.preview_url) {
     return (
       <img
@@ -48,6 +65,16 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
         className="size-full object-cover"
         loading="lazy"
       />
+    )
+  }
+  // Pendente alem do orcamento de espera: o polling parou, entao o spinner
+  // giraria para sempre sem nenhuma chance de virar preview nesta visita.
+  if (attachment.preview_status === "pendente" && previewEsgotado) {
+    return (
+      <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+        <ImageOff size={20} strokeWidth={1.5} />
+        preview indisponivel
+      </span>
     )
   }
   if (attachment.preview_status === "pendente") {
@@ -75,12 +102,14 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
 function AttachmentTile({
   attachment,
   podeExcluir,
+  previewEsgotado,
   onOpen,
   onDownload,
   onRemove,
 }: {
   attachment: Attachment
   podeExcluir: boolean
+  previewEsgotado: boolean
   onOpen: () => void
   onDownload: () => void
   onRemove: () => void
@@ -93,7 +122,7 @@ function AttachmentTile({
         title={attachment.filename}
         className="flex aspect-square w-full items-center justify-center bg-muted/40"
       >
-        <AttachmentPreview attachment={attachment} />
+        <AttachmentPreview attachment={attachment} previewEsgotado={previewEsgotado} />
       </button>
       <div className="flex items-center gap-1 border-t border-border px-2 py-1.5">
         <div className="min-w-0 flex-1">
@@ -140,12 +169,19 @@ export function AttachmentsCard({
 }) {
   const { session } = useAuth()
   const role = session?.role ?? null
+  const userId = session?.user.id ?? null
   const podeAnexar = canComment(role) && !isClosed(status)
 
   const [arrastando, setArrastando] = useState(false)
   const [removendo, setRemovendo] = useState<Attachment | null>(null)
   const [excluindo, setExcluindo] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Anexos cujo preview ficou pendente alem do orcamento de polling abaixo.
+  const [previewEsgotado, setPreviewEsgotado] = useState<Set<string>>(() => new Set())
+  // Quando cada anexo pendente foi visto pendente pela 1a vez, por id (nao um
+  // relogio global): mesma escolha feita para a foto de produto, para que um
+  // anexo novo nunca herde o relogio vencido de outro.
+  const pollStartedAtRef = useRef<Map<string, number>>(new Map())
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["anexos", ticketId],
@@ -153,10 +189,41 @@ export function AttachmentsCard({
     // O preview de imagem e gerado por um worker assincrono: um anexo recem
     // enviado chega "pendente" e vira "pronto" pouco depois. So mantemos o
     // refetch periodico enquanto houver algum preview pendente — nada de
-    // polling constante quando a lista ja estabilizou.
+    // polling constante quando a lista ja estabilizou — e so ate o orcamento de
+    // tempo acima, por anexo: com o worker parado o "pendente" nunca resolve e
+    // sem o orcamento a pagina repollaria de 4 em 4 segundos para sempre.
     refetchInterval: (query) => {
-      const anexos = query.state.data
-      return anexos?.some((a) => a.preview_status === "pendente") ? 4000 : false
+      const pendentes = (query.state.data ?? []).filter((a) => a.preview_status === "pendente")
+      const idsPendentes = new Set(pendentes.map((a) => a.id))
+
+      for (const id of pollStartedAtRef.current.keys()) {
+        if (!idsPendentes.has(id)) pollStartedAtRef.current.delete(id)
+      }
+      if (idsPendentes.size === 0) return false
+
+      const agora = Date.now()
+      const esgotadosAgora: string[] = []
+      let algumDentroDoOrcamento = false
+      for (const id of idsPendentes) {
+        const inicio = pollStartedAtRef.current.get(id)
+        if (inicio === undefined) {
+          pollStartedAtRef.current.set(id, agora)
+          algumDentroDoOrcamento = true
+        } else if (agora - inicio < POLL_BUDGET_MS) {
+          algumDentroDoOrcamento = true
+        } else {
+          esgotadosAgora.push(id)
+        }
+      }
+      if (esgotadosAgora.length > 0) {
+        setPreviewEsgotado((atual) => {
+          if (esgotadosAgora.every((id) => atual.has(id))) return atual
+          const proximo = new Set(atual)
+          for (const id of esgotadosAgora) proximo.add(id)
+          return proximo
+        })
+      }
+      return algumDentroDoOrcamento ? POLL_INTERVAL_MS : false
     },
   })
 
@@ -171,6 +238,13 @@ export function AttachmentsCard({
   const anexos = data ?? []
   const emUso = anexos.length + itens.length
   const cheio = emUso >= MAX_ATTACHMENTS
+
+  /** Mesma regra que DeleteAttachmentUseCase aplica no servidor: autor do anexo
+   *  OU quem tem DECIDIR_TICKET (admin e supervisor, ver canDecide). Derivada
+   *  dos mesmos insumos — autor do anexo e papel/usuario da sessao — para que
+   *  as duas nao divirjam e ninguem veja "Remover" so para levar um 403. */
+  const podeRemover = (attachment: Attachment) =>
+    podeAnexar && (attachment.author_user_id === userId || canDecide(role))
 
   function processarArquivos(lista: FileList | File[]) {
     const arquivos = Array.from(lista)
@@ -353,7 +427,8 @@ export function AttachmentsCard({
               <AttachmentTile
                 key={attachment.id}
                 attachment={attachment}
-                podeExcluir={podeAnexar}
+                podeExcluir={podeRemover(attachment)}
+                previewEsgotado={previewEsgotado.has(attachment.id)}
                 onOpen={() => onOpen(attachment)}
                 onDownload={() => onDownloadOriginal(attachment)}
                 onRemove={() => setRemovendo(attachment)}

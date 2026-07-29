@@ -8,7 +8,10 @@ import { expect, test } from "@playwright/test"
 import {
   apiCreateProduct,
   apiFullTicket,
+  apiPendingIntents,
+  apiProductPhoto,
   apiProductPhotoKey,
+  apiUploadAttachment,
   login,
 } from "./helpers"
 
@@ -88,6 +91,84 @@ test("recusa tipo invalido e arquivo acima do limite no dropzone", async ({ page
   }
 })
 
+test("remover anexo aparece so para o autor ou quem decide", async ({ browser, request }) => {
+  // ticket do atendente (ele so ve os proprios) com um anexo enviado pelo admin:
+  // DeleteAttachmentUseCase exige ser o autor OU ter DECIDIR_TICKET, entao o
+  // atendente nao pode remover este anexo e o supervisor pode. O menu tem que
+  // dizer a mesma coisa que o servidor faria — mostrar "Remover" para o
+  // atendente so entregaria um 403 depois da confirmacao.
+  const ticket = await apiFullTicket(request, "atendente")
+  await apiUploadAttachment(request, "admin", ticket.id, "e2e/fixtures/defeito.png")
+
+  for (const [quem, itensRemover] of [
+    ["atendente", 0],
+    ["supervisor", 1],
+  ] as const) {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    try {
+      await login(page, request, quem)
+      await page.goto(`/tickets/${ticket.id}`)
+      await page.getByRole("button", { name: "Acoes do anexo defeito.png" }).click()
+      await expect(page.getByRole("menuitem", { name: "Baixar original" })).toBeVisible()
+      await expect(page.getByRole("menuitem", { name: "Remover" })).toHaveCount(itensRemover)
+    } finally {
+      await context.close()
+    }
+  }
+})
+
+test("cancelar upload devolve a vaga que a intencao ocupou na cota", async ({ page, request }) => {
+  const ticket = await apiFullTicket(request, "admin")
+  // 9 intencoes pendentes: o servidor ja conta 9 das 10 vagas e a UI mostra
+  // 0/10, porque a lista so traz anexos disponiveis. O envio abaixo ocupa a
+  // decima; se o cancelamento nao devolvesse essa vaga, o proximo envio levaria
+  // 409 e a recuperacao dependeria da varredura de 30 min do worker.
+  await apiPendingIntents(request, "admin", ticket.id, 9)
+
+  await login(page, request, "admin")
+  await page.goto(`/tickets/${ticket.id}`)
+  await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
+
+  // Segura o PUT no storage para cancelar com o upload de fato em voo: a
+  // intencao ja criada (a vaga ja consumida) e o objeto ainda subindo. Sem isso
+  // o clique poderia cair no item ainda "na fila", que nem tem intencao e nao
+  // provaria nada.
+  let liberarPut: (() => void) | undefined
+  const putPreso = new Promise<void>((resolve) => {
+    liberarPut = resolve
+  })
+  let putIniciado: (() => void) | undefined
+  const putEmVoo = new Promise<void>((resolve) => {
+    putIniciado = resolve
+  })
+  let segurando = true
+  await page.route(/:9000\//, async (route) => {
+    if (segurando && route.request().method() === "PUT") {
+      putIniciado?.()
+      await putPreso
+    }
+    await route.continue().catch(() => undefined)
+  })
+
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/defeito.png")
+  await putEmVoo
+
+  const exclusao = page.waitForResponse(
+    (res) => res.request().method() === "DELETE" && res.url().includes("/anexos/"),
+  )
+  await page.getByRole("button", { name: "Cancelar envio de defeito.png" }).click()
+  liberarPut?.()
+  segurando = false
+  await exclusao
+  await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
+
+  // vaga devolvida: o envio seguinte tem que chegar a virar anexo de verdade
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/defeito.png")
+  await expect(page.locator('button[title="defeito.png"]')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(/[Ll]imite de anexos/)).toHaveCount(0)
+})
+
 test("remover foto do produto exige confirmacao antes de excluir", async ({ page, request }) => {
   const unico = Date.now()
   const produto = await apiCreateProduct(request, "admin", {
@@ -109,6 +190,11 @@ test("remover foto do produto exige confirmacao antes de excluir", async ({ page
   await expect(page.getByText("Foto enviada")).toBeVisible({ timeout: 20_000 })
   await expect(dialogEdicao.getByRole("button", { name: "Remover foto" })).toBeVisible()
 
+  // A foto do produto tem o mesmo pipeline assincrono do anexo: o worker gera a
+  // preview e so entao a listagem devolve photo_url (que exige as DUAS chaves,
+  // original e preview). Sem o worker de pe esta espera estoura de proposito.
+  await expect(dialogEdicao.locator("img")).toBeVisible({ timeout: 45_000 })
+
   // clicar em "Remover foto" so abre o dialog de confirmacao - nao apaga na hora
   await dialogEdicao.getByRole("button", { name: "Remover foto" }).click()
   const confirmacao = page.getByRole("dialog", { name: "Remover foto" })
@@ -127,6 +213,41 @@ test("remover foto do produto exige confirmacao antes de excluir", async ({ page
   await expect(page.getByText("Foto removida")).toBeVisible()
   await expect(dialogEdicao.getByRole("button", { name: "Remover foto" })).toHaveCount(0)
   expect(await apiProductPhotoKey(request, produto.sku)).toBeNull()
+})
+
+test("foto removida antes do preview nao volta pelo worker", async ({ page, request }) => {
+  const unico = Date.now()
+  const produto = await apiCreateProduct(request, "admin", {
+    name: `Produto Corrida ${unico}`,
+    sku: `E2E-CORRIDA-${unico}`,
+  })
+
+  await login(page, request, "admin")
+  await page.goto("/cadastros/produtos")
+  await page.getByPlaceholder("Buscar por nome ou SKU").fill(produto.sku)
+  await page
+    .getByRole("row")
+    .filter({ hasText: produto.sku })
+    .getByRole("button", { name: "Editar" })
+    .click()
+
+  const dialogEdicao = page.getByRole("dialog", { name: "Editar produto" })
+  await dialogEdicao.locator("#edit-foto").setInputFiles("e2e/fixtures/defeito.png")
+  // remove assim que a confirmacao volta, sem esperar o preview: a essa altura o
+  // job de preview costuma estar na fila e o DELETE nao o cancela.
+  await expect(page.getByText("Foto enviada")).toBeVisible({ timeout: 20_000 })
+  await dialogEdicao.getByRole("button", { name: "Remover foto" }).click()
+  await page.getByRole("dialog", { name: "Remover foto" }).getByRole("button", { name: "Remover" }).click()
+  await expect(page.getByText("Foto removida")).toBeVisible()
+
+  // o worker roda dentro desta janela; a foto tem que continuar removida, sem
+  // preview regravado (o que faria a thumb reaparecer sem botao de remover)
+  await page.waitForTimeout(8_000)
+  expect(await apiProductPhoto(request, produto.sku)).toEqual({
+    photo_key: null,
+    photo_url: null,
+  })
+  await expect(dialogEdicao.locator("img")).toHaveCount(0)
 })
 
 test("upload de foto de um produto nao aparece no dialog de outro produto", async ({
