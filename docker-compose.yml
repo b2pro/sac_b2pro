@@ -20,17 +20,54 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       SAC_DATABASE_URL: postgresql+asyncpg://sac:sac@db:5432/sac
       SAC_SEED_ADMIN_EMAIL: ${SAC_SEED_ADMIN_EMAIL:-admin@b2pro.com}
       SAC_SEED_ADMIN_PASSWORD: ${SAC_SEED_ADMIN_PASSWORD:-admin-dev-12345}
       WATCHFILES_FORCE_POLLING: "true"
+      SAC_S3_ENDPOINT_URL: http://minio:9000
+      SAC_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+      SAC_S3_BUCKET: sac-dev
+      SAC_S3_ACCESS_KEY: sacminio
+      SAC_S3_SECRET_KEY: sacminio123
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: sacminio
+      MINIO_ROOT_PASSWORD: sacminio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 sacminio sacminio123 &&
+      mc mb --ignore-existing local/sac-dev &&
+      mc anonymous set none local/sac-dev
+      "
+
 volumes:
   pgdata:
   backend_venv:
+  miniodata:

@@ -13,3 +13,13 @@ class Settings(BaseSettings):
     seed_admin_name: str = "Administrador"
     seed_admin_email: str = ""
     seed_admin_password: str = ""
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_public_endpoint_url: str = ""
+    s3_region: str = "us-east-1"
+    s3_bucket: str = "sac-dev"
+    s3_access_key: str = "sacminio"
+    s3_secret_key: str = "sacminio123"
+    presigned_ttl_seconds: int = 300
+    pending_expiration_minutes: int = 30
+    attachment_max_bytes: int = 52_428_800
+    attachment_max_per_ticket: int = 10

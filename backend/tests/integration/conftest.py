@@ -1,6 +1,7 @@
 import asyncio
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from sac.infrastructure.settings import Settings
+from sac.infrastructure.storage import S3Storage
 from sac.interface.app import create_app
 
 ADMIN_URL = "postgresql+asyncpg://sac:sac@localhost:5432/postgres"
@@ -73,3 +75,36 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+@pytest.fixture(scope="session")
+def storage_settings() -> Settings:
+    return Settings(
+        s3_endpoint_url="http://localhost:9000",
+        s3_public_endpoint_url="http://127.0.0.1:9000",
+        s3_bucket=f"sac-test-{uuid4().hex[:8]}",
+        s3_access_key="sacminio",
+        s3_secret_key="sacminio123",
+    )
+
+
+@pytest.fixture(scope="session")
+def storage(storage_settings: Settings) -> Iterator[S3Storage]:
+    from sac.infrastructure.storage import build_storage
+
+    gateway = build_storage(storage_settings)
+    gateway._internal.create_bucket(Bucket=storage_settings.s3_bucket)  # noqa: SLF001
+    yield gateway
+    # bucket descartavel: limpa objetos e remove
+    paginator = gateway._internal.get_paginator("list_objects_v2")  # noqa: SLF001
+    for page in paginator.paginate(Bucket=storage_settings.s3_bucket):
+        for obj in page.get("Contents", []):
+            gateway._internal.delete_object(  # noqa: SLF001
+                Bucket=storage_settings.s3_bucket, Key=obj["Key"]
+            )
+    gateway._internal.delete_bucket(Bucket=storage_settings.s3_bucket)  # noqa: SLF001
+
+
+@pytest.fixture(scope="session")
+def storage_public(storage: S3Storage) -> S3Storage:
+    return storage

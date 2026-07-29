@@ -5,7 +5,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-docker compose up -d --build db backend
+docker compose up -d --build db minio minio-init backend
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Falha ao subir os containers."
     exit 1
