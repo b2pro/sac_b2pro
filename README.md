@@ -135,6 +135,7 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
   - **Frontend**: lista com filtros e debounce, indicador de não lido e paginação; detalhe em duas colunas (2/3 dados + chat + timeline, 1/3 ação primária contextual por estado com trilha de status); criação com lookup de cliente por documento/CEP e itens repetíveis.
   - Anexos (Wasabi S3) ficam para a Fase 2B — o detalhe já reserva o espaço com um card placeholder desabilitado.
 - **Fase 2B — Anexos, previews e membros**: anexos de ticket com upload direto por presigned URL (imagem, PDF e vídeo até 50 MB, 10 por ticket), compressão de imagem e captura da thumb de vídeo no navegador, previews WebP (thumb 400px e média 1200px) gerados por worker assíncrono com fila em tabela (`preview_jobs`) e retry com backoff, soft delete preservando o objeto no storage para auditoria, foto de catálogo do produto (mesmo pipeline de upload e preview) e endpoint de membros do tenant com seletor de supervisor no ticket. A galeria de mídias (visualização agrupada de todos os anexos do tenant) fica para a Fase 3.
+  - **Antes do primeiro deploy em produção** aplique o checklist de bucket de `docs/armazenamento-anexos.md`: política de **CORS** no bucket (sem ela o upload direto pelo navegador falha no Wasabi, com erro opaco), bucket privado e regra de **ciclo de vida** para objetos nunca confirmados. O MinIO de desenvolvimento é permissivo justamente onde o Wasabi não é, então nenhuma verificação local cobre esses três pontos.
 
 ## Documentação
 
@@ -147,6 +148,6 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
 - `docs/superpowers/plans/2026-07-28-fase-2a-tickets.md` — plano de implementação da Fase 2A.
 - `docs/superpowers/specs/2026-07-28-sac-b2pro-fase-2b-anexos-design.md` — design técnico da Fase 2B (anexos, previews e membros).
 - `docs/superpowers/plans/2026-07-28-fase-2b-anexos.md` — plano de implementação da Fase 2B.
-- `docs/armazenamento-anexos.md` — desenho do armazenamento de anexos (Wasabi/S3, presigned URLs, previews).
+- `docs/armazenamento-anexos.md` — desenho do armazenamento de anexos (Wasabi/S3, presigned URLs, previews) e o **checklist de bucket antes do primeiro deploy em produção** (CORS, bucket privado, ciclo de vida).
 - `docs/identidade-visual.md` — identidade visual do frontend.
 - `CLAUDE.md` — decisões de arquitetura e regras obrigatórias do projeto.
