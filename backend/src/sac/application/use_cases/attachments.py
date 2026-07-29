@@ -65,6 +65,21 @@ async def _attachment_of_ticket(
     return anexo
 
 
+def _view_of(
+    attachment: TicketAttachment, storage: StoragePort, ttl_seconds: int
+) -> AttachmentView:
+    """Regra unica de quando uma preview pode ser exposta: so quando ela esta
+    PRONTA e existe uma chave gravada. Usado tanto na listagem quanto na
+    confirmacao para que a decisao nao seja duplicada na camada de interface.
+    """
+    url = (
+        storage.presigned_get(attachment.preview_key, ttl_seconds)
+        if attachment.preview_status is PreviewStatus.PRONTO and attachment.preview_key
+        else None
+    )
+    return AttachmentView(attachment=attachment, preview_url=url)
+
+
 class RequestUploadUseCase:
     def __init__(
         self,
@@ -148,6 +163,7 @@ class ConfirmUploadUseCase:
         storage: StoragePort,
         tenant_slug: str,
         max_bytes: int = MAX_ATTACHMENT_BYTES,
+        ttl_seconds: int = 300,
     ) -> None:
         self._tickets = tickets
         self._attachments = attachments
@@ -155,10 +171,11 @@ class ConfirmUploadUseCase:
         self._storage = storage
         self._tenant_slug = tenant_slug
         self._max_bytes = max_bytes
+        self._ttl = ttl_seconds
 
     async def execute(
         self, actor: TicketActor, ticket_id: UUID, attachment_id: UUID
-    ) -> TicketAttachment:
+    ) -> AttachmentView:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         if is_closed(ticket):
             raise ConflictError("ticket encerrado nao aceita anexos")
@@ -217,7 +234,7 @@ class ConfirmUploadUseCase:
                     attachment_id=anexo.id,
                 )
             )
-        return anexo
+        return _view_of(anexo, self._storage, self._ttl)
 
 
 class ListAttachmentsUseCase:
@@ -236,15 +253,7 @@ class ListAttachmentsUseCase:
     async def execute(self, actor: TicketActor, ticket_id: UUID) -> list[AttachmentView]:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         anexos = await self._attachments.list_by_ticket(ticket.id)
-        vistas: list[AttachmentView] = []
-        for anexo in anexos:
-            url = (
-                self._storage.presigned_get(anexo.preview_key, self._ttl)
-                if anexo.preview_status is PreviewStatus.PRONTO and anexo.preview_key
-                else None
-            )
-            vistas.append(AttachmentView(attachment=anexo, preview_url=url))
-        return vistas
+        return [_view_of(anexo, self._storage, self._ttl) for anexo in anexos]
 
 
 class GetAttachmentUrlUseCase:

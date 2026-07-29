@@ -143,7 +143,8 @@ async def test_confirmacao_de_imagem_enfileira_preview() -> None:
     )
     env.storage.simulate_upload(intent.object_key, b"123456789012", "image/jpeg")
 
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    anexo = view.attachment
     assert anexo.status is AttachmentStatus.DISPONIVEL
     assert anexo.confirmed_at is not None
     assert anexo.preview_status is PreviewStatus.PENDENTE
@@ -161,8 +162,8 @@ async def test_confirmacao_de_pdf_nao_gera_job() -> None:
         ADMIN, ticket.id, UploadIntentInput("nota.pdf", "application/pdf", 5)
     )
     env.storage.simulate_upload(intent.object_key, b"12345", "application/pdf")
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
-    assert anexo.preview_status is PreviewStatus.SEM_PREVIEW
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    assert view.attachment.preview_status is PreviewStatus.SEM_PREVIEW
     assert env.jobs.items == {}
 
 
@@ -179,9 +180,10 @@ async def test_confirmacao_de_video_usa_thumb_do_navegador() -> None:
     preview_key = intent.preview_upload_url.removeprefix("https://fake/put/")
     env.storage.simulate_upload(preview_key, b"webp", "image/webp")
 
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
-    assert anexo.preview_status is PreviewStatus.PRONTO
-    assert anexo.preview_key == preview_key
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    assert view.attachment.preview_status is PreviewStatus.PRONTO
+    assert view.attachment.preview_key == preview_key
+    assert view.preview_url == f"https://fake/get/{preview_key}"
     assert env.jobs.items == {}
 
 
@@ -194,8 +196,8 @@ async def test_confirmacao_de_video_sem_thumb_fica_sem_preview() -> None:
         UploadIntentInput("clipe.mp4", "video/mp4", 9, with_preview=True),
     )
     env.storage.simulate_upload(intent.object_key, b"123456789", "video/mp4")
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
-    assert anexo.preview_status is PreviewStatus.SEM_PREVIEW
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    assert view.attachment.preview_status is PreviewStatus.SEM_PREVIEW
 
 
 async def test_confirmacao_de_video_com_thumb_grande_demais_fica_sem_preview() -> None:
@@ -213,10 +215,11 @@ async def test_confirmacao_de_video_com_thumb_grande_demais_fica_sem_preview() -
     # nao pode bloquear a confirmacao do video em si.
     env.storage.simulate_upload(preview_key, b"x" * 52_428_801, "image/webp")
 
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
-    assert anexo.status is AttachmentStatus.DISPONIVEL
-    assert anexo.preview_status is PreviewStatus.SEM_PREVIEW
-    assert anexo.preview_key is None
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    assert view.attachment.status is AttachmentStatus.DISPONIVEL
+    assert view.attachment.preview_status is PreviewStatus.SEM_PREVIEW
+    assert view.attachment.preview_key is None
+    assert view.preview_url is None
 
 
 async def test_confirmacao_falha_sem_objeto_ou_com_head_divergente() -> None:
@@ -255,7 +258,8 @@ async def test_listagem_traz_url_de_preview_apenas_quando_pronto() -> None:
         ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
     )
     env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    anexo = view.attachment
 
     vistas = await ListAttachmentsUseCase(env.tickets, env.attachments, env.storage).execute(
         ADMIN, ticket.id
@@ -279,7 +283,8 @@ async def test_url_por_variante() -> None:
         ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
     )
     env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    anexo = view.attachment
     anexo.preview_status = PreviewStatus.PRONTO
     anexo.preview_medium_key = "acme/t/previews/x_medium.webp"
     await env.attachments.update(anexo)
@@ -306,7 +311,8 @@ async def test_exclusao_por_autor_e_por_papel() -> None:
         ATENDENTE, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
     )
     env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
-    anexo = await env.confirm_uc().execute(ATENDENTE, ticket.id, intent.attachment_id)
+    view = await env.confirm_uc().execute(ATENDENTE, ticket.id, intent.attachment_id)
+    anexo = view.attachment
 
     uc = DeleteAttachmentUseCase(env.tickets, env.attachments)
     # admin pode excluir anexo de outro autor
@@ -324,11 +330,11 @@ async def test_atendente_nao_exclui_anexo_de_outro_autor() -> None:
         ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
     )
     env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
-    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
 
     with pytest.raises(PermissionDeniedError):
         await DeleteAttachmentUseCase(env.tickets, env.attachments).execute(
-            ATENDENTE, ticket.id, anexo.id
+            ATENDENTE, ticket.id, view.attachment.id
         )
 
 

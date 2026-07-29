@@ -1,4 +1,5 @@
 import io
+from uuid import uuid4
 
 import httpx
 from httpx import AsyncClient
@@ -220,6 +221,20 @@ async def test_visualizador_le_mas_nao_anexa_e_ticket_encerrado_bloqueia(
     assert (
         await client.get(f"/api/tickets/{ticket_id}/anexos", headers=viewer_headers)
     ).status_code == 200
+
+    # a mesma permissao (COMENTAR_ANEXAR) tambem bloqueia confirmar e excluir; o
+    # anexo_id nem precisa existir, pois a permissao e negada antes de qualquer
+    # busca no repositorio
+    res = await client.post(
+        f"/api/tickets/{ticket_id}/anexos/{uuid4()}/confirmar",
+        headers=viewer_headers,
+    )
+    assert res.status_code == 403
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{uuid4()}",
+        headers=viewer_headers,
+    )
+    assert res.status_code == 403
 
     await client.post(f"/api/tickets/{ticket_id}/cancelar", json={}, headers=headers)
     res = await client.post(

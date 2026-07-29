@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, Response
 from sac.application.ports import TokenPayload
 from sac.application.ports_tickets import TicketActor, TicketFilters
 from sac.application.use_cases.attachments import (
-    AttachmentView,
     ConfirmUploadUseCase,
     DeleteAttachmentUseCase,
     GetAttachmentUrlUseCase,
@@ -44,7 +43,6 @@ from sac.application.use_cases.tickets_workflow import (
     SetWarrantyUseCase,
     SubmitTicketUseCase,
 )
-from sac.domain.attachments import PreviewStatus
 from sac.domain.permissions import Permission
 from sac.domain.tickets import TicketPriority, TicketStatus
 from sac.infrastructure.repositories_attachments import AttachmentRepos
@@ -520,18 +518,11 @@ async def confirm_attachment_upload(
         storage,
         tenant_slug=tenant_slug,
         max_bytes=settings.attachment_max_bytes,
+        ttl_seconds=settings.presigned_ttl_seconds,
     )
-    anexo = await use_case.execute(_actor(identity), ticket_id, anexo_id)
-    nomes = await repos.users.names_by_ids({anexo.author_user_id})
-    view = AttachmentView(
-        attachment=anexo,
-        preview_url=(
-            storage.presigned_get(anexo.preview_key, settings.presigned_ttl_seconds)
-            if anexo.preview_status is PreviewStatus.PRONTO and anexo.preview_key
-            else None
-        ),
-    )
-    return attachment_out(view, nomes.get(anexo.author_user_id))
+    view = await use_case.execute(_actor(identity), ticket_id, anexo_id)
+    nomes = await repos.users.names_by_ids({view.attachment.author_user_id})
+    return attachment_out(view, nomes.get(view.attachment.author_user_id))
 
 
 @router.get("/{ticket_id}/anexos", response_model=list[AttachmentOut])
