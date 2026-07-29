@@ -1,0 +1,138 @@
+from datetime import datetime
+from uuid import UUID
+
+from sac.application.ports_attachments import ObjectHead, TenantMember
+from sac.domain.attachments import (
+    PreviewJob,
+    PreviewJobStatus,
+    TicketAttachment,
+)
+
+
+class FakeStorage:
+    def __init__(self) -> None:
+        self.objects: dict[str, tuple[bytes, str]] = {}
+        self.assinaturas: list[tuple[str, str]] = []
+
+    def simulate_upload(self, key: str, data: bytes, content_type: str) -> None:
+        """Faz o papel do navegador: grava no bucket sem passar pelo backend."""
+        self.objects[key] = (data, content_type)
+
+    def presigned_put(self, key: str, content_type: str, max_bytes: int, ttl_seconds: int) -> str:
+        self.assinaturas.append(("put", key))
+        return f"https://fake/put/{key}"
+
+    def presigned_get(self, key: str, ttl_seconds: int) -> str:
+        self.assinaturas.append(("get", key))
+        return f"https://fake/get/{key}"
+
+    def head(self, key: str) -> ObjectHead | None:
+        found = self.objects.get(key)
+        if found is None:
+            return None
+        data, content_type = found
+        return ObjectHead(content_type=content_type, size_bytes=len(data))
+
+    def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
+        self.objects[key] = (data, content_type)
+
+    def get_bytes(self, key: str) -> bytes:
+        return self.objects[key][0]
+
+
+class InMemoryAttachmentRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, TicketAttachment] = {}
+
+    async def add(self, attachment: TicketAttachment) -> None:
+        self.items[attachment.id] = attachment
+
+    async def get(self, attachment_id: UUID) -> TicketAttachment | None:
+        return self.items.get(attachment_id)
+
+    async def list_by_ticket(self, ticket_id: UUID) -> list[TicketAttachment]:
+        from sac.domain.attachments import AttachmentStatus
+
+        return [
+            a
+            for a in self.items.values()
+            if a.ticket_id == ticket_id
+            and a.status is AttachmentStatus.DISPONIVEL
+            and a.deleted_at is None
+        ]
+
+    async def count_active(self, ticket_id: UUID) -> int:
+        from sac.domain.attachments import AttachmentStatus
+
+        return sum(
+            1
+            for a in self.items.values()
+            if a.ticket_id == ticket_id
+            and a.deleted_at is None
+            and a.status in (AttachmentStatus.PENDENTE, AttachmentStatus.DISPONIVEL)
+        )
+
+    async def update(self, attachment: TicketAttachment) -> None:
+        self.items[attachment.id] = attachment
+
+    async def list_pending_before(self, moment: datetime) -> list[TicketAttachment]:
+        from sac.domain.attachments import AttachmentStatus
+
+        return [
+            a
+            for a in self.items.values()
+            if a.status is AttachmentStatus.PENDENTE
+            and a.created_at is not None
+            and a.created_at < moment
+        ]
+
+
+class InMemoryPreviewJobRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, PreviewJob] = {}
+
+    async def add(self, job: PreviewJob) -> None:
+        self.items[job.id] = job
+
+    async def get(self, job_id: UUID) -> PreviewJob | None:
+        return self.items.get(job_id)
+
+    async def claim_next(self, now: datetime) -> PreviewJob | None:
+        for job in self.items.values():
+            if job.status is PreviewJobStatus.PENDENTE and job.next_attempt_at <= now:
+                job.status = PreviewJobStatus.PROCESSANDO
+                return job
+        return None
+
+    async def mark_done(self, job_id: UUID) -> None:
+        self.items[job_id].status = PreviewJobStatus.PRONTO
+
+    async def mark_failed(
+        self, job_id: UUID, error: str, next_attempt_at: datetime, exhausted: bool
+    ) -> None:
+        job = self.items[job_id]
+        job.attempts += 1
+        job.last_error = error
+        job.next_attempt_at = next_attempt_at
+        job.status = PreviewJobStatus.FALHOU if exhausted else PreviewJobStatus.PENDENTE
+
+
+class InMemoryProductPhotoRepository:
+    def __init__(self) -> None:
+        self.photos: dict[UUID, tuple[str | None, str | None]] = {}
+
+    async def set_photo(
+        self, product_id: UUID, photo_key: str | None, preview_key: str | None
+    ) -> None:
+        self.photos[product_id] = (photo_key, preview_key)
+
+    async def get_photo(self, product_id: UUID) -> tuple[str | None, str | None] | None:
+        return self.photos.get(product_id)
+
+
+class InMemoryTenantMemberDirectory:
+    def __init__(self, members: dict[str, list[TenantMember]] | None = None) -> None:
+        self.members = members or {}
+
+    async def list_members(self, tenant_slug: str) -> list[TenantMember]:
+        return self.members.get(tenant_slug, [])
