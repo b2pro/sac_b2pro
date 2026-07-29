@@ -50,6 +50,10 @@ class PreviewJobRepository(Protocol):
     ) -> None: ...
 
 
+class PreviewGenerator(Protocol):
+    def __call__(self, data: bytes) -> tuple[bytes, bytes]: ...
+
+
 class ProductPhotoRepository(Protocol):
     async def set_photo(
         self, product_id: UUID, photo_key: str | None, preview_key: str | None
