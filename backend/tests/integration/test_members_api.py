@@ -37,3 +37,15 @@ async def test_membros_exige_token_de_tenant(client: AsyncClient, session: Async
     super_admin = await seed_user(session, email="super@membros.com", is_super_admin=True)
     headers = token_for(super_admin)
     assert (await client.get("/api/membros", headers=headers)).status_code == 401
+
+
+async def test_visualizador_nao_lista_membros(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="membrosvisu")
+    visualizador = await seed_user(session, email="visu@membrosvisu.com", name="Vera Visu")
+    await seed_link(session, user=visualizador, tenant=tenant, role=Role.VISUALIZADOR)
+    headers = token_for(visualizador, tenant_slug=tenant.slug, role=Role.VISUALIZADOR)
+
+    res = await client.get("/api/membros", headers=headers)
+    assert res.status_code == 403

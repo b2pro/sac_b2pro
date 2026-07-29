@@ -58,17 +58,11 @@ async def list_products(
     settings: Settings = Depends(get_settings),
 ) -> ProductsPageOut:
     page, per_page = clamp_page(page, per_page)
-    items, total = await ListProductsUseCase(repo).execute(search, active, page, per_page)
+    views, total = await ListProductsUseCase(repo, storage, settings.presigned_ttl_seconds).execute(
+        search, active, page, per_page
+    )
     return ProductsPageOut(
-        items=[
-            product_out(
-                p,
-                storage.presigned_get(p.photo_preview_key, settings.presigned_ttl_seconds)
-                if p.photo_preview_key
-                else None,
-            )
-            for p in items
-        ],
+        items=[product_out(v.product, v.photo_url) for v in views],
         total=total,
         page=page,
         per_page=per_page,

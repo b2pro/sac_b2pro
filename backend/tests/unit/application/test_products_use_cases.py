@@ -9,6 +9,7 @@ from sac.application.use_cases.products import (
 )
 from sac.domain.errors import ConflictError, ValidationError
 from tests.unit.fakes import InMemoryProductRepository
+from tests.unit.fakes_attachments import FakeStorage
 
 
 async def test_criar_produto_normaliza_sku() -> None:
@@ -51,9 +52,31 @@ async def test_atualizar_produto_preserva_photo_key() -> None:
 
 async def test_listar_e_inativar() -> None:
     repo = InMemoryProductRepository()
+    storage = FakeStorage()
     product = await CreateProductUseCase(repo).execute(ProductInput(name="A", sku="X-1"))
-    itens, total = await ListProductsUseCase(repo).execute(search="x-1")
-    assert total == 1 and itens[0].id == product.id
+    itens, total = await ListProductsUseCase(repo, storage).execute(search="x-1")
+    assert total == 1 and itens[0].product.id == product.id
+    assert itens[0].photo_url is None
 
     inativado = await SetProductActiveUseCase(repo).execute(product.id, False)
     assert inativado.active is False
+
+
+async def test_listagem_traz_photo_url_apenas_quando_ha_preview() -> None:
+    repo = InMemoryProductRepository()
+    storage = FakeStorage()
+    sem_foto = await CreateProductUseCase(repo).execute(ProductInput(name="Sem foto", sku="X-2"))
+    com_foto = await CreateProductUseCase(repo).execute(ProductInput(name="Com foto", sku="X-3"))
+    guardado = await repo.get(com_foto.id)
+    assert guardado is not None
+    guardado.photo_key = "acme/catalogo/produtos/x/foto.png"
+    guardado.photo_preview_key = "acme/catalogo/produtos/x/previews/foto.webp"
+    await repo.update(guardado)
+
+    itens, _ = await ListProductsUseCase(repo, storage, ttl_seconds=120).execute()
+    por_id = {v.product.id: v for v in itens}
+    assert por_id[sem_foto.id].photo_url is None
+    assert (
+        por_id[com_foto.id].photo_url
+        == "https://fake/get/acme/catalogo/produtos/x/previews/foto.webp"
+    )

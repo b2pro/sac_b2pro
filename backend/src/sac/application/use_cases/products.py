@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from sac.application.ports_attachments import StoragePort
 from sac.application.ports_cadastros import ProductRepository
 from sac.application.use_cases.customers import clamp_page
 from sac.domain.cadastros import Product
@@ -13,6 +14,26 @@ class ProductInput:
     sku: str
     segment: str | None = None
     description: str | None = None
+
+
+@dataclass(frozen=True)
+class ProductView:
+    product: Product
+    photo_url: str | None
+
+
+def _photo_view_of(product: Product, storage: StoragePort, ttl_seconds: int) -> ProductView:
+    """Regra unica de quando a foto de um produto pode ser exposta: so quando
+    existe uma chave de preview gravada. Usado na listagem para que a decisao
+    nao seja duplicada na camada de interface (mesmo principio de `_view_of`
+    em `use_cases/attachments.py`).
+    """
+    url = (
+        storage.presigned_get(product.photo_preview_key, ttl_seconds)
+        if product.photo_preview_key
+        else None
+    )
+    return ProductView(product=product, photo_url=url)
 
 
 def _clean(value: str | None) -> str | None:
@@ -33,8 +54,12 @@ def _normalize(data: ProductInput) -> tuple[str, str, str | None, str | None]:
 
 
 class ListProductsUseCase:
-    def __init__(self, repo: ProductRepository) -> None:
+    def __init__(
+        self, repo: ProductRepository, storage: StoragePort, ttl_seconds: int = 300
+    ) -> None:
         self._repo = repo
+        self._storage = storage
+        self._ttl = ttl_seconds
 
     async def execute(
         self,
@@ -42,9 +67,10 @@ class ListProductsUseCase:
         active: bool | None = None,
         page: int = 1,
         per_page: int = 20,
-    ) -> tuple[list[Product], int]:
+    ) -> tuple[list[ProductView], int]:
         page, per_page = clamp_page(page, per_page)
-        return await self._repo.list(search, active, page, per_page)
+        products, total = await self._repo.list(search, active, page, per_page)
+        return [_photo_view_of(p, self._storage, self._ttl) for p in products], total
 
 
 class CreateProductUseCase:
