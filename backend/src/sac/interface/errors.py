@@ -14,6 +14,7 @@ STATUS_BY_CODE = {
     "rate_limited": 429,
     "cep_indisponivel": 503,
     "transicao_invalida": 409,
+    "storage_indisponivel": 503,
 }
 
 

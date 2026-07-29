@@ -32,3 +32,7 @@ class CepUnavailableError(DomainError):
 
 class InvalidTransitionError(DomainError):
     code = "transicao_invalida"
+
+
+class StorageUnavailableError(DomainError):
+    code = "storage_indisponivel"
