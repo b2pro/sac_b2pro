@@ -29,5 +29,6 @@ class Product:
     segment: str | None = None
     description: str | None = None
     photo_key: str | None = None
+    photo_preview_key: str | None = None
     active: bool = True
     deleted_at: datetime | None = None

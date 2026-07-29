@@ -198,6 +198,7 @@ def _product_entity(m: ProductModel) -> Product:
         segment=m.segment,
         description=m.description,
         photo_key=m.photo_key,
+        photo_preview_key=m.photo_preview_key,
         active=m.active,
         deleted_at=m.deleted_at,
     )
@@ -249,6 +250,7 @@ class SqlProductRepository:
                 segment=product.segment,
                 description=product.description,
                 photo_key=product.photo_key,
+                photo_preview_key=product.photo_preview_key,
                 active=product.active,
                 deleted_at=product.deleted_at,
             )
@@ -264,6 +266,7 @@ class SqlProductRepository:
         m.segment = product.segment
         m.description = product.description
         m.photo_key = product.photo_key
+        m.photo_preview_key = product.photo_preview_key
         m.active = product.active
         m.deleted_at = product.deleted_at
         await _flush_or_conflict(self._session, "SKU ja cadastrado")

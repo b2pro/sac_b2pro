@@ -198,6 +198,8 @@ class ProductOut(BaseModel):
     segment: str | None
     description: str | None
     photo_key: str | None
+    photo_preview_key: str | None
+    photo_url: str | None
     active: bool
 
 
@@ -212,8 +214,18 @@ def customer_out(customer: Customer) -> CustomerOut:
     return CustomerOut.model_validate(customer, from_attributes=True)
 
 
-def product_out(product: Product) -> ProductOut:
-    return ProductOut.model_validate(product, from_attributes=True)
+def product_out(product: Product, photo_url: str | None = None) -> ProductOut:
+    return ProductOut(
+        id=product.id,
+        name=product.name,
+        sku=product.sku,
+        segment=product.segment,
+        description=product.description,
+        photo_key=product.photo_key,
+        photo_preview_key=product.photo_preview_key,
+        photo_url=photo_url,
+        active=product.active,
+    )
 
 
 class CepOut(BaseModel):
@@ -554,3 +566,25 @@ def attachment_out(view: AttachmentView, author_name: str | None) -> AttachmentO
         author_name=author_name,
         created_at=a.created_at,
     )
+
+
+class PhotoIntentIn(BaseModel):
+    content_type: str = Field(max_length=100)
+    size_bytes: int = Field(gt=0)
+
+
+class PhotoIntentOut(BaseModel):
+    object_key: str
+    upload_url: str
+    expires_in: int
+
+
+class PhotoConfirmIn(BaseModel):
+    object_key: str = Field(max_length=400)
+
+
+class MemberOut(BaseModel):
+    id: UUID
+    name: str
+    role: Role
+    active: bool
