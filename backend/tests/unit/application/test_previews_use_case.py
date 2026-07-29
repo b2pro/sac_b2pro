@@ -11,6 +11,7 @@ from sac.domain.attachments import (
     TicketAttachment,
     preview_keys_for,
 )
+from sac.domain.errors import ValidationError
 from tests.unit.fakes_attachments import (
     FakeStorage,
     InMemoryAttachmentRepository,
@@ -194,6 +195,29 @@ async def test_job_de_video_falha_definitivamente_sem_chamar_o_gerador_de_imagem
     processou = await env.use_case(generate=generate_nao_deveria_ser_chamado).execute(
         datetime.now(UTC)
     )
+    assert processou is True
+
+    assert env.jobs.items[job.id].attempts == 1
+    assert env.jobs.items[job.id].status is PreviewJobStatus.FALHOU
+    atualizado = await env.attachments.get(anexo.id)
+    assert atualizado is not None
+    assert atualizado.preview_status is PreviewStatus.FALHOU
+
+
+async def test_imagem_invalida_falha_definitivamente_sem_esperar_cinco_tentativas() -> None:
+    """images.py traduz DecompressionBombError (e qualquer outra imagem
+    indecodificavel) em ValidationError. Uma imagem gigante ou corrompida nunca
+    vai gerar preview em uma proxima tentativa, entao o use case trata
+    ValidationError vindo do gerador como falha permanente - mesmo tratamento
+    ja dado a objeto ausente e a job de video - em vez de queimar as 5
+    tentativas com backoff (~31 minutos) por um erro que retry nunca resolve."""
+    env = Env()
+    anexo, job = await env.anexo_com_job()
+
+    def gerador_recusa_a_imagem(data: bytes) -> tuple[bytes, bytes]:
+        raise ValidationError("arquivo nao e uma imagem valida")
+
+    processou = await env.use_case(generate=gerador_recusa_a_imagem).execute(datetime.now(UTC))
     assert processou is True
 
     assert env.jobs.items[job.id].attempts == 1

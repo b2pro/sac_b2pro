@@ -15,6 +15,7 @@ from sac.domain.attachments import (
     next_backoff,
     preview_keys_for,
 )
+from sac.domain.errors import ValidationError
 
 
 class _PermanentJobError(Exception):
@@ -89,7 +90,12 @@ class ProcessPreviewJobUseCase:
                     await photos.set_photo(job.product_id, atual[0], thumb_key)
             await self._jobs.mark_done(job.id)
         except Exception as exc:  # noqa: BLE001 - qualquer falha reagenda o job
-            esgotou = tentativas >= MAX_PREVIEW_ATTEMPTS or isinstance(exc, _PermanentJobError)
+            # ValidationError vindo do gerador (imagem indecodificavel, bomba de
+            # descompressao etc.) e sempre permanente: nenhum retry decodifica os
+            # mesmos bytes invalidos de forma diferente.
+            esgotou = tentativas >= MAX_PREVIEW_ATTEMPTS or isinstance(
+                exc, (_PermanentJobError, ValidationError)
+            )
             await self._jobs.mark_failed(
                 job.id,
                 f"{type(exc).__name__}: {exc}",
