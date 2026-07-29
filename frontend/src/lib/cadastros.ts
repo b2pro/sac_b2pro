@@ -36,6 +36,8 @@ export type Product = {
   segment: string | null
   description: string | null
   photo_key: string | null
+  photo_preview_key: string | null
+  photo_url: string | null
   active: boolean
 }
 

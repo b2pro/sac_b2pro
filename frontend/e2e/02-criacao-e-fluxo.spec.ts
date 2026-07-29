@@ -57,7 +57,9 @@ test("criacao completa pela UI e fluxo ate finalizado", async ({ page }) => {
   await expect(page.getByText("Joana Prado")).toBeVisible()
   await expect(page.getByText(formatCpf(cpf))).toBeVisible()
   await expect(page.getByText("PED-E2E-001")).toBeVisible()
-  await expect(page.getByText("Anexos chegam na Fase 2B (armazenamento Wasabi).")).toBeVisible()
+  // O placeholder "Anexos chegam na Fase 2B" foi substituido pelo card real de
+  // anexos (Task 12); sem upload neste fluxo, o card mostra o estado vazio.
+  await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
 
   // --- Fluxo: aberto -> aguardando_analise ---
   await page.getByRole("button", { name: "Enviar para analise" }).click()

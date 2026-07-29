@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
 import { StatusTrail } from "@/components/tickets/StatusTrail"
+import { SupervisorSelect } from "@/components/tickets/SupervisorSelect"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -117,6 +118,9 @@ export function ActionPanel({
   const [editPurchaseDate, setEditPurchaseDate] = useState(ticket.purchase_date?.slice(0, 10) ?? "")
   const [editDeliveryDate, setEditDeliveryDate] = useState(ticket.delivery_date?.slice(0, 10) ?? "")
   const [editDescription, setEditDescription] = useState(ticket.description ?? "")
+  const [editSupervisorId, setEditSupervisorId] = useState<string | null>(
+    ticket.supervisor_user_id ?? null,
+  )
   const [editDocument, setEditDocument] = useState("")
   const [editCustomerId, setEditCustomerId] = useState<string | null>(ticket.customer_id)
   const [editCustomerName, setEditCustomerName] = useState<string | null>(
@@ -162,6 +166,7 @@ export function ActionPanel({
       setEditPurchaseDate(ticket.purchase_date?.slice(0, 10) ?? "")
       setEditDeliveryDate(ticket.delivery_date?.slice(0, 10) ?? "")
       setEditDescription(ticket.description ?? "")
+      setEditSupervisorId(ticket.supervisor_user_id ?? null)
       setEditDocument("")
       setEditCustomerId(ticket.customer_id)
       setEditCustomerName(detail.customer?.name ?? null)
@@ -283,7 +288,7 @@ export function ActionPanel({
         brand_id: editBrandId,
         priority: editPriority,
         customer_id: editCustomerId,
-        supervisor_user_id: ticket.supervisor_user_id,
+        supervisor_user_id: editSupervisorId,
         purchase_channel_id: editChannelId === CHANNEL_NONE ? null : editChannelId,
         order_code: editOrderCode.trim() || null,
         purchase_date: editPurchaseDate || null,
@@ -780,6 +785,15 @@ export function ActionPanel({
                   onChange={(e) => setEditOrderCode(e.target.value)}
                 />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="editar-supervisor">Supervisor</Label>
+              <SupervisorSelect
+                id="editar-supervisor"
+                value={editSupervisorId}
+                onChange={setEditSupervisorId}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

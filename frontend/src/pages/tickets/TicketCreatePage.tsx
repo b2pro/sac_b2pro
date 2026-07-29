@@ -14,6 +14,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
 import { AutocompleteField } from "@/components/tickets/AutocompleteField"
+import { SupervisorSelect } from "@/components/tickets/SupervisorSelect"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -112,6 +113,7 @@ export default function TicketCreatePage() {
   const [purchaseDate, setPurchaseDate] = useState("")
   const [deliveryDate, setDeliveryDate] = useState("")
   const [description, setDescription] = useState("")
+  const [supervisorId, setSupervisorId] = useState<string | null>(null)
   const [items, setItems] = useState<ItemRow[]>([])
 
   const { data: brands } = useQuery({
@@ -273,6 +275,7 @@ export default function TicketCreatePage() {
       purchase_date: purchaseDate || undefined,
       delivery_date: deliveryDate || undefined,
       description: description.trim() || undefined,
+      supervisor_user_id: supervisorId,
       items:
         validItems.length > 0
           ? validItems.map((item) => ({
@@ -578,6 +581,11 @@ export default function TicketCreatePage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descreva o defeito relatado pelo cliente"
             />
+          </div>
+
+          <div className="flex flex-col gap-2 sm:w-1/2">
+            <Label htmlFor="supervisor">Supervisor</Label>
+            <SupervisorSelect id="supervisor" value={supervisorId} onChange={setSupervisorId} />
           </div>
 
           <div className="space-y-3 border-t border-border pt-4">
