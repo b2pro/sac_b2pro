@@ -57,6 +57,18 @@ export const attachmentUrl = (
 export const deleteAttachment = (ticketId: string, attachmentId: string) =>
   api<void>(`/tickets/${ticketId}/anexos/${attachmentId}`, { method: "DELETE" })
 
+/** `descartado`: a vaga voltou para a cota do ticket. `disponivel`: o upload na
+ *  verdade foi confirmado e nada foi apagado — e a resposta do `confirmar` que se
+ *  perdeu no caminho. */
+export type IntentDiscard = { status: "descartado" | "disponivel" }
+
+/** Desfaz uma intencao de upload abandonada. Diferente de `deleteAttachment`,
+ *  que apaga qualquer anexo: aqui o servidor recusa apagar o que ja esta
+ *  disponivel, entao um confirmar que commitou sem o cliente saber nao vira
+ *  exclusao silenciosa de um anexo real. */
+export const discardAttachmentIntent = (ticketId: string, attachmentId: string) =>
+  api<IntentDiscard>(`/tickets/${ticketId}/anexos/${attachmentId}/intencao`, { method: "DELETE" })
+
 /** PUT direto no storage. Usa XMLHttpRequest porque fetch nao reporta progresso
  *  de upload. A URL ja vem assinada; nao acrescentar headers de autenticacao.
  *  Aceita um AbortSignal opcional para cancelamento (ex.: fila de upload da UI);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { deleteAttachment, uploadAttachment } from "@/lib/attachments"
+import { discardAttachmentIntent, uploadAttachment } from "@/lib/attachments"
 import { kindOf, MAX_UPLOAD_BYTES } from "@/lib/media"
 
 /** Fila de upload de anexos: um item por arquivo, processados em serie (um por
@@ -50,17 +50,26 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
 
   /** Devolve ao ticket a vaga que a intencao de upload ocupou. A linha nasce
    *  `pendente` antes do PUT e conta na cota de 10 do servidor, mesmo invisivel
-   *  na lista (que so mostra `disponivel`): sem este DELETE, cada cancelamento
+   *  na lista (que so mostra `disponivel`): sem este descarte, cada cancelamento
    *  ou nova tentativa queimaria uma vaga de forma silenciosa ate a varredura
-   *  de 30 minutos do worker — e, com o worker parado, para sempre. Falha do
-   *  DELETE e ignorada de proposito: 404 ou corrida com o servidor nao e
-   *  assunto do usuario. */
+   *  de 30 minutos do worker — e, com o worker parado, para sempre.
+   *
+   *  Quem decide e o servidor, nao o cliente: um upload cujo `confirmar` commitou
+   *  mas cuja resposta se perdeu no caminho parece falha aqui, e um DELETE cego
+   *  apagaria um anexo real. A rota de intencao recusa apagar o que ja esta
+   *  disponivel e responde `disponivel`, entao `aoDescobrirConfirmado` avisa quem
+   *  chamou que o upload deu certo. Falha de rede do proprio descarte e ignorada:
+   *  a varredura do servidor resolve, e nao e assunto do usuario. */
   const descartarIntent = useCallback(
-    (id: string) => {
+    (id: string, aoDescobrirConfirmado?: () => void) => {
       const attachmentId = intents.current.get(id)
       if (!attachmentId) return
       intents.current.delete(id)
-      void deleteAttachment(ticketId, attachmentId).catch(() => undefined)
+      void discardAttachmentIntent(ticketId, attachmentId)
+        .then((resultado) => {
+          if (resultado.status === "disponivel") aoDescobrirConfirmado?.()
+        })
+        .catch(() => undefined)
     },
     [ticketId],
   )
@@ -92,7 +101,10 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
           controllers.current.delete(itemId)
           const mensagem = error instanceof Error ? error.message : "erro inesperado"
           if (mensagem === CANCELADO) {
-            descartarIntent(itemId)
+            // cancelar acontece durante o PUT, antes do confirmar, entao o
+            // normal e a vaga voltar; se o servidor disser que o anexo esta
+            // disponivel, a listagem precisa mostra-lo.
+            descartarIntent(itemId, onUploaded)
             remover(itemId)
           } else {
             // o intent fica no mapa: quem tentar de novo ou dispensar o item
@@ -148,26 +160,57 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
     [remover],
   )
 
-  const tentarNovamente = useCallback(
+  const reenfileirar = useCallback(
     (id: string) => {
-      if (!arquivos.current.has(id)) return
-      // a tentativa anterior deixou uma linha pendente no servidor e o reenvio
-      // pede uma intencao nova: sem descartar a anterior, cada nova tentativa
-      // do mesmo arquivo consumiria mais uma vaga da cota do ticket.
-      descartarIntent(id)
       atualizar(id, { status: "aguardando", percent: 0, erro: undefined })
       pendentes.current.push(id)
       void processar()
     },
-    [atualizar, processar, descartarIntent],
+    [atualizar, processar],
+  )
+
+  const tentarNovamente = useCallback(
+    (id: string) => {
+      if (!arquivos.current.has(id)) return
+      const attachmentId = intents.current.get(id)
+      if (!attachmentId) {
+        reenfileirar(id)
+        return
+      }
+      // A tentativa anterior deixou uma linha pendente no servidor e o reenvio
+      // pede uma intencao nova: sem descartar a anterior, cada nova tentativa do
+      // mesmo arquivo consumiria mais uma vaga da cota do ticket. O reenvio
+      // espera a resposta do descarte porque a tentativa anterior pode ter
+      // commitado sem o cliente saber — nesse caso reenviar criaria um anexo
+      // duplicado, quando o certo e mostrar o que ja existe.
+      intents.current.delete(id)
+      atualizar(id, { status: "aguardando", percent: 0, erro: undefined })
+      void discardAttachmentIntent(ticketId, attachmentId)
+        .then((resultado) => {
+          if (resultado.status === "disponivel") {
+            remover(id)
+            onUploaded()
+            return
+          }
+          pendentes.current.push(id)
+          void processar()
+        })
+        .catch(() => {
+          // o descarte nao respondeu: a vaga pode seguir ocupada ate a varredura
+          // do servidor, mas travar o reenvio seria pior para quem quer anexar.
+          pendentes.current.push(id)
+          void processar()
+        })
+    },
+    [ticketId, atualizar, processar, remover, onUploaded, reenfileirar],
   )
 
   const dispensar = useCallback(
     (id: string) => {
-      descartarIntent(id)
+      descartarIntent(id, onUploaded)
       remover(id)
     },
-    [remover, descartarIntent],
+    [remover, descartarIntent, onUploaded],
   )
 
   /** Sair da tela com upload em andamento (ou com um item em erro na fila) e
