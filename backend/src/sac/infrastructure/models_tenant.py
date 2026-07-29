@@ -66,6 +66,7 @@ class ProductModel(TenantTableMixin, TenantBase):
     segment: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    photo_preview_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class CustomerModel(TenantTableMixin, TenantBase):
@@ -262,3 +263,32 @@ class SlaPolicyModel(TenantBase):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class TicketAttachmentModel(TenantBase):
+    __tablename__ = "ticket_attachments"
+    __table_args__ = (
+        CheckConstraint("size_bytes > 0", name="ck_ticket_attachments_size"),
+        {"schema": "tenant"},
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    ticket_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenant.tickets.id", name="fk_ticket_attachments_ticket_id"),
+        nullable=False,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    object_key: Mapped[str] = mapped_column(String(400), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    preview_key: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    preview_medium_key: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    preview_status: Mapped[str] = mapped_column(String(12), nullable=False)
+    author_user_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
