@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -165,6 +166,71 @@ async def test_fila_claim_marca_processando_e_pula_travado(session: AsyncSession
     assert pego.status is PreviewJobStatus.PROCESSANDO
     # ja em processamento: nao volta
     assert await jobs.claim_next(agora) is None
+
+
+async def test_fila_claim_pula_linha_travada_por_outra_sessao(engine: AsyncEngine) -> None:
+    # Prova o SKIP LOCKED de verdade: duas sessoes/conexoes distintas disputando a fila.
+    # Uma unica sessao chamando claim_next duas vezes (como no teste acima) prova apenas a
+    # transicao de status - passaria mesmo com um SELECT simples sem nenhuma clausula de
+    # lock. Aqui a segunda sessao so pode ver a primeira linha como "pendente" (a UPDATE da
+    # sessao A ainda nao foi commitada) mas encontra a linha travada por FOR UPDATE e a
+    # pula, reivindicando a outra.
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    agora = datetime.now(UTC)
+    travado_id = uuid4()
+    livre_id = uuid4()
+    async with factory() as seed_session:
+        seed_jobs = SqlPreviewJobRepository(seed_session)
+        for job_id, sufixo in ((travado_id, "travado"), (livre_id, "livre")):
+            await seed_jobs.add(
+                PreviewJob(
+                    id=job_id,
+                    tenant_slug="acme",
+                    object_key=f"acme/t/{sufixo}.jpg",
+                    kind=AttachmentKind.IMAGEM,
+                    status=PreviewJobStatus.PENDENTE,
+                    attempts=0,
+                    next_attempt_at=agora - timedelta(seconds=1),
+                    attachment_id=uuid4(),
+                )
+            )
+        await seed_session.commit()
+
+    session_a = factory()
+    session_b = factory()
+    try:
+        jobs_a = SqlPreviewJobRepository(session_a)
+        jobs_b = SqlPreviewJobRepository(session_b)
+
+        primeiro = await jobs_a.claim_next(agora)
+        assert primeiro is not None
+        assert primeiro.id in (travado_id, livre_id)
+        # session_a NAO comita: mantem a linha reivindicada travada (FOR UPDATE) em aberto.
+
+        # Se claim_next nao usasse SKIP LOCKED, esta chamada bloquearia esperando a
+        # sessao A liberar o lock; o timeout transforma um travamento em falha visivel
+        # em vez de travar a suite inteira.
+        segundo = await asyncio.wait_for(jobs_b.claim_next(agora), timeout=5)
+
+        assert segundo is not None, (
+            "sessao B deveria pular a linha travada e reivindicar a outra, nao bloquear"
+        )
+        assert segundo.id != primeiro.id
+        assert {primeiro.id, segundo.id} == {travado_id, livre_id}
+    except BaseException:
+        # nao deixa a limpeza mascarar o erro real (ex.: TimeoutError de um lock que
+        # bloqueou de verdade)
+        await session_a.rollback()
+        await session_b.rollback()
+        raise
+    else:
+        # persiste as duas linhas como "processando" para nao poluir a fila global
+        # (preview_jobs e uma tabela publica, compartilhada entre todos os testes)
+        await session_a.commit()
+        await session_b.commit()
+    finally:
+        await session_a.close()
+        await session_b.close()
 
 
 async def test_fila_respeita_next_attempt_at(session: AsyncSession) -> None:
