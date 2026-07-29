@@ -1,12 +1,15 @@
 from typing import Any
 
+import pytest
 from botocore.exceptions import ClientError
 
 from sac.infrastructure.provision_bucket import (
     MULTIPART_RULE_ID,
     aplicar,
     cors_configuration,
+    mesclar_multipart,
     multipart_lifecycle,
+    regras_atuais,
 )
 
 
@@ -19,9 +22,14 @@ class FakeS3:
     para cada operacao, como MinIO e Wasabi fazem de formas diferentes.
     """
 
-    def __init__(self, erros: dict[str, ClientError] | None = None) -> None:
+    def __init__(
+        self,
+        erros: dict[str, ClientError] | None = None,
+        regras: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.chamadas: list[tuple[str, dict[str, Any]]] = []
         self._erros = erros or {}
+        self._regras = regras
 
     def _executar(self, operacao: str, **kwargs: Any) -> dict[str, Any]:
         self.chamadas.append((operacao, kwargs))
@@ -35,6 +43,15 @@ class FakeS3:
 
     def put_bucket_lifecycle_configuration(self, **kwargs: Any) -> dict[str, Any]:
         return self._executar("put_bucket_lifecycle_configuration", **kwargs)
+
+    def get_bucket_lifecycle_configuration(self, **kwargs: Any) -> dict[str, Any]:
+        self.chamadas.append(("get_bucket_lifecycle_configuration", kwargs))
+        erro = self._erros.get("get_bucket_lifecycle_configuration")
+        if erro is not None:
+            raise erro
+        if self._regras is None:
+            raise _erro("NoSuchLifecycleConfiguration", "GetBucketLifecycleConfiguration")
+        return {"Rules": self._regras}
 
 
 def test_cors_permite_so_o_header_que_dispara_o_preflight() -> None:
@@ -74,8 +91,10 @@ def test_aplicar_no_caminho_feliz_configura_as_duas_politicas() -> None:
     falhas = aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], 1)
 
     assert falhas == []
+    # o ciclo de vida e lido antes de ser escrito, para nao apagar outras regras
     assert [nome for nome, _ in cliente.chamadas] == [
         "put_bucket_cors",
+        "get_bucket_lifecycle_configuration",
         "put_bucket_lifecycle_configuration",
     ]
     _, kwargs = cliente.chamadas[0]
@@ -114,3 +133,62 @@ def test_aplicar_sem_dias_de_multipart_nao_toca_o_ciclo_de_vida() -> None:
 
     assert aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], None) == []
     assert [nome for nome, _ in cliente.chamadas] == ["put_bucket_cors"]
+
+
+def test_bucket_sem_ciclo_de_vida_nao_e_erro() -> None:
+    assert regras_atuais(FakeS3(), "sac-prod") == []
+
+
+def test_falha_real_ao_ler_ciclo_de_vida_sobe() -> None:
+    cliente = FakeS3(
+        {"get_bucket_lifecycle_configuration": _erro("AccessDenied", "GetBucketLifecycle")}
+    )
+
+    with pytest.raises(ClientError):
+        regras_atuais(cliente, "sac-prod")
+
+
+def test_mesclar_preserva_regra_de_outro_id() -> None:
+    """PutBucketLifecycleConfiguration substitui a configuracao inteira do bucket.
+    Reaplicar so a regra de multipart apagaria em silencio uma regra criada
+    depois — por exemplo a de staging, se o projeto seguir por esse caminho.
+    """
+    staging = {
+        "ID": "expira-staging",
+        "Status": "Enabled",
+        "Filter": {"Prefix": "staging/"},
+        "Expiration": {"Days": 1},
+    }
+
+    mesclado = mesclar_multipart([staging], 1)
+
+    ids = [regra["ID"] for regra in mesclado["Rules"]]
+    assert ids == ["expira-staging", MULTIPART_RULE_ID]
+    assert staging in mesclado["Rules"]
+
+
+def test_mesclar_substitui_a_propria_regra_em_vez_de_duplicar() -> None:
+    antiga = multipart_lifecycle(7)["Rules"][0]
+
+    mesclado = mesclar_multipart([antiga], 1)
+
+    assert len(mesclado["Rules"]) == 1
+    assert mesclado["Rules"][0]["AbortIncompleteMultipartUpload"] == {"DaysAfterInitiation": 1}
+
+
+def test_aplicar_manda_ao_bucket_a_configuracao_mesclada() -> None:
+    staging = {
+        "ID": "expira-staging",
+        "Status": "Enabled",
+        "Filter": {"Prefix": "staging/"},
+        "Expiration": {"Days": 1},
+    }
+    cliente = FakeS3(regras=[staging])
+
+    assert aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], 1) == []
+
+    enviado = next(
+        kwargs for nome, kwargs in cliente.chamadas if nome == "put_bucket_lifecycle_configuration"
+    )
+    ids = [regra["ID"] for regra in enviado["LifecycleConfiguration"]["Rules"]]
+    assert ids == ["expira-staging", MULTIPART_RULE_ID]

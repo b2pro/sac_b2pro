@@ -37,6 +37,11 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
   const intents = useRef(new Map<string, string>())
   const pendentes = useRef<string[]>([])
   const processando = useRef(false)
+  // itens com um descarte de intencao em voo. Sem esta trava, dois cliques em
+  // "Tentar de novo" antes do primeiro render (clique duplo, ou touch duplicado)
+  // entrariam duas vezes: o segundo veria o mapa de intents ja limpo, cairia no
+  // caminho de "nunca teve intencao" e comecaria um segundo upload em paralelo.
+  const retentando = useRef(new Set<string>())
 
   const atualizar = useCallback((id: string, patch: Partial<FilaItem>) => {
     setItens((atual) => atual.map((item) => (item.id === id ? { ...item, ...patch } : item)))
@@ -172,6 +177,7 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
   const tentarNovamente = useCallback(
     (id: string) => {
       if (!arquivos.current.has(id)) return
+      if (retentando.current.has(id)) return
       const attachmentId = intents.current.get(id)
       if (!attachmentId) {
         reenfileirar(id)
@@ -183,10 +189,13 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
       // espera a resposta do descarte porque a tentativa anterior pode ter
       // commitado sem o cliente saber — nesse caso reenviar criaria um anexo
       // duplicado, quando o certo e mostrar o que ja existe.
-      intents.current.delete(id)
+      retentando.current.add(id)
       atualizar(id, { status: "aguardando", percent: 0, erro: undefined })
       void discardAttachmentIntent(ticketId, attachmentId)
         .then((resultado) => {
+          // o destino da tentativa anterior agora e conhecido: o id nao serve mais
+          intents.current.delete(id)
+          retentando.current.delete(id)
           if (resultado.status === "disponivel") {
             remover(id)
             onUploaded()
@@ -196,10 +205,13 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
           void processar()
         })
         .catch(() => {
-          // o descarte nao respondeu: a vaga pode seguir ocupada ate a varredura
-          // do servidor, mas travar o reenvio seria pior para quem quer anexar.
-          pendentes.current.push(id)
-          void processar()
+          // Sem resposta do descarte, o destino da tentativa anterior segue
+          // desconhecido — a mesma ambiguidade que o `confirmar` tem. Reenviar as
+          // cegas criaria um anexo duplicado, entao o attachment_id fica no mapa
+          // e a proxima tentativa recomeca pelo descarte. Nao ha custo real em
+          // esperar: com a API sem responder, o reenvio tambem nao completaria.
+          retentando.current.delete(id)
+          atualizar(id, { status: "erro", erro: "servidor nao respondeu; tente de novo" })
         })
     },
     [ticketId, atualizar, processar, remover, onUploaded, reenfileirar],

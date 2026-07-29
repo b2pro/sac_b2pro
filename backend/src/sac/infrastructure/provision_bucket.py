@@ -77,6 +77,35 @@ def multipart_lifecycle(dias: int) -> dict[str, Any]:
     }
 
 
+_SEM_CICLO_DE_VIDA = {"NoSuchLifecycleConfiguration", "NoSuchLifecycleConfigurationError"}
+
+
+def regras_atuais(cliente: Any, bucket: str) -> list[dict[str, Any]]:
+    """Regras de ciclo de vida que o bucket ja tem. Bucket sem configuracao
+    nenhuma devolve lista vazia em vez de erro.
+    """
+    try:
+        resposta = cliente.get_bucket_lifecycle_configuration(Bucket=bucket)
+    except ClientError as erro:
+        if erro.response["Error"].get("Code") in _SEM_CICLO_DE_VIDA:
+            return []
+        raise
+    return list(resposta.get("Rules") or [])
+
+
+def mesclar_multipart(existentes: list[dict[str, Any]], dias: int) -> dict[str, Any]:
+    """Junta a regra de multipart as que o bucket ja tem.
+
+    `PutBucketLifecycleConfiguration` substitui a configuracao INTEIRA do bucket,
+    nao acrescenta: mandar so a nossa regra apagaria em silencio qualquer outra —
+    por exemplo a regra de `Expiration` sobre um prefixo de staging, se o projeto
+    seguir por esse caminho. A regra de mesmo ID e substituida; as outras passam
+    intactas.
+    """
+    outras = [regra for regra in existentes if regra.get("ID") != MULTIPART_RULE_ID]
+    return {"Rules": [*outras, multipart_lifecycle(dias)["Rules"][0]]}
+
+
 def _mostrar(cliente: Any, bucket: str) -> None:
     try:
         atual = cliente.get_bucket_cors(Bucket=bucket)
@@ -118,10 +147,17 @@ def aplicar(cliente: Any, bucket: str, origens: list[str], multipart_dias: int |
 
     if multipart_dias is not None:
         try:
+            existentes = regras_atuais(cliente, bucket)
             cliente.put_bucket_lifecycle_configuration(
-                Bucket=bucket, LifecycleConfiguration=multipart_lifecycle(multipart_dias)
+                Bucket=bucket,
+                LifecycleConfiguration=mesclar_multipart(existentes, multipart_dias),
             )
+            preservadas = [
+                str(regra.get("ID")) for regra in existentes if regra.get("ID") != MULTIPART_RULE_ID
+            ]
             logger.info("Regra %s aplicada (%s dias)", MULTIPART_RULE_ID, multipart_dias)
+            if preservadas:
+                logger.info("Regras preservadas: %s", ", ".join(preservadas))
         except (ClientError, BotoCoreError) as erro:
             codigo = (
                 erro.response["Error"].get("Code")
@@ -166,6 +202,8 @@ def main() -> None:
         help="so mostra as politicas atuais do bucket, sem escrever",
     )
     args = parser.parse_args()
+    if args.multipart_dias < 0:
+        parser.error("--multipart-dias nao aceita valor negativo (use 0 para desligar a regra)")
 
     settings = Settings()
     cliente = build_client(
