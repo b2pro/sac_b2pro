@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.application.ports_attachments import StoragePort
 from sac.application.use_cases.attachments import ExpirePendingUseCase
-from sac.application.use_cases.previews import ProcessPreviewJobUseCase
+from sac.application.use_cases.previews import PermanentJobError, ProcessPreviewJobUseCase
 from sac.domain.attachments import PreviewJob
 from sac.domain.entities import TenantStatus
 from sac.infrastructure.db import build_engine
@@ -47,9 +47,16 @@ def _same_tenant[T](slug: str, job: PreviewJob, repo: T) -> T:
     _PreClaimedJobs.claim_next). Aqui honramos esse argumento de verdade: em
     vez de descartar o slug e devolver sempre o mesmo repositorio (o bug do
     finding 1), confirmamos que bate com o tenant para o qual a sessao foi
-    traduzida - qualquer divergencia futura vira erro alto, nunca silencio."""
+    traduzida.
+
+    Uma divergencia e erro de programacao: retry nunca resolve, e insistir
+    gravaria dados no tenant errado. Por isso levantamos PermanentJobError, que
+    o use case reconhece e esgota na primeira tentativa, com a mensagem gravada
+    em last_error. Um AssertionError aqui nao serviria: ele cairia no
+    `except Exception` do use case e o job seria reagendado 5 vezes com backoff,
+    disfarcando o bug de instabilidade transitoria."""
     if slug != job.tenant_slug:
-        raise AssertionError(
+        raise PermanentJobError(
             f"resolucao de tenant inconsistente: sessao traduzida para "
             f"{job.tenant_slug!r} mas o use case pediu repositorio de {slug!r}"
         )
@@ -150,14 +157,26 @@ async def _active_tenant_slugs(engine: AsyncEngine) -> list[str]:
 
 
 async def expire_pending_all(engine: AsyncEngine, minutes: int) -> None:
+    """Varre todos os tenants ativos. A falha de UM tenant (ex.: tenant ativo
+    cujo schema nao foi provisionado) e logada e a varredura segue: esta funcao
+    roda dentro de run_forever, entao deixar a excecao subir mataria o processo,
+    o restart traria o worker de volta na mesma falha e nenhuma preview seria
+    gerada para nenhum tenant."""
     tenants = await _active_tenant_slugs(engine)
     total = 0
+    falhas = 0
     for slug in tenants:
-        total += await _expire_pending(engine, slug, minutes)
+        try:
+            total += await _expire_pending(engine, slug, minutes)
+        except Exception:  # noqa: BLE001 - um tenant ruim nao derruba a varredura
+            falhas += 1
+            logger.exception("falha ao expirar pendentes do tenant %s", slug)
     logger.info(
-        "varredura de expiracao de pendentes: %d anexo(s) expirados em %d tenant(s) ativo(s)",
+        "varredura de expiracao de pendentes: %d anexo(s) expirados em %d tenant(s) ativo(s), "
+        "%d tenant(s) com falha",
         total,
         len(tenants),
+        falhas,
     )
 
 

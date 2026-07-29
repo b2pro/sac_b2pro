@@ -80,3 +80,21 @@ async def test_listagem_traz_photo_url_apenas_quando_ha_preview() -> None:
         por_id[com_foto.id].photo_url
         == "https://fake/get/acme/catalogo/produtos/x/previews/foto.webp"
     )
+
+
+async def test_listagem_nao_expoe_photo_url_de_linha_meio_gravada() -> None:
+    """photo_preview_key sem photo_key e uma linha inconsistente (foto removida
+    ou substituida com um job de preview ainda em voo). Expor a URL nesse estado
+    faz a thumb de uma foto que nao existe mais reaparecer na tabela e no dialog
+    de edicao, e sem o botao "Remover foto" (que depende de photo_key)."""
+    repo = InMemoryProductRepository()
+    storage = FakeStorage()
+    produto = await CreateProductUseCase(repo).execute(ProductInput(name="Meio", sku="X-4"))
+    guardado = await repo.get(produto.id)
+    assert guardado is not None
+    guardado.photo_key = None
+    guardado.photo_preview_key = "acme/catalogo/produtos/x/previews/orfa.webp"
+    await repo.update(guardado)
+
+    itens, _ = await ListProductsUseCase(repo, storage).execute()
+    assert itens[0].photo_url is None

@@ -137,6 +137,95 @@ async def test_job_de_produto_grava_no_repositorio_de_fotos() -> None:
     assert await env.photos.get_photo(produto_id) == (chave, thumb_key)
 
 
+async def test_job_de_produto_com_foto_removida_nao_ressuscita_o_preview() -> None:
+    """A chave do anexo e imutavel, mas a foto do produto pode mudar entre a
+    confirmacao (que enfileira o job) e o processamento. DeleteProductPhotoUseCase
+    limpa as duas chaves e NAO cancela o job pendente: se o worker gravasse o
+    preview de qualquer forma, o produto voltaria a exibir a thumb da foto
+    excluida (photo_preview_key preenchido com photo_key nulo) e sem botao de
+    remover. Job obsoleto nao e falha: encerra como pronto, sem gravar nada."""
+    env = Env()
+    produto_id = uuid4()
+    chave = f"{SLUG}/catalogo/produtos/{produto_id}/{uuid4()}.png"
+    env.storage.simulate_upload(chave, b"original", "image/png")
+    await env.photos.set_photo(produto_id, chave, None)
+    job = PreviewJob(
+        id=uuid4(),
+        tenant_slug=SLUG,
+        object_key=chave,
+        kind=AttachmentKind.IMAGEM,
+        status=PreviewJobStatus.PENDENTE,
+        attempts=0,
+        next_attempt_at=datetime.now(UTC) - timedelta(seconds=1),
+        product_id=produto_id,
+    )
+    await env.jobs.add(job)
+    # o usuario remove a foto dentro da janela de poll do worker
+    await env.photos.set_photo(produto_id, None, None)
+
+    assert await env.use_case().execute(datetime.now(UTC)) is True
+
+    assert await env.photos.get_photo(produto_id) == (None, None)
+    assert env.jobs.items[job.id].status is PreviewJobStatus.PRONTO
+    assert env.jobs.items[job.id].attempts == 0
+    assert env.jobs.items[job.id].last_error is None
+
+
+async def test_job_de_produto_superado_nao_sobrescreve_o_preview_da_foto_atual() -> None:
+    """Troca de foto: A e confirmada (job A), falha uma vez e entra em backoff;
+    B e confirmada e processada primeiro. Quando A finalmente roda, ela ja nao
+    e a foto do produto - gravar o preview de A deixaria photo_key apontando
+    para B e photo_preview_key para a thumb de A."""
+    env = Env()
+    produto_id = uuid4()
+    agora = datetime.now(UTC)
+    chave_a = f"{SLUG}/catalogo/produtos/{produto_id}/{uuid4()}.png"
+    chave_b = f"{SLUG}/catalogo/produtos/{produto_id}/{uuid4()}.png"
+    env.storage.simulate_upload(chave_a, b"foto-a", "image/png")
+    env.storage.simulate_upload(chave_b, b"foto-b", "image/png")
+
+    await env.photos.set_photo(produto_id, chave_a, None)
+    job_a = PreviewJob(
+        id=uuid4(),
+        tenant_slug=SLUG,
+        object_key=chave_a,
+        kind=AttachmentKind.IMAGEM,
+        status=PreviewJobStatus.PENDENTE,
+        attempts=1,
+        next_attempt_at=agora + timedelta(minutes=1),
+        product_id=produto_id,
+    )
+    await env.jobs.add(job_a)
+
+    await env.photos.set_photo(produto_id, chave_b, None)
+    job_b = PreviewJob(
+        id=uuid4(),
+        tenant_slug=SLUG,
+        object_key=chave_b,
+        kind=AttachmentKind.IMAGEM,
+        status=PreviewJobStatus.PENDENTE,
+        attempts=0,
+        next_attempt_at=agora - timedelta(seconds=1),
+        product_id=produto_id,
+    )
+    await env.jobs.add(job_b)
+
+    # B roda primeiro (A ainda em backoff) e grava o preview correto
+    assert await env.use_case().execute(agora) is True
+    thumb_b, _ = preview_keys_for(chave_b)
+    assert await env.photos.get_photo(produto_id) == (chave_b, thumb_b)
+
+    # A sai do backoff e roda depois: obsoleta, nao pode tocar no produto
+    job_a.status = PreviewJobStatus.PENDENTE
+    job_a.next_attempt_at = agora - timedelta(seconds=1)
+    assert await env.use_case().execute(agora) is True
+
+    thumb_a, _ = preview_keys_for(chave_a)
+    assert await env.photos.get_photo(produto_id) == (chave_b, thumb_b)
+    assert (await env.photos.get_photo(produto_id))[1] != thumb_a
+    assert env.jobs.items[job_a.id].status is PreviewJobStatus.PRONTO
+
+
 async def test_original_ausente_falha_definitivamente_sem_esperar_cinco_tentativas() -> None:
     """Achado carregado da Task 2: get_bytes nao distingue objeto ausente de
     storage fora do ar. head() distingue (devolve None), entao o use case

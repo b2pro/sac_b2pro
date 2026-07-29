@@ -43,13 +43,11 @@ class RequestProductPhotoUploadUseCase:
         storage: StoragePort,
         tenant_slug: str,
         ttl_seconds: int = 300,
-        max_bytes: int = 52_428_800,
     ) -> None:
         self._products = products
         self._storage = storage
         self._tenant_slug = tenant_slug
         self._ttl = ttl_seconds
-        self._max_bytes = max_bytes
 
     async def execute(self, product_id: UUID, data: PhotoIntentInput) -> PhotoIntent:
         if await self._products.get(product_id) is None:
@@ -64,9 +62,7 @@ class RequestProductPhotoUploadUseCase:
         )
         return PhotoIntent(
             object_key=object_key,
-            upload_url=self._storage.presigned_put(
-                object_key, data.content_type, self._max_bytes, self._ttl
-            ),
+            upload_url=self._storage.presigned_put(object_key, data.content_type, self._ttl),
             expires_in=self._ttl,
         )
 

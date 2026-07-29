@@ -18,15 +18,19 @@ from sac.domain.attachments import (
 from sac.domain.errors import ValidationError
 
 
-class _PermanentJobError(Exception):
-    """Falha que retry nunca resolve: esgota o job de imediato, na 1a tentativa."""
+class PermanentJobError(Exception):
+    """Falha que retry nunca resolve: esgota o job de imediato, na 1a tentativa.
+
+    Publica de proposito: o adaptador do worker (infrastructure) tambem levanta
+    esta excecao quando detecta um erro de programacao que retry nunca corrige
+    (ver `_same_tenant` em `infrastructure/worker.py`)."""
 
 
-class _OriginalNotFoundError(_PermanentJobError):
+class _OriginalNotFoundError(PermanentJobError):
     """Objeto original ausente no bucket: falha permanente, nunca transitoria."""
 
 
-class _UnsupportedKindError(_PermanentJobError):
+class _UnsupportedKindError(PermanentJobError):
     """Job para um kind que este worker nao processa (ex.: video). Video nunca e
     processado no servidor - se um job desses chegar aqui por engano (hoje o
     fluxo de upload so enfileira jobs para imagem), o worker nao deve nem tentar
@@ -66,7 +70,15 @@ class ProcessPreviewJobUseCase:
             return False
         thumb_key, medium_key = preview_keys_for(job.object_key)
         tentativas = job.attempts + 1
+        # Resolvido uma unica vez, no inicio do try, e reaproveitado no caminho
+        # de falha: chamar attachments_for de novo dentro do except faria uma
+        # falha do proprio resolvedor (ex.: divergencia de tenant no adaptador
+        # do worker) escapar de execute depois do mark_failed, matando o
+        # processo do worker em vez de esgotar o job com a mensagem certa.
+        anexos: AttachmentRepository | None = None
         try:
+            if job.attachment_id is not None:
+                anexos = self._attachments_for(job.tenant_slug)
             if job.kind is not AttachmentKind.IMAGEM:
                 raise _UnsupportedKindError(f"worker de preview nao processa kind={job.kind}")
             if self._storage.head(job.object_key) is None:
@@ -75,18 +87,27 @@ class ProcessPreviewJobUseCase:
             thumb, medium = self._generate(original)
             self._storage.put_bytes(thumb_key, thumb, "image/webp")
             self._storage.put_bytes(medium_key, medium, "image/webp")
-            if job.attachment_id is not None:
-                repo = self._attachments_for(job.tenant_slug)
-                anexo = await repo.get(job.attachment_id)
+            if anexos is not None and job.attachment_id is not None:
+                anexo = await anexos.get(job.attachment_id)
                 if anexo is not None:
                     anexo.preview_key = thumb_key
                     anexo.preview_medium_key = medium_key
                     anexo.preview_status = PreviewStatus.PRONTO
-                    await repo.update(anexo)
+                    await anexos.update(anexo)
             elif job.product_id is not None:
                 photos = self._photos_for(job.tenant_slug)
                 atual = await photos.get_photo(job.product_id)
-                if atual is not None:
+                # Ao contrario do anexo (object_key imutavel), a foto do produto
+                # pode ter sido removida ou substituida entre a confirmacao, que
+                # enfileirou este job, e o processamento. So gravamos o preview
+                # quando o job ainda descreve a foto ATUAL - note que get_photo
+                # devolve a tupla (None, None) para um produto sem foto, que nao
+                # e None e portanto passaria por um teste de existencia. Um job
+                # obsoleto nao e falha: encerra como pronto, sem gravar nada. Os
+                # objetos de preview ja escritos no bucket ficam orfaos de
+                # proposito - suas chaves derivam da foto superada, e o bucket
+                # nunca perde objetos por soft delete.
+                if atual is not None and atual[0] == job.object_key:
                     await photos.set_photo(job.product_id, atual[0], thumb_key)
             await self._jobs.mark_done(job.id)
         except Exception as exc:  # noqa: BLE001 - qualquer falha reagenda o job
@@ -94,7 +115,7 @@ class ProcessPreviewJobUseCase:
             # descompressao etc.) e sempre permanente: nenhum retry decodifica os
             # mesmos bytes invalidos de forma diferente.
             esgotou = tentativas >= MAX_PREVIEW_ATTEMPTS or isinstance(
-                exc, (_PermanentJobError, ValidationError)
+                exc, (PermanentJobError, ValidationError)
             )
             await self._jobs.mark_failed(
                 job.id,
@@ -102,10 +123,9 @@ class ProcessPreviewJobUseCase:
                 now + next_backoff(tentativas),
                 exhausted=esgotou,
             )
-            if esgotou and job.attachment_id is not None:
-                repo = self._attachments_for(job.tenant_slug)
-                anexo = await repo.get(job.attachment_id)
+            if esgotou and anexos is not None and job.attachment_id is not None:
+                anexo = await anexos.get(job.attachment_id)
                 if anexo is not None:
                     anexo.preview_status = PreviewStatus.FALHOU
-                    await repo.update(anexo)
+                    await anexos.update(anexo)
         return True

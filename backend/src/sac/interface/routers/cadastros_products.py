@@ -140,7 +140,6 @@ async def request_photo_upload(
         storage,
         tenant_slug=tenant_slug,
         ttl_seconds=settings.presigned_ttl_seconds,
-        max_bytes=settings.attachment_max_bytes,
     ).execute(product_id, PhotoIntentInput(body.content_type, body.size_bytes))
     return PhotoIntentOut(
         object_key=intent.object_key,

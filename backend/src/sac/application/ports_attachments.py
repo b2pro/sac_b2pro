@@ -14,9 +14,13 @@ class ObjectHead:
 
 
 class StoragePort(Protocol):
-    def presigned_put(
-        self, key: str, content_type: str, max_bytes: int, ttl_seconds: int
-    ) -> str: ...
+    # presigned_put NAO recebe limite de tamanho: URL assinada de put_object nao
+    # suporta content-length-range (isso e feature de POST policy), entao um
+    # parametro desses seria ignorado em silencio e a porta prometeria uma
+    # garantia que nao existe. O limite e aplicado na intencao (validate_size) e
+    # no HEAD da confirmacao; o risco residual e a regra de ciclo de vida que o
+    # mitiga estao documentados em docs/armazenamento-anexos.md.
+    def presigned_put(self, key: str, content_type: str, ttl_seconds: int) -> str: ...
     def presigned_get(self, key: str, ttl_seconds: int) -> str: ...
     def head(self, key: str) -> ObjectHead | None: ...
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...

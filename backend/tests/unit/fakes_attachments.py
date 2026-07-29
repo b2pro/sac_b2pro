@@ -18,7 +18,7 @@ class FakeStorage:
         """Faz o papel do navegador: grava no bucket sem passar pelo backend."""
         self.objects[key] = (data, content_type)
 
-    def presigned_put(self, key: str, content_type: str, max_bytes: int, ttl_seconds: int) -> str:
+    def presigned_put(self, key: str, content_type: str, ttl_seconds: int) -> str:
         self.assinaturas.append(("put", key))
         return f"https://fake/put/{key}"
 

@@ -160,6 +160,31 @@ async def test_cota_de_dez_anexos(
     assert res.json()["details"]["limite"] == 10
 
 
+async def test_variante_desconhecida_e_recusada_em_vez_de_cair_no_original(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    """Variante fora do vocabulario nao pode falhar aberto entregando o objeto
+    original (um pedido de "thumbnail" devolveria os 50 MB da fonte). O router
+    restringe o parametro, entao a recusa vem como 422 antes de qualquer busca;
+    uma variante valida passa da validacao e ai sim chega ao 404 do anexo."""
+    _, _, headers = await _setup(session, engine, "anexapi7")
+    ticket_id = await _ticket(client, headers)
+    inexistente = uuid4()
+
+    res = await client.get(
+        f"/api/tickets/{ticket_id}/anexos/{inexistente}/url?variante=thumbnail",
+        headers=headers,
+    )
+    assert res.status_code == 422
+
+    for variante in ("medio", "original"):
+        res = await client.get(
+            f"/api/tickets/{ticket_id}/anexos/{inexistente}/url?variante={variante}",
+            headers=headers,
+        )
+        assert res.status_code == 404
+
+
 async def test_video_recebe_duas_urls_e_thumb_do_navegador(
     client: AsyncClient, session: AsyncSession, engine: AsyncEngine
 ) -> None:

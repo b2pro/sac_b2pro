@@ -226,20 +226,32 @@ class SqlTenantMemberDirectory:
         self._session = session
 
     async def list_members(self, tenant_slug: str) -> list[TenantMember]:
+        """Traz tambem os membros inativos, marcados com active=False - quem
+        decide o que fazer com eles e o cliente. Filtrar aqui faria o supervisor
+        ja atribuido a um ticket desaparecer da resposta quando fosse desativado,
+        e o seletor mostraria "Sem supervisor" para um ticket que tem supervisor.
+        Inativo e vinculo desativado OU usuario desativado globalmente: as duas
+        coisas tiram o membro de circulacao. Excluido por soft delete continua
+        fora da lista - esse nao existe mais.
+        """
         rows = await self._session.execute(
-            select(UserModel.id, UserModel.name, UserTenantModel.role, UserTenantModel.active)
+            select(
+                UserModel.id,
+                UserModel.name,
+                UserTenantModel.role,
+                UserTenantModel.active,
+                UserModel.active,
+            )
             .join(UserTenantModel, UserTenantModel.user_id == UserModel.id)
             .join(TenantModel, TenantModel.id == UserTenantModel.tenant_id)
             .where(
                 TenantModel.slug == tenant_slug,
-                UserTenantModel.active.is_(True),
-                UserModel.active.is_(True),
                 UserModel.deleted_at.is_(None),
             )
             .order_by(UserModel.name)
         )
         return [
-            TenantMember(id=row[0], name=row[1], role=Role(row[2]), active=row[3])
+            TenantMember(id=row[0], name=row[1], role=Role(row[2]), active=bool(row[3] and row[4]))
             for row in rows.all()
         ]
 

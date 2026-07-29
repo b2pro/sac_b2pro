@@ -23,14 +23,19 @@ class ProductView:
 
 
 def _photo_view_of(product: Product, storage: StoragePort, ttl_seconds: int) -> ProductView:
-    """Regra unica de quando a foto de um produto pode ser exposta: so quando
-    existe uma chave de preview gravada. Usado na listagem para que a decisao
-    nao seja duplicada na camada de interface (mesmo principio de `_view_of`
-    em `use_cases/attachments.py`).
+    """Regra unica de quando a foto de um produto pode ser exposta: so quando as
+    DUAS chaves existem - a do original e a do preview. Usado na listagem para
+    que a decisao nao seja duplicada na camada de interface (mesmo principio de
+    `_view_of` em `use_cases/attachments.py`).
+
+    Exigir tambem photo_key impede que uma linha meio gravada (preview sem
+    original, estado que a remocao de foto com job de preview em voo produzia)
+    renderize a thumb de uma foto que nao existe mais - e sem o botao de remover,
+    que depende de photo_key.
     """
     url = (
         storage.presigned_get(product.photo_preview_key, ttl_seconds)
-        if product.photo_preview_key
+        if product.photo_key and product.photo_preview_key
         else None
     )
     return ProductView(product=product, photo_url=url)

@@ -52,10 +52,13 @@ class S3Storage:
         )
         return cls(internal, public, bucket)
 
-    def presigned_put(self, key: str, content_type: str, max_bytes: int, ttl_seconds: int) -> str:
-        # max_bytes nao e aplicado aqui: presigned URL de put_object nao suporta
-        # content-length-range (isso e feature de POST policy); o limite e
-        # garantido pela validacao da intencao e pelo HEAD na confirmacao.
+    def presigned_put(self, key: str, content_type: str, ttl_seconds: int) -> str:
+        # Sem limite de tamanho por design: presigned URL de put_object nao
+        # suporta content-length-range (isso e feature de POST policy). Quem
+        # tiver a URL pode gravar mais bytes que o declarado; a confirmacao
+        # rejeita via HEAD e o anexo expira, mas o objeto fica no bucket. Risco
+        # aceito e regra de ciclo de vida que o mitiga estao em
+        # docs/armazenamento-anexos.md.
         try:
             return str(
                 self._public.generate_presigned_url(

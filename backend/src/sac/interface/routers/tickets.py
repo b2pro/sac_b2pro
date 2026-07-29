@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response
@@ -479,7 +480,6 @@ async def request_attachment_upload(
         tenant_slug=tenant_slug,
         ttl_seconds=settings.presigned_ttl_seconds,
         max_per_ticket=settings.attachment_max_per_ticket,
-        max_bytes=settings.attachment_max_bytes,
     )
     intent = await use_case.execute(
         _actor(identity),
@@ -545,7 +545,11 @@ async def list_attachments(
 async def get_attachment_url(
     ticket_id: UUID,
     anexo_id: UUID,
-    variante: str = "medio",
+    # Vocabulario fechado: GetAttachmentUrlUseCase entrega o original para
+    # qualquer valor diferente de "medio", entao um erro de digitacao ou um
+    # "?variante=thumbnail" devolveria a fonte inteira em vez de uma preview.
+    # Restringir aqui faz o FastAPI recusar com 422 antes de chegar ao use case.
+    variante: Literal["medio", "original"] = "medio",
     identity: TokenPayload = Depends(_read),
     repos: TicketRepos = Depends(get_ticket_repos),
     anexos: AttachmentRepos = Depends(get_attachment_repos),

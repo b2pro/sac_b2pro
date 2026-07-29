@@ -50,6 +50,9 @@ _FK_FIELDS: dict[str, str] = {
     "fk_ticket_timeline_events_ticket_id": "ticket_id",
     "fk_ticket_reads_ticket_id": "ticket_id",
     "fk_reverse_codes_ticket_id": "ticket_id",
+    # o repositorio de anexos tambem usa flush_tickets; sem estas duas entradas
+    # uma violacao de constraint de anexo seria re-levantada crua e viraria 500
+    "fk_ticket_attachments_ticket_id": "ticket_id",
 }
 _UNIQUE_CONSTRAINTS: dict[str, str] = {
     "uq_tickets_number": "numero de ticket ja utilizado",
@@ -57,6 +60,7 @@ _UNIQUE_CONSTRAINTS: dict[str, str] = {
 }
 _CHECK_CONSTRAINTS: dict[str, str] = {
     "ck_ticket_items_quantity": "quantidade minima e 1",
+    "ck_ticket_attachments_size": "tamanho de anexo invalido",
 }
 
 

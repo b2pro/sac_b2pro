@@ -7,7 +7,7 @@ from sac.infrastructure.storage import S3Storage
 
 async def test_presigned_put_e_head(storage: S3Storage) -> None:
     chave = "acme/teste/arquivo.png"
-    url = storage.presigned_put(chave, "image/png", max_bytes=1_000_000, ttl_seconds=60)
+    url = storage.presigned_put(chave, "image/png", ttl_seconds=60)
     async with httpx.AsyncClient() as client:
         res = await client.put(url, content=b"conteudo-fake", headers={"Content-Type": "image/png"})
     assert res.status_code == 200
@@ -26,7 +26,7 @@ async def test_put_com_content_type_diferente_do_assinado_e_recusado(
     storage: S3Storage,
 ) -> None:
     chave = "acme/teste/mismatch.png"
-    url = storage.presigned_put(chave, "image/png", max_bytes=1_000_000, ttl_seconds=60)
+    url = storage.presigned_put(chave, "image/png", ttl_seconds=60)
     async with httpx.AsyncClient() as client:
         res = await client.put(url, content=b"x", headers={"Content-Type": "application/pdf"})
     assert res.status_code >= 400

@@ -214,6 +214,68 @@ async def test_job_de_objeto_inexistente_esgota_na_primeira_tentativa(
     assert relido.last_error is not None and "nao encontrado" in relido.last_error
 
 
+async def test_foto_de_produto_removida_nao_volta_pelo_worker(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+    storage_settings: Settings,
+) -> None:
+    """Caminho real do achado critico: confirmar a foto enfileira o job, o
+    usuario remove a foto dentro da janela de poll do worker (o DELETE nao
+    cancela o job) e o worker roda depois. O produto tem que continuar sem foto
+    e sem preview - e o job encerra como pronto, nao como falha, porque estar
+    obsoleto nao e erro."""
+    from sac.application.use_cases.product_photo import DeleteProductPhotoUseCase
+    from sac.domain.cadastros import Product
+    from sac.infrastructure.repositories_cadastros import SqlProductRepository
+
+    tenant = await seed_provisioned_tenant(session, engine, slug="workerfoto")
+    produto_id = uuid4()
+    chave = f"{tenant.slug}/catalogo/produtos/{produto_id}/{uuid4()}.png"
+    async with _factory(engine, tenant.schema_name)() as ts:
+        produtos = SqlProductRepository(ts)
+        await produtos.add(
+            Product(id=produto_id, name="Alicate com foto", sku=f"WF-{produto_id.hex[:8]}")
+        )
+        repos = build_attachment_repos(ts)
+        await repos.photos.set_photo(produto_id, chave, None)
+        await ts.commit()
+
+    storage.put_bytes(chave, _png(), "image/png")
+    job_id = uuid4()
+    await SqlPreviewJobRepository(session).add(
+        PreviewJob(
+            id=job_id,
+            tenant_slug=tenant.slug,
+            object_key=chave,
+            kind=AttachmentKind.IMAGEM,
+            status=PreviewJobStatus.PENDENTE,
+            attempts=0,
+            next_attempt_at=datetime.now(UTC) - timedelta(seconds=1),
+            product_id=produto_id,
+        )
+    )
+    await session.commit()
+
+    # o usuario remove a foto antes do worker processar o job
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        await DeleteProductPhotoUseCase(SqlProductRepository(ts), repos.photos).execute(produto_id)
+        await ts.commit()
+
+    assert await run_once(engine, storage, storage_settings) is True
+
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        assert await repos.photos.get_photo(produto_id) == (None, None)
+
+    relido = await SqlPreviewJobRepository(session).get(job_id)
+    assert relido is not None
+    assert relido.status is PreviewJobStatus.PRONTO
+    assert relido.attempts == 0
+    assert relido.last_error is None
+
+
 async def test_expiracao_de_pendentes_varre_os_tenants(
     session: AsyncSession,
     engine: AsyncEngine,
@@ -225,6 +287,57 @@ async def test_expiracao_de_pendentes_varre_os_tenants(
 
     tenant = await seed_provisioned_tenant(session, engine, slug="workerexp")
     user = await seed_user(session, email="workerexp@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        ticket_id = await _ticket_id(ts, user.id)
+        anexo = TicketAttachment(
+            id=uuid4(),
+            ticket_id=ticket_id,
+            filename="pendente.png",
+            content_type="image/png",
+            size_bytes=10,
+            object_key=f"{tenant.slug}/{ticket_id}/{uuid4()}.png",
+            kind=AttachmentKind.IMAGEM,
+            status=AttachmentStatus.PENDENTE,
+            preview_status=PreviewStatus.PENDENTE,
+            author_user_id=user.id,
+        )
+        await repos.attachments.add(anexo)
+        await ts.execute(
+            text(
+                f'UPDATE "{tenant.schema_name}".ticket_attachments '
+                "SET created_at = now() - interval '2 hours'"
+            )
+        )
+        await ts.commit()
+
+    await expire_pending_all(engine, minutes=30)
+
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        relido = await repos.attachments.get(anexo.id)
+        assert relido is not None
+        assert relido.status is AttachmentStatus.EXPIRADO
+
+
+async def test_expiracao_continua_quando_um_tenant_falha(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+) -> None:
+    """A varredura roda dentro do run_forever: se a falha de um tenant subisse,
+    o processo sairia, o restart traria o worker de volta na mesma falha e as
+    previews morreriam para TODOS os tenants. Um tenant ativo sem schema
+    provisionado (o caso mais barato de reproduzir) tem que ser apenas logado."""
+    from sqlalchemy import text
+
+    from sac.infrastructure.worker import expire_pending_all
+    from tests.integration.helpers import seed_tenant
+
+    await seed_tenant(session, slug="workersemschema")
+
+    tenant = await seed_provisioned_tenant(session, engine, slug="workerresil")
+    user = await seed_user(session, email="workerresil@t.com")
     async with _factory(engine, tenant.schema_name)() as ts:
         repos = build_attachment_repos(ts)
         ticket_id = await _ticket_id(ts, user.id)

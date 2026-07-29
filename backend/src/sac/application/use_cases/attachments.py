@@ -89,7 +89,6 @@ class RequestUploadUseCase:
         tenant_slug: str,
         ttl_seconds: int = 300,
         max_per_ticket: int = MAX_ATTACHMENTS_PER_TICKET,
-        max_bytes: int = MAX_ATTACHMENT_BYTES,
     ) -> None:
         self._tickets = tickets
         self._attachments = attachments
@@ -97,7 +96,6 @@ class RequestUploadUseCase:
         self._tenant_slug = tenant_slug
         self._ttl = ttl_seconds
         self._max_per_ticket = max_per_ticket
-        self._max_bytes = max_bytes
 
     async def execute(
         self, actor: TicketActor, ticket_id: UUID, data: UploadIntentInput
@@ -121,9 +119,7 @@ class RequestUploadUseCase:
         preview_key: str | None = None
         if data.with_preview and kind is AttachmentKind.VIDEO:
             preview_key = thumb_key
-            preview_url = self._storage.presigned_put(
-                thumb_key, "image/webp", self._max_bytes, self._ttl
-            )
+            preview_url = self._storage.presigned_put(thumb_key, "image/webp", self._ttl)
         preview_status = (
             PreviewStatus.PENDENTE if kind is AttachmentKind.IMAGEM else PreviewStatus.SEM_PREVIEW
         )
@@ -146,9 +142,7 @@ class RequestUploadUseCase:
         return UploadIntent(
             attachment_id=attachment_id,
             object_key=object_key,
-            upload_url=self._storage.presigned_put(
-                object_key, data.content_type, self._max_bytes, self._ttl
-            ),
+            upload_url=self._storage.presigned_put(object_key, data.content_type, self._ttl),
             expires_in=self._ttl,
             preview_upload_url=preview_url,
         )
