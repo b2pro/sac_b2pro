@@ -44,7 +44,7 @@ def database() -> str:
 async def engine(database: str) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(database)
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE user_tenants, users, tenants CASCADE"))
+        await conn.execute(text("TRUNCATE user_tenants, users, tenants, preview_jobs CASCADE"))
         result = await conn.execute(
             text(
                 "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 't\\_%'"
@@ -64,8 +64,19 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def app(engine: AsyncEngine, database: str) -> AsyncIterator[FastAPI]:
-    application = create_app(Settings(database_url=database))
+async def app(
+    engine: AsyncEngine,
+    database: str,
+    storage: S3Storage,
+    storage_settings: Settings,
+) -> AsyncIterator[FastAPI]:
+    application = create_app(
+        Settings(
+            database_url=database,
+            s3_bucket=storage_settings.s3_bucket,
+            s3_public_endpoint_url="http://127.0.0.1:9000",
+        )
+    )
     yield application
     await application.state.engine.dispose()
 

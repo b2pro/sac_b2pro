@@ -5,7 +5,9 @@ from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.ports_cadastros import CepAddress
 from sac.application.ports_tickets import TicketDetail, TicketItemView, TicketListRow
+from sac.application.use_cases.attachments import AttachmentView
 from sac.application.use_cases.auth import AuthResult
+from sac.domain.attachments import AttachmentKind, PreviewStatus
 from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, TenantStatus
@@ -502,4 +504,53 @@ def ticket_detail_out(detail: TicketDetail) -> TicketDetailOut:
             )
             for r in detail.reverses
         ],
+    )
+
+
+class AttachmentIntentIn(BaseModel):
+    filename: str = Field(max_length=255)
+    content_type: str = Field(max_length=100)
+    size_bytes: int = Field(gt=0)
+    with_preview: bool = False
+
+
+class AttachmentIntentOut(BaseModel):
+    attachment_id: UUID
+    object_key: str
+    upload_url: str
+    expires_in: int
+    preview_upload_url: str | None
+
+
+class AttachmentOut(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str
+    size_bytes: int
+    kind: AttachmentKind
+    preview_status: PreviewStatus
+    preview_url: str | None
+    author_user_id: UUID
+    author_name: str | None
+    created_at: datetime | None
+
+
+class AttachmentUrlOut(BaseModel):
+    url: str
+    expires_in: int
+
+
+def attachment_out(view: AttachmentView, author_name: str | None) -> AttachmentOut:
+    a = view.attachment
+    return AttachmentOut(
+        id=a.id,
+        filename=a.filename,
+        content_type=a.content_type,
+        size_bytes=a.size_bytes,
+        kind=a.kind,
+        preview_status=a.preview_status,
+        preview_url=view.preview_url,
+        author_user_id=a.author_user_id,
+        author_name=author_name,
+        created_at=a.created_at,
     )

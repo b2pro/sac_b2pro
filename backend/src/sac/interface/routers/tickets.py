@@ -4,6 +4,15 @@ from fastapi import APIRouter, Depends, Response
 
 from sac.application.ports import TokenPayload
 from sac.application.ports_tickets import TicketActor, TicketFilters
+from sac.application.use_cases.attachments import (
+    AttachmentView,
+    ConfirmUploadUseCase,
+    DeleteAttachmentUseCase,
+    GetAttachmentUrlUseCase,
+    ListAttachmentsUseCase,
+    RequestUploadUseCase,
+    UploadIntentInput,
+)
 from sac.application.use_cases.customers import CustomerInput
 from sac.application.use_cases.tickets_crud import (
     AddCommentUseCase,
@@ -35,16 +44,28 @@ from sac.application.use_cases.tickets_workflow import (
     SetWarrantyUseCase,
     SubmitTicketUseCase,
 )
+from sac.domain.attachments import PreviewStatus
 from sac.domain.permissions import Permission
 from sac.domain.tickets import TicketPriority, TicketStatus
+from sac.infrastructure.repositories_attachments import AttachmentRepos
 from sac.infrastructure.repositories_tickets import TicketRepos
+from sac.infrastructure.settings import Settings
+from sac.infrastructure.storage import S3Storage
 from sac.interface.deps import (
+    get_attachment_repos,
+    get_settings,
+    get_storage,
+    get_tenant_slug,
     get_ticket_repos,
     require_any_permission,
     require_permission,
 )
 from sac.interface.schemas import (
     ApproveIn,
+    AttachmentIntentIn,
+    AttachmentIntentOut,
+    AttachmentOut,
+    AttachmentUrlOut,
     CancelIn,
     CommentIn,
     DeclineIn,
@@ -60,6 +81,7 @@ from sac.interface.schemas import (
     TicketsPageOut,
     TicketUpdateIn,
     WarrantyIn,
+    attachment_out,
     ticket_detail_out,
     ticket_item_out,
     ticket_list_item_out,
@@ -77,6 +99,7 @@ _operate = require_any_permission(
     Permission.OPERAR_LOGISTICA_TODOS, Permission.OPERAR_LOGISTICA_PROPRIOS
 )
 _comment = require_permission(Permission.COMENTAR_ANEXAR)
+_attach = require_permission(Permission.COMENTAR_ANEXAR)
 
 
 def _actor(identity: TokenPayload) -> TicketActor:
@@ -437,4 +460,122 @@ async def mark_unread(
 ) -> Response:
     use_case = MarkTicketUnreadUseCase(repos.tickets, repos.reads)
     await use_case.execute(_actor(identity), ticket_id)
+    return Response(status_code=204)
+
+
+@router.post("/{ticket_id}/anexos/intencao", response_model=AttachmentIntentOut, status_code=201)
+async def request_attachment_upload(
+    ticket_id: UUID,
+    body: AttachmentIntentIn,
+    identity: TokenPayload = Depends(_attach),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
+    tenant_slug: str = Depends(get_tenant_slug),
+    settings: Settings = Depends(get_settings),
+) -> AttachmentIntentOut:
+    use_case = RequestUploadUseCase(
+        repos.tickets,
+        anexos.attachments,
+        storage,
+        tenant_slug=tenant_slug,
+        ttl_seconds=settings.presigned_ttl_seconds,
+        max_per_ticket=settings.attachment_max_per_ticket,
+        max_bytes=settings.attachment_max_bytes,
+    )
+    intent = await use_case.execute(
+        _actor(identity),
+        ticket_id,
+        UploadIntentInput(
+            filename=body.filename,
+            content_type=body.content_type,
+            size_bytes=body.size_bytes,
+            with_preview=body.with_preview,
+        ),
+    )
+    return AttachmentIntentOut(
+        attachment_id=intent.attachment_id,
+        object_key=intent.object_key,
+        upload_url=intent.upload_url,
+        expires_in=intent.expires_in,
+        preview_upload_url=intent.preview_upload_url,
+    )
+
+
+@router.post("/{ticket_id}/anexos/{anexo_id}/confirmar", response_model=AttachmentOut)
+async def confirm_attachment_upload(
+    ticket_id: UUID,
+    anexo_id: UUID,
+    identity: TokenPayload = Depends(_attach),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
+    tenant_slug: str = Depends(get_tenant_slug),
+    settings: Settings = Depends(get_settings),
+) -> AttachmentOut:
+    use_case = ConfirmUploadUseCase(
+        repos.tickets,
+        anexos.attachments,
+        anexos.jobs,
+        storage,
+        tenant_slug=tenant_slug,
+        max_bytes=settings.attachment_max_bytes,
+    )
+    anexo = await use_case.execute(_actor(identity), ticket_id, anexo_id)
+    nomes = await repos.users.names_by_ids({anexo.author_user_id})
+    view = AttachmentView(
+        attachment=anexo,
+        preview_url=(
+            storage.presigned_get(anexo.preview_key, settings.presigned_ttl_seconds)
+            if anexo.preview_status is PreviewStatus.PRONTO and anexo.preview_key
+            else None
+        ),
+    )
+    return attachment_out(view, nomes.get(anexo.author_user_id))
+
+
+@router.get("/{ticket_id}/anexos", response_model=list[AttachmentOut])
+async def list_attachments(
+    ticket_id: UUID,
+    identity: TokenPayload = Depends(_read),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+) -> list[AttachmentOut]:
+    vistas = await ListAttachmentsUseCase(
+        repos.tickets, anexos.attachments, storage, settings.presigned_ttl_seconds
+    ).execute(_actor(identity), ticket_id)
+    nomes = await repos.users.names_by_ids({v.attachment.author_user_id for v in vistas})
+    return [attachment_out(v, nomes.get(v.attachment.author_user_id)) for v in vistas]
+
+
+@router.get("/{ticket_id}/anexos/{anexo_id}/url", response_model=AttachmentUrlOut)
+async def get_attachment_url(
+    ticket_id: UUID,
+    anexo_id: UUID,
+    variante: str = "medio",
+    identity: TokenPayload = Depends(_read),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+) -> AttachmentUrlOut:
+    url = await GetAttachmentUrlUseCase(
+        repos.tickets, anexos.attachments, storage, settings.presigned_ttl_seconds
+    ).execute(_actor(identity), ticket_id, anexo_id, variante)
+    return AttachmentUrlOut(url=url, expires_in=settings.presigned_ttl_seconds)
+
+
+@router.delete("/{ticket_id}/anexos/{anexo_id}", status_code=204)
+async def delete_attachment(
+    ticket_id: UUID,
+    anexo_id: UUID,
+    identity: TokenPayload = Depends(_attach),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+) -> Response:
+    await DeleteAttachmentUseCase(repos.tickets, anexos.attachments).execute(
+        _actor(identity), ticket_id, anexo_id
+    )
     return Response(status_code=204)

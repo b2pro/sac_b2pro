@@ -33,6 +33,11 @@ from sac.infrastructure.repositories import (
     SqlUserRepository,
     SqlUserTenantRepository,
 )
+from sac.infrastructure.repositories_attachments import (
+    AttachmentRepos,
+    SqlTenantMemberDirectory,
+    build_attachment_repos,
+)
 from sac.infrastructure.repositories_cadastros import (
     SqlCatalogRepository,
     SqlCustomerRepository,
@@ -41,6 +46,7 @@ from sac.infrastructure.repositories_cadastros import (
 from sac.infrastructure.repositories_tickets import TicketRepos, build_ticket_repos
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
+from sac.infrastructure.storage import S3Storage
 
 
 def get_settings(request: Request) -> Settings:
@@ -223,6 +229,29 @@ def get_product_repository(
 
 def get_ticket_repos(session: AsyncSession = Depends(get_tenant_session)) -> TicketRepos:
     return build_ticket_repos(session)
+
+
+def get_storage(request: Request) -> S3Storage:
+    storage: S3Storage = request.app.state.storage
+    return storage
+
+
+def get_attachment_repos(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> AttachmentRepos:
+    return build_attachment_repos(session)
+
+
+def get_member_directory(
+    session: AsyncSession = Depends(get_session),
+) -> SqlTenantMemberDirectory:
+    return SqlTenantMemberDirectory(session)
+
+
+async def get_tenant_slug(identity: TokenPayload = Depends(get_current_identity)) -> str:
+    if identity.tenant_slug is None:
+        raise AuthError("token sem tenant")
+    return identity.tenant_slug
 
 
 def get_cep_gateway() -> ViaCepGateway:
