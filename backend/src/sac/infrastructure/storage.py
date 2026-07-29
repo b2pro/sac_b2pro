@@ -11,7 +11,10 @@ from sac.infrastructure.settings import Settings
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
 
 
-def _client(endpoint_url: str, region: str, access_key: str, secret_key: str) -> Any:
+def build_client(endpoint_url: str, region: str, access_key: str, secret_key: str) -> Any:
+    """Client S3 cru. Publico porque o provisionamento do bucket
+    (provision_bucket.py) precisa do mesmo client, com a mesma assinatura v4 e o
+    mesmo addressing style que o gateway usa."""
     return boto3.client(
         "s3",
         endpoint_url=endpoint_url,
@@ -44,11 +47,11 @@ class S3Storage:
         access_key: str,
         secret_key: str,
     ) -> "S3Storage":
-        internal = _client(endpoint_url, region, access_key, secret_key)
+        internal = build_client(endpoint_url, region, access_key, secret_key)
         public = (
             internal
             if not public_endpoint_url or public_endpoint_url == endpoint_url
-            else _client(public_endpoint_url, region, access_key, secret_key)
+            else build_client(public_endpoint_url, region, access_key, secret_key)
         )
         return cls(internal, public, bucket)
 

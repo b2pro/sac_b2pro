@@ -1,0 +1,116 @@
+from typing import Any
+
+from botocore.exceptions import ClientError
+
+from sac.infrastructure.provision_bucket import (
+    MULTIPART_RULE_ID,
+    aplicar,
+    cors_configuration,
+    multipart_lifecycle,
+)
+
+
+def _erro(codigo: str, operacao: str) -> ClientError:
+    return ClientError({"Error": {"Code": codigo, "Message": codigo}}, operacao)
+
+
+class FakeS3:
+    """Client S3 de mentira: registra as chamadas e levanta o erro programado
+    para cada operacao, como MinIO e Wasabi fazem de formas diferentes.
+    """
+
+    def __init__(self, erros: dict[str, ClientError] | None = None) -> None:
+        self.chamadas: list[tuple[str, dict[str, Any]]] = []
+        self._erros = erros or {}
+
+    def _executar(self, operacao: str, **kwargs: Any) -> dict[str, Any]:
+        self.chamadas.append((operacao, kwargs))
+        erro = self._erros.get(operacao)
+        if erro is not None:
+            raise erro
+        return {}
+
+    def put_bucket_cors(self, **kwargs: Any) -> dict[str, Any]:
+        return self._executar("put_bucket_cors", **kwargs)
+
+    def put_bucket_lifecycle_configuration(self, **kwargs: Any) -> dict[str, Any]:
+        return self._executar("put_bucket_lifecycle_configuration", **kwargs)
+
+
+def test_cors_permite_so_o_header_que_dispara_o_preflight() -> None:
+    regra = cors_configuration(["https://sac.b2pro.com.br"])["CORSRules"][0]
+
+    assert regra["AllowedOrigins"] == ["https://sac.b2pro.com.br"]
+    # `Content-Type` e o unico header que o PUT do navegador manda: a assinatura
+    # vai na query string, entao nao ha x-amz-* nem Authorization para liberar.
+    assert regra["AllowedHeaders"] == ["Content-Type"]
+    assert regra["AllowedMethods"] == ["PUT", "GET", "HEAD"]
+    assert regra["ExposeHeaders"] == ["ETag"]
+
+
+def test_cors_nunca_libera_origem_curinga() -> None:
+    origens = cors_configuration(["https://a.example", "https://b.example"])["CORSRules"][0]
+
+    assert "*" not in origens["AllowedOrigins"]
+    assert origens["AllowedOrigins"] == ["https://a.example", "https://b.example"]
+
+
+def test_regra_de_multipart_nao_expira_objeto_nenhum() -> None:
+    """A regra e higiene de upload multipart. Se algum dia ganhar `Expiration`,
+    apagaria anexos confirmados: as chaves nascem na posicao final, sem prefixo de
+    staging que permita distinguir abandonado de em uso.
+    """
+    regra = multipart_lifecycle(1)["Rules"][0]
+
+    assert regra["ID"] == MULTIPART_RULE_ID
+    assert regra["AbortIncompleteMultipartUpload"] == {"DaysAfterInitiation": 1}
+    assert "Expiration" not in regra
+    assert "NoncurrentVersionExpiration" not in regra
+
+
+def test_aplicar_no_caminho_feliz_configura_as_duas_politicas() -> None:
+    cliente = FakeS3()
+
+    falhas = aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], 1)
+
+    assert falhas == []
+    assert [nome for nome, _ in cliente.chamadas] == [
+        "put_bucket_cors",
+        "put_bucket_lifecycle_configuration",
+    ]
+    _, kwargs = cliente.chamadas[0]
+    assert kwargs["Bucket"] == "sac-prod"
+
+
+def test_aplicar_tolera_o_que_o_minio_nao_implementa() -> None:
+    """Em desenvolvimento as duas politicas sao recusadas pelo MinIO — CORS porque
+    nao existe lá, ciclo de vida porque ele exige Expiration. Nenhuma das duas e
+    falha de provisionamento: o MinIO ja libera CORS por padrao.
+    """
+    cliente = FakeS3(
+        {
+            "put_bucket_cors": _erro("NotImplemented", "PutBucketCors"),
+            "put_bucket_lifecycle_configuration": _erro(
+                "InvalidArgument", "PutBucketLifecycleConfiguration"
+            ),
+        }
+    )
+
+    assert aplicar(cliente, "sac-dev", ["http://localhost:5173"], 1) == []
+
+
+def test_aplicar_reporta_falha_real_e_nao_para_na_primeira() -> None:
+    cliente = FakeS3({"put_bucket_cors": _erro("AccessDenied", "PutBucketCors")})
+
+    falhas = aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], 1)
+
+    assert falhas == ["CORS: AccessDenied"]
+    # credencial sem permissao de CORS nao impede tentar o ciclo de vida
+    assert "put_bucket_lifecycle_configuration" in [nome for nome, _ in cliente.chamadas]
+
+
+def test_aplicar_sem_dias_de_multipart_nao_toca_o_ciclo_de_vida() -> None:
+    cliente = FakeS3()
+
+    assert aplicar(cliente, "sac-prod", ["https://sac.b2pro.com.br"], None) == []
+    assert [nome for nome, _ in cliente.chamadas] == ["put_bucket_cors"]

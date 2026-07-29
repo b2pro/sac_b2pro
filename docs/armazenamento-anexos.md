@@ -31,7 +31,15 @@ O arquivo **nunca passa pelo backend**. Boas práticas de segurança obrigatóri
 
 O navegador envia o PUT direto para o bucket com um `Content-Type` explícito, o que é um pedido **cross-origin com header não simples** — o browser dispara um preflight `OPTIONS` antes do PUT. O MinIO usado em desenvolvimento libera isso por padrão, então **nenhum teste local detecta a falta desta configuração**; o Wasabi **não** libera: sem uma política de CORS no bucket o preflight é recusado e o upload falha no navegador com um erro opaco (`xhr.onerror`, sem status).
 
-Aplicar no bucket (`PutBucketCors`, via console do Wasabi ou `aws s3api put-bucket-cors --endpoint-url https://s3.<regiao>.wasabisys.com --bucket <bucket> --cors-configuration file://cors.json`):
+Aplicar com o script de provisionamento, que usa as mesmas variáveis `SAC_S3_*` do backend e é idempotente:
+
+```bash
+cd backend
+python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br
+python -m sac.infrastructure.provision_bucket --conferir   # mostra o que está no bucket
+```
+
+A política que ele aplica (`PutBucketCors`, também disponível no console do Wasabi):
 
 ```json
 {
@@ -39,7 +47,7 @@ Aplicar no bucket (`PutBucketCors`, via console do Wasabi ou `aws s3api put-buck
     {
       "AllowedOrigins": ["https://sac.b2pro.com.br"],
       "AllowedMethods": ["PUT", "GET", "HEAD"],
-      "AllowedHeaders": ["Content-Type", "x-amz-*", "Authorization"],
+      "AllowedHeaders": ["Content-Type"],
       "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 3000
     }
@@ -47,9 +55,10 @@ Aplicar no bucket (`PutBucketCors`, via console do Wasabi ou `aws s3api put-buck
 }
 ```
 
-- `AllowedOrigins`: a origem exata do frontend (uma entrada por ambiente; nunca `*` em produção, para não transformar URLs assinadas vazadas em upload de qualquer site).
+- `AllowedOrigins`: a origem exata do frontend (uma entrada por ambiente, repetindo `--origem`; nunca `*` em produção, para não transformar URLs assinadas vazadas em upload de qualquer site).
 - `AllowedMethods`: `PUT` para o upload direto, `GET`/`HEAD` para o download e o preview por presigned GET.
-- `AllowedHeaders` precisa conter `Content-Type` — é justamente esse header que força o preflight (ver `putToStorage` em `frontend/src/lib/attachments.ts`).
+- `AllowedHeaders` contém **apenas** `Content-Type`: é o único header que o navegador manda no PUT, e é justamente ele que força o preflight (ver `putToStorage` em `frontend/src/lib/attachments.ts`). A assinatura viaja na query string, então não há `x-amz-*` nem `Authorization` para liberar — liberar headers que ninguém envia só amplia a política sem necessidade.
+- Contra o MinIO o script avisa que `PutBucketCors` não existe (`NotImplemented`) e segue com exit 0: em desenvolvimento o CORS já é liberado por padrão. Contra o Wasabi, o mesmo erro seria falha de verdade.
 
 ## Limite de tamanho: o que é garantido e o que não é
 
@@ -57,16 +66,27 @@ Risco aceito e consciente: uma **presigned URL de `put_object` não suporta `con
 
 - O que protege: a intenção valida o tamanho declarado (`validate_size`), a confirmação faz `HEAD` no objeto e **recusa** tamanho/tipo divergentes, o anexo não confirmado expira em 30 min e a URL é curta e emitida só para usuário autenticado com permissão no ticket.
 - O que não é evitado: o objeto grande **já foi gravado** e permanece no bucket, ocupando custo, mesmo com a confirmação recusada. Por isso `StoragePort.presigned_put` **não** recebe `max_bytes` — um parâmetro assim seria ignorado em silêncio e prometeria uma garantia inexistente.
-- Mitigação obrigatória (configuração de bucket, não de código): **regra de ciclo de vida** que expira objetos nunca confirmados. Como as chaves nascem sob `{tenant}/{ticket}/…` e `{tenant}/catalogo/produtos/…`, a regra prática é expirar objetos com mais de 1 dia que não tenham anexo confirmado — na configuração do bucket, uma regra por prefixo com `Expiration: Days: 1` sobre um prefixo dedicado de staging, ou uma varredura periódica que compare o bucket com as chaves confirmadas no banco.
+### Objetos órfãos: por que não existe regra de ciclo de vida hoje
+
+Mitigar o objeto grande que já foi gravado pede expirar o que nunca foi confirmado — e **não há regra de bucket capaz disso com o layout de chaves atual**. As chaves nascem na posição final (`{tenant}/{ticket}/…`, `{tenant}/catalogo/produtos/…`) e a confirmação só muda uma linha no banco: nenhum atributo do objeto distingue confirmado de abandonado. Uma regra `Expiration: Days: N` sobre esses prefixos **apagaria anexos em uso** — é a armadilha a evitar, não a solução.
+
+O que o script aplica é apenas `AbortIncompleteMultipartUpload` (higiene de upload multipart interrompido). Como o upload do SAC é `PUT` simples, isso resolve pouco na prática, e é por isso que a regra vem separada e sem `Expiration`.
+
+As duas saídas reais, ambas maiores que configuração de bucket e **pendentes de decisão**:
+
+1. **Prefixo de staging**: o PUT assinado grava em `{tenant}/staging/…` e a confirmação copia para a chave final. Aí sim `Expiration: Days: 1` sobre `staging/` é seguro e automático. Custa uma cópia server-side por anexo e uma mudança no fluxo de confirmação.
+2. **Varredura no worker**: um job periódico lista o bucket e apaga objeto que não tem anexo correspondente no banco. Não muda o fluxo de upload, mas é código novo com acesso destrutivo ao bucket, e precisa de margem de tempo para não apagar objeto de upload em andamento.
+
+Enquanto nenhuma das duas existir, o custo de um objeto abandonado permanece no bucket indefinidamente.
 - Se um dia o upload migrar para **POST policy**, o `content-length-range` passa a ser aplicado no próprio storage e este risco desaparece (mudança de fase, não de correção pontual).
 
 ## Antes do primeiro deploy em produção
 
 Checklist do que **não** é verificável localmente (o MinIO é permissivo onde o Wasabi não é):
 
-1. **CORS do bucket** aplicado com a origem real do frontend (seção acima). Sem isso todo upload pelo navegador falha.
-2. **Bucket privado**: nenhum acesso público de leitura/escrita, nenhuma política anônima; credenciais com IAM policy restrita ao bucket/prefixo. Todo acesso é por URL assinada de TTL curto.
-3. **Regra de ciclo de vida** para objetos nunca confirmados (seção acima), que é o que mitiga o limite de tamanho não aplicável no PUT assinado.
+1. **CORS do bucket** aplicado com a origem real do frontend: `python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br` (seção acima). Sem isso todo upload pelo navegador falha. Conferir depois com `--conferir`.
+2. **Bucket privado**: nenhum acesso público de leitura/escrita, nenhuma política anônima; credenciais com IAM policy restrita ao bucket/prefixo. Todo acesso é por URL assinada de TTL curto. A credencial precisa de permissão de `PutBucketCors` para o passo 1.
+3. **Objetos órfãos**: decidir entre prefixo de staging e varredura no worker (seção acima). Não existe regra de bucket que resolva isso hoje, e aplicar `Expiration` nos prefixos reais apagaria anexos em uso.
 4. `SAC_S3_PUBLIC_ENDPOINT_URL` apontando para o endpoint que o **navegador** alcança: a assinatura cobre o header `Host`, então trocar o host depois de assinar invalida a URL.
 
 ## Previews (thumbnails)
