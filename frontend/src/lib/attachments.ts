@@ -119,9 +119,13 @@ export async function uploadAttachment(
   if (thumb && intent.preview_upload_url) {
     try {
       await putToStorage(intent.preview_upload_url, thumb, "image/webp", undefined, signal)
-    } catch {
-      // preview e best-effort: o backend cai para sem_preview se o thumb nao chegar,
-      // e uma falha aqui nunca deve impedir a confirmacao do anexo ja enviado.
+    } catch (error) {
+      // Cancelamento do usuario nao pode ser absorvido aqui: se o signal foi
+      // abortado, o upload inteiro deve ser reportado como cancelado, nao como
+      // sucesso. Qualquer outra falha do thumb continua tolerada — e best-effort,
+      // o backend cai para sem_preview se o thumb nao chegar, e isso nunca deve
+      // impedir a confirmacao do anexo ja enviado.
+      if (signal?.aborted) throw error
     }
   }
   return confirmUpload(ticketId, intent.attachment_id)

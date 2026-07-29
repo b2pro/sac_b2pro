@@ -3,7 +3,7 @@ import { FileText, ImageOff, Loader2, MoreVertical, Upload, Video, X } from "luc
 import { useRef, useState, type DragEvent } from "react"
 import { toast } from "sonner"
 
-import { useUploadQueue } from "@/components/tickets/AttachmentsCard.upload"
+import { useUploadQueue, validarArquivo } from "@/components/tickets/AttachmentsCard.upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -109,7 +109,7 @@ function AttachmentTile({
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon-sm"
               aria-label={`Mais acoes de ${attachment.filename}`}
             >
               <MoreVertical size={16} strokeWidth={1.5} />
@@ -175,11 +175,22 @@ export function AttachmentsCard({
   function processarArquivos(lista: FileList | File[]) {
     const arquivos = Array.from(lista)
     if (arquivos.length === 0) return
+    // Validar tipo/tamanho antes de cortar pelo limite de vagas: um arquivo
+    // invalido no meio do lote nao pode "roubar" a vaga de um arquivo valido
+    // que vinha depois dele.
+    const validos: File[] = []
+    for (const arquivo of arquivos) {
+      const erro = validarArquivo(arquivo)
+      if (erro) {
+        toast.error(erro)
+      } else {
+        validos.push(arquivo)
+      }
+    }
     const espaco = Math.max(0, MAX_ATTACHMENTS - emUso)
-    const aceitar = arquivos.slice(0, espaco)
-    const excedentes = arquivos.length - aceitar.length
-    const rejeitados = enfileirar(aceitar)
-    for (const mensagem of rejeitados) toast.error(mensagem)
+    const aceitar = validos.slice(0, espaco)
+    const excedentes = validos.length - aceitar.length
+    enfileirar(aceitar)
     if (excedentes > 0) {
       toast.error(`Limite de ${MAX_ATTACHMENTS} anexos por ticket atingido`)
     }
@@ -304,7 +315,7 @@ export function AttachmentsCard({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       onClick={() => dispensar(item.id)}
                       aria-label={`Descartar ${item.nome}`}
                     >
@@ -319,7 +330,7 @@ export function AttachmentsCard({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       onClick={() => cancelar(item.id)}
                       aria-label={`Cancelar envio de ${item.nome}`}
                     >
