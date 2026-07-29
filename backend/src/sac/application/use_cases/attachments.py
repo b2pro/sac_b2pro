@@ -186,9 +186,17 @@ class ConfirmUploadUseCase:
         if anexo.kind is AttachmentKind.IMAGEM:
             anexo.preview_status = PreviewStatus.PENDENTE
         elif anexo.kind is AttachmentKind.VIDEO and anexo.preview_key is not None:
-            if self._storage.head(anexo.preview_key) is not None:
+            thumb_head = self._storage.head(anexo.preview_key)
+            if (
+                thumb_head is not None
+                and 1 <= thumb_head.size_bytes <= self._max_bytes
+                and thumb_head.content_type == "image/webp"
+            ):
                 anexo.preview_status = PreviewStatus.PRONTO
             else:
+                # Thumb ausente, grande demais ou de tipo inesperado: trata como
+                # se o navegador nao tivesse enviado thumb nenhum. Uma thumb ruim
+                # nunca bloqueia a confirmacao do video em si.
                 anexo.preview_key = None
                 anexo.preview_status = PreviewStatus.SEM_PREVIEW
         else:

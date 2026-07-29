@@ -198,6 +198,27 @@ async def test_confirmacao_de_video_sem_thumb_fica_sem_preview() -> None:
     assert anexo.preview_status is PreviewStatus.SEM_PREVIEW
 
 
+async def test_confirmacao_de_video_com_thumb_grande_demais_fica_sem_preview() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN,
+        ticket.id,
+        UploadIntentInput("clipe.mp4", "video/mp4", 9, with_preview=True),
+    )
+    env.storage.simulate_upload(intent.object_key, b"123456789", "video/mp4")
+    assert intent.preview_upload_url is not None
+    preview_key = intent.preview_upload_url.removeprefix("https://fake/put/")
+    # thumb enviada pelo navegador excede o limite de tamanho: uma thumb ruim
+    # nao pode bloquear a confirmacao do video em si.
+    env.storage.simulate_upload(preview_key, b"x" * 52_428_801, "image/webp")
+
+    anexo = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    assert anexo.status is AttachmentStatus.DISPONIVEL
+    assert anexo.preview_status is PreviewStatus.SEM_PREVIEW
+    assert anexo.preview_key is None
+
+
 async def test_confirmacao_falha_sem_objeto_ou_com_head_divergente() -> None:
     env = Env()
     ticket = await env.ticket()
@@ -326,3 +347,27 @@ async def test_pendentes_antigos_expiram() -> None:
     assert total == 1
     expirado = await env.attachments.get(anexo.id)
     assert expirado is not None and expirado.status is AttachmentStatus.EXPIRADO
+
+
+async def test_pendente_ja_excluido_nao_e_recontado_como_expirado() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    anexo = await env.attachments.get(intent.attachment_id)
+    assert anexo is not None
+    anexo.created_at = datetime.now(UTC) - timedelta(hours=2)
+    anexo.deleted_at = datetime.now(UTC)
+    await env.attachments.update(anexo)
+
+    # a query real (list_pending_before) nao filtra deleted_at, entao o fake
+    # precisa devolver a linha ja excluida para o teste provar o guard de fato.
+    pendentes_crus = await env.attachments.list_pending_before(datetime.now(UTC))
+    assert any(a.id == anexo.id for a in pendentes_crus)
+
+    total = await ExpirePendingUseCase(env.attachments, minutes=30).execute()
+    assert total == 0
+    ainda_pendente = await env.attachments.get(anexo.id)
+    assert ainda_pendente is not None
+    assert ainda_pendente.status is AttachmentStatus.PENDENTE
