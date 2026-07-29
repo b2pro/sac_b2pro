@@ -71,6 +71,7 @@ export async function captureVideoThumb(file: File): Promise<Blob | null> {
   video.muted = true
   video.playsInline = true
   video.preload = "metadata"
+  let watchdog: ReturnType<typeof setTimeout> | undefined
   try {
     const pronto = new Promise<void>((resolve, reject) => {
       const falhar = () => reject(new Error("codec sem suporte"))
@@ -79,7 +80,7 @@ export async function captureVideoThumb(file: File): Promise<Blob | null> {
         video.currentTime = Math.min(1, (video.duration || 1) / 2)
       }
       video.onseeked = () => resolve()
-      setTimeout(falhar, 8000)
+      watchdog = setTimeout(falhar, 8000)
     })
     video.src = url
     await pronto
@@ -95,6 +96,7 @@ export async function captureVideoThumb(file: File): Promise<Blob | null> {
   } catch {
     return null
   } finally {
+    if (watchdog) clearTimeout(watchdog)
     URL.revokeObjectURL(url)
     video.removeAttribute("src")
   }

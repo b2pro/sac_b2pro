@@ -58,15 +58,24 @@ export const deleteAttachment = (ticketId: string, attachmentId: string) =>
   api<void>(`/tickets/${ticketId}/anexos/${attachmentId}`, { method: "DELETE" })
 
 /** PUT direto no storage. Usa XMLHttpRequest porque fetch nao reporta progresso
- *  de upload. A URL ja vem assinada; nao acrescentar headers de autenticacao. */
+ *  de upload. A URL ja vem assinada; nao acrescentar headers de autenticacao.
+ *  Aceita um AbortSignal opcional para cancelamento (ex.: fila de upload da UI);
+ *  um signal ja abortado antes de comecar tambem e respeitado. */
 export function putToStorage(
   url: string,
   body: Blob,
   contentType: string,
   onProgress?: UploadProgress,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("upload cancelado"))
+      return
+    }
     const xhr = new XMLHttpRequest()
+    const onSignalAbort = () => xhr.abort()
+    const cleanup = () => signal?.removeEventListener("abort", onSignalAbort)
     xhr.open("PUT", url)
     xhr.setRequestHeader("Content-Type", contentType)
     xhr.upload.onprogress = (event) => {
@@ -74,11 +83,20 @@ export function putToStorage(
         onProgress(Math.round((event.loaded / event.total) * 100))
       }
     }
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`falha no upload (${xhr.status})`))
-    xhr.onerror = () => reject(new Error("falha de rede no upload"))
+    xhr.onload = () => {
+      cleanup()
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`falha no upload (${xhr.status})`))
+    }
+    xhr.onerror = () => {
+      cleanup()
+      reject(new Error("falha de rede no upload"))
+    }
+    xhr.onabort = () => {
+      cleanup()
+      reject(new Error("upload cancelado"))
+    }
+    signal?.addEventListener("abort", onSignalAbort)
     xhr.send(body)
   })
 }
@@ -87,6 +105,7 @@ export async function uploadAttachment(
   ticketId: string,
   file: File,
   onProgress?: UploadProgress,
+  signal?: AbortSignal,
 ): Promise<Attachment> {
   const preparado = await compressImage(file)
   const thumb = await captureVideoThumb(preparado)
@@ -96,9 +115,14 @@ export async function uploadAttachment(
     size_bytes: preparado.size,
     with_preview: thumb !== null,
   })
-  await putToStorage(intent.upload_url, preparado, preparado.type, onProgress)
+  await putToStorage(intent.upload_url, preparado, preparado.type, onProgress, signal)
   if (thumb && intent.preview_upload_url) {
-    await putToStorage(intent.preview_upload_url, thumb, "image/webp")
+    try {
+      await putToStorage(intent.preview_upload_url, thumb, "image/webp", undefined, signal)
+    } catch {
+      // preview e best-effort: o backend cai para sem_preview se o thumb nao chegar,
+      // e uma falha aqui nunca deve impedir a confirmacao do anexo ja enviado.
+    }
   }
   return confirmUpload(ticketId, intent.attachment_id)
 }
@@ -127,6 +151,7 @@ export async function uploadProductPhoto(
   productId: string,
   file: File,
   onProgress?: UploadProgress,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (kindOf(file) !== "imagem") throw new Error("a foto do produto precisa ser imagem")
   const preparado = await compressImage(file)
@@ -134,6 +159,6 @@ export async function uploadProductPhoto(
     content_type: preparado.type,
     size_bytes: preparado.size,
   })
-  await putToStorage(intent.upload_url, preparado, preparado.type, onProgress)
+  await putToStorage(intent.upload_url, preparado, preparado.type, onProgress, signal)
   await confirmProductPhoto(productId, intent.object_key)
 }
