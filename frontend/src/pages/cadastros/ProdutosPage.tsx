@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ImageOff, Loader2, Package, Plus } from "lucide-react"
-import { useState, type ChangeEvent, type FormEvent } from "react"
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -38,6 +40,16 @@ import {
 import { kindOf, MAX_UPLOAD_BYTES } from "@/lib/media"
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp"
+
+const UPLOAD_CANCELADO = "upload cancelado"
+
+const POLL_INTERVAL_MS = 4000
+// Cobre o turnaround normal (segundos, na pratica) e a janela de retry do
+// worker de preview: backoff de 1+2+4+8 min entre as 5 tentativas antes do
+// job ser dado por esgotado (MAX_PREVIEW_ATTEMPTS=5 em
+// sac.domain.attachments) — cerca de 15 min no pior caso. 20 min da uma
+// folga sem manter o polling indefinidamente quando o worker desiste.
+const POLL_BUDGET_MS = 20 * 60 * 1000
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
@@ -78,7 +90,25 @@ export default function ProdutosPage() {
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
-  const [photoProgress, setPhotoProgress] = useState<number | null>(null)
+  const [confirmingPhotoDelete, setConfirmingPhotoDelete] = useState<Product | null>(null)
+  const [photoProgress, setPhotoProgress] = useState<{ id: string; percent: number } | null>(null)
+  // Produtos cuja foto ficou pendente de preview alem do orcamento de polling
+  // abaixo — o worker de preview esgotou as tentativas (ou esta demorando
+  // demais) e nao ha, nesta fase, um campo de status de falha no produto
+  // (diferente do anexo de ticket, que tem preview_status). Sem isso o dialog
+  // de edicao ficaria com o spinner girando para sempre.
+  const [previewTimedOut, setPreviewTimedOut] = useState<Set<string>>(() => new Set())
+  const photoAbortRef = useRef<AbortController | null>(null)
+  // Quando cada produto pendente foi visto pendente pela 1a vez, por id — nao
+  // um unico relogio global. Um relogio global tratado por "o conjunto de ids
+  // pendentes mudou" parece razoavel, mas quebra justamente o caso que mais
+  // importa: reenviar a foto de um produto cujo preview anterior ja estourou
+  // o orcamento nao muda o conjunto de ids pendentes (o produto ja estava
+  // pendente, continua pendente), entao o novo envio herdaria o relogio
+  // vencido e seria marcado como "esgotado" antes mesmo de comecar. Por
+  // produto, resetar e so limpar a entrada dele no mapa (feito em
+  // onPhotoSelected).
+  const pollStartedAtRef = useRef<Map<string, number>>(new Map())
 
   const role = session?.role ?? null
   const podeCriar = canCreateCadastros(role)
@@ -91,10 +121,46 @@ export default function ProdutosPage() {
     // A foto e um objeto que existe no storage assim que confirmado, mas o
     // preview (o que aparece como photo_url) e gerado por um worker
     // assincrono — chega pronto pouco depois. So repetimos o fetch enquanto
-    // existir alguma foto sem preview ainda; nada de polling constante.
+    // existir alguma foto sem preview ainda, e so ate o orcamento de tempo
+    // acima, por produto: sem isso, um produto cujo worker desistiu (job
+    // marcado como esgotado) seria repolled a cada 4s para sempre, enquanto a
+    // pagina ficasse aberta.
     refetchInterval: (query) => {
-      const produtos = query.state.data?.items
-      return produtos?.some((p) => p.photo_key && !p.photo_url) ? 4000 : false
+      const produtos = query.state.data?.items ?? []
+      const pendentes = produtos.filter((p) => p.photo_key && !p.photo_url)
+      const idsPendentes = new Set(pendentes.map((p) => p.id))
+
+      // limpa do mapa quem nao esta mais pendente (preview chegou, foto foi
+      // removida, ou saiu da pagina/busca atual)
+      for (const id of pollStartedAtRef.current.keys()) {
+        if (!idsPendentes.has(id)) pollStartedAtRef.current.delete(id)
+      }
+
+      if (idsPendentes.size === 0) return false
+
+      const agora = Date.now()
+      const esgotadosAgora: string[] = []
+      let algumDentroDoOrcamento = false
+      for (const id of idsPendentes) {
+        const inicio = pollStartedAtRef.current.get(id)
+        if (inicio === undefined) {
+          pollStartedAtRef.current.set(id, agora)
+          algumDentroDoOrcamento = true
+        } else if (agora - inicio < POLL_BUDGET_MS) {
+          algumDentroDoOrcamento = true
+        } else {
+          esgotadosAgora.push(id)
+        }
+      }
+      if (esgotadosAgora.length > 0) {
+        setPreviewTimedOut((atual) => {
+          if (esgotadosAgora.every((id) => atual.has(id))) return atual
+          const proximo = new Set(atual)
+          for (const id of esgotadosAgora) proximo.add(id)
+          return proximo
+        })
+      }
+      return algumDentroDoOrcamento ? POLL_INTERVAL_MS : false
     },
   })
 
@@ -159,15 +225,21 @@ export default function ProdutosPage() {
   })
 
   const photoMutation = useMutation({
-    mutationFn: ({ id, file }: { id: string; file: File }) =>
-      uploadProductPhoto(id, file, (percent) => setPhotoProgress(percent)),
+    mutationFn: ({ id, file, signal }: { id: string; file: File; signal: AbortSignal }) =>
+      uploadProductPhoto(id, file, (percent) => setPhotoProgress({ id, percent }), signal),
     onSuccess: () => {
       setPhotoProgress(null)
+      photoAbortRef.current = null
       invalidate()
       toast.success("Foto enviada")
     },
     onError: (error) => {
       setPhotoProgress(null)
+      photoAbortRef.current = null
+      // Cancelamento deliberado (dialog fechado durante o upload): ver
+      // onOpenChange do dialog de edicao. Nao e uma falha para avisar o
+      // usuario, e o esperado quando ele sai da tela antes de terminar.
+      if (error instanceof Error && error.message === UPLOAD_CANCELADO) return
       toast.error(errorMessage(error))
     },
   })
@@ -176,6 +248,7 @@ export default function ProdutosPage() {
     mutationFn: (id: string) => deleteProductPhoto(id),
     onSuccess: () => {
       invalidate()
+      setConfirmingPhotoDelete(null)
       toast.success("Foto removida")
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -190,8 +263,39 @@ export default function ProdutosPage() {
       toast.error(erro)
       return
     }
-    setPhotoProgress(0)
-    photoMutation.mutate({ id: editing.id, file })
+    // Reenviar a foto de um produto cujo preview anterior tinha estourado o
+    // orcamento de espera precisa comecar do zero: sem isso, o novo envio
+    // herdaria o relogio vencido e o dialog mostraria "preview indisponivel"
+    // antes mesmo do worker tentar de novo.
+    pollStartedAtRef.current.delete(editing.id)
+    setPreviewTimedOut((atual) => {
+      if (!atual.has(editing.id)) return atual
+      const proximo = new Set(atual)
+      proximo.delete(editing.id)
+      return proximo
+    })
+
+    const controller = new AbortController()
+    photoAbortRef.current = controller
+    setPhotoProgress({ id: editing.id, percent: 0 })
+    photoMutation.mutate({ id: editing.id, file, signal: controller.signal })
+  }
+
+  function onConfirmarRemocaoFoto() {
+    if (!confirmingPhotoDelete) return
+    deletePhotoMutation.mutate(confirmingPhotoDelete.id)
+  }
+
+  /** Fecha o dialog de edicao. Um upload em andamento e abortado em vez de
+   *  seguir "solto" em segundo plano: assim que o dialog fecha, nao ha mais
+   *  nenhuma tela mostrando o progresso daquele envio, e deixa-lo terminar
+   *  sozinho arriscaria exatamente a confusao de atribuicao entre produtos
+   *  que motivou isolar esse estado por id (photoProgress, abaixo). */
+  function onEditDialogOpenChange(open: boolean) {
+    if (open) return
+    if (photoMutation.isPending) photoAbortRef.current?.abort()
+    setConfirmingPhotoDelete(null)
+    setEditing(null)
   }
 
   function onSearchChange(value: string) {
@@ -369,7 +473,7 @@ export default function ProdutosPage() {
         </div>
       </div>
 
-      <Dialog open={editing != null} onOpenChange={(open) => !open && setEditing(null)}>
+      <Dialog open={editing != null} onOpenChange={onEditDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar produto</DialogTitle>
@@ -408,60 +512,111 @@ export default function ProdutosPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="edit-foto">Foto</Label>
-                <div className="flex items-center gap-3">
-                  {editingLive.photo_url ? (
-                    <img
-                      src={editingLive.photo_url}
-                      alt=""
-                      className="size-16 shrink-0 rounded border border-border object-cover"
-                    />
-                  ) : editingLive.photo_key ? (
-                    <div className="flex size-16 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
-                      <Loader2
-                        size={16}
-                        strokeWidth={1.5}
-                        className="animate-spin text-muted-foreground"
-                      />
+                {(() => {
+                  // photoMutation/deletePhotoMutation sao instancias unicas da
+                  // pagina (um dialog por vez, mas o dialog pode fechar antes
+                  // de a mutacao anterior terminar); .variables identifica de
+                  // qual produto e o upload/exclusao em andamento, pra este
+                  // dialog nunca mostrar o progresso de outro produto.
+                  const enviandoEste =
+                    photoMutation.isPending && photoProgress?.id === editingLive.id
+                  const removendoEsta =
+                    deletePhotoMutation.isPending &&
+                    deletePhotoMutation.variables === editingLive.id
+                  const semPreviewAinda = editingLive.photo_key && !editingLive.photo_url
+                  const previewEmpacou = previewTimedOut.has(editingLive.id)
+                  return (
+                    <div className="flex items-center gap-3">
+                      {editingLive.photo_url ? (
+                        <img
+                          src={editingLive.photo_url}
+                          alt=""
+                          className="size-16 shrink-0 rounded border border-border object-cover"
+                        />
+                      ) : semPreviewAinda && !previewEmpacou ? (
+                        <div className="flex size-16 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
+                          <Loader2
+                            size={16}
+                            strokeWidth={1.5}
+                            className="animate-spin text-muted-foreground"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex size-16 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
+                          <ImageOff size={16} strokeWidth={1.5} className="text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="flex flex-1 flex-col gap-2">
+                        <Input
+                          id="edit-foto"
+                          type="file"
+                          accept={PHOTO_ACCEPT}
+                          onChange={onPhotoSelected}
+                          disabled={enviandoEste}
+                        />
+                        {enviandoEste ? (
+                          <p className="text-xs text-muted-foreground">
+                            Enviando... {photoProgress?.percent ?? 0}%
+                          </p>
+                        ) : semPreviewAinda ? (
+                          <p className="text-xs text-muted-foreground">
+                            {previewEmpacou ? "Preview indisponivel." : "Gerando preview..."}
+                          </p>
+                        ) : null}
+                        {editingLive.photo_key && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={removendoEsta}
+                            onClick={() => setConfirmingPhotoDelete(editingLive)}
+                          >
+                            Remover foto
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="flex size-16 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
-                      <ImageOff size={16} strokeWidth={1.5} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="flex flex-1 flex-col gap-2">
-                    <Input
-                      id="edit-foto"
-                      type="file"
-                      accept={PHOTO_ACCEPT}
-                      onChange={onPhotoSelected}
-                      disabled={photoMutation.isPending}
-                    />
-                    {photoMutation.isPending ? (
-                      <p className="text-xs text-muted-foreground">
-                        Enviando... {photoProgress ?? 0}%
-                      </p>
-                    ) : editingLive.photo_key && !editingLive.photo_url ? (
-                      <p className="text-xs text-muted-foreground">Gerando preview...</p>
-                    ) : null}
-                    {editingLive.photo_key && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={deletePhotoMutation.isPending}
-                        onClick={() => deletePhotoMutation.mutate(editingLive.id)}
-                      >
-                        Remover foto
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                  )
+                })()}
               </div>
               <Button type="submit" disabled={updateMutation.isPending} className="mt-1">
                 Salvar
               </Button>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmingPhotoDelete != null}
+        onOpenChange={(open) => !open && setConfirmingPhotoDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remover foto</DialogTitle>
+            <DialogDescription>
+              {confirmingPhotoDelete
+                ? `Remover a foto de "${confirmingPhotoDelete.name}"? O arquivo continua no armazenamento para fins de auditoria, mas deixa de aparecer no produto.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmingPhotoDelete(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletePhotoMutation.isPending}
+              onClick={onConfirmarRemocaoFoto}
+            >
+              Remover
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>
