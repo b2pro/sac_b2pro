@@ -231,7 +231,13 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
   useEffect(
     () => () => {
       for (const controller of controllers.current.values()) controller.abort()
-      for (const id of [...intents.current.keys()]) descartarIntent(id)
+      for (const id of [...intents.current.keys()]) {
+        // quem tem descarte em voo (tentarNovamente) ja esta devolvendo a vaga:
+        // repetir aqui so mandaria um DELETE redundante, que perderia a corrida
+        // e levaria 404.
+        if (retentando.current.has(id)) continue
+        descartarIntent(id)
+      }
     },
     [descartarIntent],
   )
