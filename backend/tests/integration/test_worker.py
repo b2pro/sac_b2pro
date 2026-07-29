@@ -16,6 +16,7 @@ from sac.domain.attachments import (
     TicketAttachment,
     preview_keys_for,
 )
+from sac.domain.entities import Tenant
 from sac.infrastructure.models_tenant import BrandModel, TicketModel
 from sac.infrastructure.repositories_attachments import (
     SqlPreviewJobRepository,
@@ -54,6 +55,57 @@ async def _ticket_id(ts: AsyncSession, attendant: UUID) -> UUID:
     ts.add(ticket)
     await ts.flush()
     return ticket.id
+
+
+async def _seed_pending_image(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+    *,
+    slug: str,
+    user_email: str,
+    next_attempt_at: datetime,
+) -> tuple[Tenant, TicketAttachment, UUID]:
+    """Cria um tenant provisionado com um anexo disponivel + objeto no bucket
+    + job de preview pendente. Devolve o tenant, o anexo e o id do job."""
+    tenant = await seed_provisioned_tenant(session, engine, slug=slug)
+    user = await seed_user(session, email=user_email)
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        ticket_id = await _ticket_id(ts, user.id)
+        chave = f"{tenant.slug}/{ticket_id}/{uuid4()}.png"
+        anexo = TicketAttachment(
+            id=uuid4(),
+            ticket_id=ticket_id,
+            filename="foto.png",
+            content_type="image/png",
+            size_bytes=len(_png()),
+            object_key=chave,
+            kind=AttachmentKind.IMAGEM,
+            status=AttachmentStatus.DISPONIVEL,
+            preview_status=PreviewStatus.PENDENTE,
+            author_user_id=user.id,
+            confirmed_at=datetime.now(UTC),
+        )
+        await repos.attachments.add(anexo)
+        await ts.commit()
+
+    storage.put_bytes(chave, _png(), "image/png")
+    job_id = uuid4()
+    await SqlPreviewJobRepository(session).add(
+        PreviewJob(
+            id=job_id,
+            tenant_slug=tenant.slug,
+            object_key=chave,
+            kind=AttachmentKind.IMAGEM,
+            status=PreviewJobStatus.PENDENTE,
+            attempts=0,
+            next_attempt_at=next_attempt_at,
+            attachment_id=anexo.id,
+        )
+    )
+    await session.commit()
+    return tenant, anexo, job_id
 
 
 async def test_worker_gera_os_dois_previews_e_marca_pronto(
@@ -204,3 +256,88 @@ async def test_expiracao_de_pendentes_varre_os_tenants(
         relido = await repos.attachments.get(anexo.id)
         assert relido is not None
         assert relido.status is AttachmentStatus.EXPIRADO
+
+
+async def test_worker_resolve_tenant_correto_mesmo_com_job_mais_antigo_travado(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+    storage_settings: Settings,
+) -> None:
+    """Cobre o finding 1 (achado do code review): claim_next usa FOR UPDATE
+    SKIP LOCKED, entao o job globalmente mais antigo pode estar travado por
+    outro worker e ser pulado. Se o worker resolvesse o schema do tenant
+    ANTES do claim, a partir de um palpite do job mais antigo sem lock (o bug
+    corrigido aqui), ele gravaria o preview pronto no tenant errado, de forma
+    silenciosa (mark_done ainda marcaria o job como concluido). Este teste
+    forca exatamente essa divergencia: trava o job de "tenanta" (o mais
+    antigo) numa transacao paralela sem commit, e prova que run_once
+    resolve, processa e grava CORRETAMENTE o job de "tenantb" (o unico
+    elegivel) - nunca no schema de tenanta. Depois libera o lock e confirma
+    que o job de tenanta tambem e processado, no proprio schema, sem
+    cruzamento em nenhum dos dois sentidos."""
+    from sqlalchemy import text
+
+    agora = datetime.now(UTC)
+    tenant_a, anexo_a, job_a_id = await _seed_pending_image(
+        session,
+        engine,
+        storage,
+        slug="tenanta",
+        user_email="tenanta@t.com",
+        next_attempt_at=agora - timedelta(seconds=5),
+    )
+    tenant_b, anexo_b, _job_b_id = await _seed_pending_image(
+        session,
+        engine,
+        storage,
+        slug="tenantb",
+        user_email="tenantb@t.com",
+        next_attempt_at=agora - timedelta(seconds=1),
+    )
+
+    lock_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with lock_factory() as locker:
+        # trava a linha do job de tenanta (o mais antigo, seria o "palpite"
+        # do bug) sem commitar - claim_next tem que pular para tenantb.
+        await locker.execute(
+            text("SELECT id FROM preview_jobs WHERE id = :id FOR UPDATE"),
+            {"id": job_a_id},
+        )
+
+        assert await run_once(engine, storage, storage_settings) is True
+
+        async with _factory(engine, tenant_b.schema_name)() as ts:
+            repos = build_attachment_repos(ts)
+            atualizado_b = await repos.attachments.get(anexo_b.id)
+            assert atualizado_b is not None
+            assert atualizado_b.preview_status is PreviewStatus.PRONTO
+            thumb_b, medium_b = preview_keys_for(anexo_b.object_key)
+            assert atualizado_b.preview_key == thumb_b
+            assert atualizado_b.preview_medium_key == medium_b
+
+        # tenanta continua intocado: o job travado nao foi processado, e o
+        # anexo de tenanta nao recebeu (por engano) as chaves de tenantb.
+        async with _factory(engine, tenant_a.schema_name)() as ts:
+            repos = build_attachment_repos(ts)
+            ainda_pendente_a = await repos.attachments.get(anexo_a.id)
+            assert ainda_pendente_a is not None
+            assert ainda_pendente_a.preview_status is PreviewStatus.PENDENTE
+            assert ainda_pendente_a.preview_key is None
+
+        await locker.rollback()
+
+    # com o lock liberado, o job de tenanta e o unico elegivel - tem que ser
+    # processado e gravado no proprio schema de tenanta.
+    assert await run_once(engine, storage, storage_settings) is True
+    async with _factory(engine, tenant_a.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        atualizado_a = await repos.attachments.get(anexo_a.id)
+        assert atualizado_a is not None
+        assert atualizado_a.preview_status is PreviewStatus.PRONTO
+        thumb_a, medium_a = preview_keys_for(anexo_a.object_key)
+        assert atualizado_a.preview_key == thumb_a
+        assert atualizado_a.preview_medium_key == medium_a
+
+    # nunca cruzados: as chaves de preview de cada tenant sao distintas.
+    assert atualizado_a.preview_key != atualizado_b.preview_key

@@ -37,14 +37,27 @@ services:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
+    healthcheck:
+      # so fica saudavel depois que o entrypoint roda as migrations (public +
+      # todos os schemas de tenant) e o seed e sobe o uvicorn - o worker
+      # depende dessa condicao para nunca consultar preview_jobs/tenants antes
+      # das tabelas existirem (achado do code review).
+      test: ["CMD", "python3", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
 
   worker:
     build: ./backend
     command: uv run python -m sac.worker
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     environment:
       SAC_DATABASE_URL: postgresql+asyncpg://sac:sac@db:5432/sac
