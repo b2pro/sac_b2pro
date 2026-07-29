@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.ports_cadastros import CepAddress
 from sac.application.ports_tickets import TicketDetail, TicketItemView, TicketListRow
-from sac.application.use_cases.attachments import AttachmentView
+from sac.application.use_cases.attachments import AttachmentView, IntentDiscardResult
 from sac.application.use_cases.auth import AuthResult
 from sac.domain.attachments import AttachmentKind, PreviewStatus
 from sac.domain.cadastros import Customer, Product
@@ -550,6 +550,14 @@ class AttachmentOut(BaseModel):
 class AttachmentUrlOut(BaseModel):
     url: str
     expires_in: int
+
+
+class AttachmentIntentDiscardOut(BaseModel):
+    """`descartado` quando a vaga voltou para a cota; `disponivel` quando o
+    upload na verdade tinha sido confirmado e nada foi apagado.
+    """
+
+    status: IntentDiscardResult
 
 
 def attachment_out(view: AttachmentView, author_name: str | None) -> AttachmentOut:

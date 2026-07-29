@@ -261,6 +261,12 @@ async def test_visualizador_le_mas_nao_anexa_e_ticket_encerrado_bloqueia(
     )
     assert res.status_code == 403
 
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{uuid4()}/intencao",
+        headers=viewer_headers,
+    )
+    assert res.status_code == 403
+
     await client.post(f"/api/tickets/{ticket_id}/cancelar", json={}, headers=headers)
     res = await client.post(
         f"/api/tickets/{ticket_id}/anexos/intencao",
@@ -268,3 +274,95 @@ async def test_visualizador_le_mas_nao_anexa_e_ticket_encerrado_bloqueia(
         headers=headers,
     )
     assert res.status_code == 409
+
+
+async def test_descartar_intencao_libera_a_cota_e_preserva_anexo_confirmado(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    _, _, headers = await _setup(session, engine, "anexapi9")
+    ticket_id = await _ticket(client, headers)
+
+    # 10 intencoes ocupam a cota inteira sem nenhum upload ter acontecido
+    intencoes = []
+    for _ in range(10):
+        res = await client.post(
+            f"/api/tickets/{ticket_id}/anexos/intencao",
+            json={"filename": "x.png", "content_type": "image/png", "size_bytes": 100},
+            headers=headers,
+        )
+        assert res.status_code == 201
+        intencoes.append(res.json())
+    # nenhuma delas aparece na listagem, que so mostra anexo disponivel
+    assert (await client.get(f"/api/tickets/{ticket_id}/anexos", headers=headers)).json() == []
+
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{intencoes[0]['attachment_id']}/intencao",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "descartado"}
+
+    # a vaga voltou de verdade: a 11a intencao agora entra
+    res = await client.post(
+        f"/api/tickets/{ticket_id}/anexos/intencao",
+        json={"filename": "nova.png", "content_type": "image/png", "size_bytes": 100},
+        headers=headers,
+    )
+    assert res.status_code == 201
+    nova = res.json()
+
+    # sobe e confirma essa: descartar depois do confirmar nao apaga nada, so
+    # informa que o anexo existe (o caso da resposta do confirmar perdida)
+    imagem = _png()
+    async with httpx.AsyncClient() as direto:
+        await direto.put(nova["upload_url"], content=imagem, headers={"Content-Type": "image/png"})
+    res = await client.post(
+        f"/api/tickets/{ticket_id}/anexos/{nova['attachment_id']}/confirmar", headers=headers
+    )
+    assert res.status_code == 200
+
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{nova['attachment_id']}/intencao",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "disponivel"}
+    listados = (await client.get(f"/api/tickets/{ticket_id}/anexos", headers=headers)).json()
+    assert [a["id"] for a in listados] == [nova["attachment_id"]]
+
+    # anexo inexistente segue 404, e o descarte nao inventa linha
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{uuid4()}/intencao", headers=headers
+    )
+    assert res.status_code == 404
+
+
+async def test_descartar_intencao_de_outro_autor_e_negado(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant, _, headers = await _setup(session, engine, "anexapi10")
+    outro = await seed_user(session, email="outro@anexapi10.com", name="Bruno")
+    await seed_link(session, user=outro, tenant=tenant, role=Role.ADMIN)
+    outro_headers = token_for(outro, tenant_slug=tenant.slug, role=Role.ADMIN)
+    ticket_id = await _ticket(client, headers)
+
+    res = await client.post(
+        f"/api/tickets/{ticket_id}/anexos/intencao",
+        json={"filename": "x.png", "content_type": "image/png", "size_bytes": 100},
+        headers=headers,
+    )
+    intencao = res.json()
+
+    # admin pode excluir anexo alheio, mas nao descartar intencao alheia
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{intencao['attachment_id']}/intencao",
+        headers=outro_headers,
+    )
+    assert res.status_code == 403
+
+    res = await client.delete(
+        f"/api/tickets/{ticket_id}/anexos/{intencao['attachment_id']}/intencao",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "descartado"}

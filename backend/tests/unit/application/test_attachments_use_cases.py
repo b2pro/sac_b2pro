@@ -7,8 +7,10 @@ from sac.application.ports_tickets import TicketActor
 from sac.application.use_cases.attachments import (
     ConfirmUploadUseCase,
     DeleteAttachmentUseCase,
+    DiscardIntentUseCase,
     ExpirePendingUseCase,
     GetAttachmentUrlUseCase,
+    IntentDiscardResult,
     ListAttachmentsUseCase,
     RequestUploadUseCase,
     UploadIntentInput,
@@ -336,6 +338,123 @@ async def test_atendente_nao_exclui_anexo_de_outro_autor() -> None:
         await DeleteAttachmentUseCase(env.tickets, env.attachments).execute(
             ATENDENTE, ticket.id, view.attachment.id
         )
+
+
+async def test_descartar_intencao_pendente_devolve_a_vaga() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    # a intencao ja ocupa vaga na cota antes do upload existir
+    assert await env.attachments.count_active(ticket.id) == 1
+
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+        ADMIN, ticket.id, intent.attachment_id
+    )
+
+    assert resultado is IntentDiscardResult.DESCARTADO
+    descartado = await env.attachments.get(intent.attachment_id)
+    assert descartado is not None and descartado.deleted_at is not None
+    assert await env.attachments.count_active(ticket.id) == 0
+
+
+async def test_descartar_intencao_nao_apaga_anexo_ja_confirmado() -> None:
+    """O caso que motivou este use case: a resposta do confirmar se perde depois
+    do servidor ter commitado, o cliente acha que falhou e pede o descarte. O
+    servidor e a autoridade sobre o status, e um anexo DISPONIVEL nao pode ser
+    apagado por um pedido de descarte de intencao.
+    """
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
+    await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+        ADMIN, ticket.id, intent.attachment_id
+    )
+
+    assert resultado is IntentDiscardResult.DISPONIVEL
+    intacto = await env.attachments.get(intent.attachment_id)
+    assert intacto is not None
+    assert intacto.deleted_at is None
+    assert intacto.status is AttachmentStatus.DISPONIVEL
+    assert len(await env.attachments.list_by_ticket(ticket.id)) == 1
+
+
+async def test_descartar_intencao_de_outro_autor_e_recusado_ate_para_admin() -> None:
+    """Mais restrito que DeleteAttachmentUseCase de proposito: excluir um anexo
+    visivel e moderacao (admin pode), descartar uma intencao pendente e desfazer
+    o proprio upload em andamento — ninguem mais tem motivo para isso.
+    """
+    env = Env()
+    ticket = await env.ticket(actor=ATENDENTE)
+    intent = await env.request_uc().execute(
+        ATENDENTE, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+
+    with pytest.raises(PermissionDeniedError):
+        await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+            ADMIN, ticket.id, intent.attachment_id
+        )
+
+    preservado = await env.attachments.get(intent.attachment_id)
+    assert preservado is not None and preservado.deleted_at is None
+
+
+async def test_descartar_intencao_funciona_com_ticket_encerrado() -> None:
+    """Diferente das outras escritas de anexo, que recusam ticket encerrado: a
+    vaga precisa voltar mesmo se o ticket fechou no meio do upload, e a linha
+    pendente nem aparece na listagem do ticket.
+    """
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    ticket.status = TicketStatus.FINALIZADO
+    await env.tickets.update(ticket)
+
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+        ADMIN, ticket.id, intent.attachment_id
+    )
+
+    assert resultado is IntentDiscardResult.DESCARTADO
+    assert await env.attachments.count_active(ticket.id) == 0
+
+
+async def test_descartar_intencao_expirada_nao_reescreve_a_linha() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    anexo = await env.attachments.get(intent.attachment_id)
+    assert anexo is not None
+    anexo.status = AttachmentStatus.EXPIRADO
+    await env.attachments.update(anexo)
+
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+        ADMIN, ticket.id, intent.attachment_id
+    )
+
+    # a varredura ja liberou a vaga (expirado nao conta em count_active), entao
+    # o descarte e um no-op idempotente em vez de um segundo soft-delete.
+    assert resultado is IntentDiscardResult.DESCARTADO
+    assert await env.attachments.count_active(ticket.id) == 0
+    ainda_expirado = await env.attachments.get(intent.attachment_id)
+    assert ainda_expirado is not None and ainda_expirado.deleted_at is None
+
+
+async def test_descartar_intencao_inexistente_da_404() -> None:
+    env = Env()
+    ticket = await env.ticket()
+
+    with pytest.raises(NotFoundError):
+        await DiscardIntentUseCase(env.tickets, env.attachments).execute(ADMIN, ticket.id, uuid4())
 
 
 async def test_pendentes_antigos_expiram() -> None:

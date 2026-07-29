@@ -8,6 +8,7 @@ from sac.application.ports_tickets import TicketActor, TicketFilters
 from sac.application.use_cases.attachments import (
     ConfirmUploadUseCase,
     DeleteAttachmentUseCase,
+    DiscardIntentUseCase,
     GetAttachmentUrlUseCase,
     ListAttachmentsUseCase,
     RequestUploadUseCase,
@@ -61,6 +62,7 @@ from sac.interface.deps import (
 )
 from sac.interface.schemas import (
     ApproveIn,
+    AttachmentIntentDiscardOut,
     AttachmentIntentIn,
     AttachmentIntentOut,
     AttachmentOut,
@@ -560,6 +562,20 @@ async def get_attachment_url(
         repos.tickets, anexos.attachments, storage, settings.presigned_ttl_seconds
     ).execute(_actor(identity), ticket_id, anexo_id, variante)
     return AttachmentUrlOut(url=url, expires_in=settings.presigned_ttl_seconds)
+
+
+@router.delete("/{ticket_id}/anexos/{anexo_id}/intencao", response_model=AttachmentIntentDiscardOut)
+async def discard_attachment_intent(
+    ticket_id: UUID,
+    anexo_id: UUID,
+    identity: TokenPayload = Depends(_attach),
+    repos: TicketRepos = Depends(get_ticket_repos),
+    anexos: AttachmentRepos = Depends(get_attachment_repos),
+) -> AttachmentIntentDiscardOut:
+    resultado = await DiscardIntentUseCase(repos.tickets, anexos.attachments).execute(
+        _actor(identity), ticket_id, anexo_id
+    )
+    return AttachmentIntentDiscardOut(status=resultado)
 
 
 @router.delete("/{ticket_id}/anexos/{anexo_id}", status_code=204)

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sac.application.ports_attachments import (
@@ -294,6 +295,51 @@ class DeleteAttachmentUseCase:
             raise PermissionDeniedError("sem permissao para excluir anexo de outro autor")
         anexo.deleted_at = datetime.now(UTC)
         await self._attachments.update(anexo)
+
+
+class IntentDiscardResult(StrEnum):
+    """O que o servidor fez com o pedido de descarte. `DISPONIVEL` significa que
+    o upload na verdade deu certo e nada foi apagado — o cliente que perdeu a
+    resposta do confirmar descobre por aqui que o anexo existe.
+    """
+
+    DESCARTADO = "descartado"
+    DISPONIVEL = "disponivel"
+
+
+class DiscardIntentUseCase:
+    """Desfaz uma intencao de upload abandonada, devolvendo a vaga que ela ocupa
+    na cota do ticket.
+
+    Existe separado de DeleteAttachmentUseCase porque o cliente nao sabe, num
+    upload que falhou, se o `confirmar` chegou a commitar: uma resposta perdida
+    depois do commit fazia o cliente pedir a exclusao de um anexo real. Aqui
+    quem decide e o servidor, olhando o status da propria linha.
+    """
+
+    def __init__(self, tickets: TicketRepository, attachments: AttachmentRepository) -> None:
+        self._tickets = tickets
+        self._attachments = attachments
+
+    async def execute(
+        self, actor: TicketActor, ticket_id: UUID, attachment_id: UUID
+    ) -> IntentDiscardResult:
+        ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
+        # Sem guarda de ticket encerrado, ao contrario das outras escritas de
+        # anexo: a vaga precisa voltar mesmo se o ticket fechou durante o upload,
+        # e uma linha pendente nao aparece na listagem — nao e alteracao visivel.
+        anexo = await _attachment_of_ticket(self._attachments, ticket.id, attachment_id)
+        # Mais restrito que a exclusao, que admin e supervisor podem fazer em
+        # anexo alheio: descartar intencao e desfazer o proprio upload.
+        if anexo.author_user_id != actor.user_id:
+            raise PermissionDeniedError("sem permissao para descartar intencao de outro autor")
+        if anexo.status is AttachmentStatus.DISPONIVEL:
+            return IntentDiscardResult.DISPONIVEL
+        if anexo.status is AttachmentStatus.PENDENTE:
+            anexo.deleted_at = datetime.now(UTC)
+            await self._attachments.update(anexo)
+        # EXPIRADO ja saiu da cota pela varredura: nada a escrever.
+        return IntentDiscardResult.DESCARTADO
 
 
 class ExpirePendingUseCase:
