@@ -12,6 +12,7 @@ import ClientesPage from "@/pages/cadastros/ClientesPage"
 import ProdutosPage from "@/pages/cadastros/ProdutosPage"
 import DashboardPage from "@/pages/dashboard/DashboardPage"
 import LoginPage from "@/pages/LoginPage"
+import MidiasPage from "@/pages/midias/MidiasPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
 import RelatoriosPage from "@/pages/relatorios/RelatoriosPage"
@@ -50,6 +51,7 @@ const router = createBrowserRouter([
             children: [
               { path: "/dashboard", element: <DashboardPage /> },
               { path: "/relatorios", element: <RelatoriosPage /> },
+              { path: "/midias", element: <MidiasPage /> },
               { path: "/tickets", element: <TicketsListPage /> },
               { path: "/tickets/novo", element: <TicketCreatePage /> },
               { path: "/tickets/:id", element: <TicketDetailPage /> },

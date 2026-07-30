@@ -3,6 +3,7 @@ import { FileText, ImageOff, Loader2, MoreVertical, Upload, Video, X } from "luc
 import { useRef, useState, type DragEvent } from "react"
 import { toast } from "sonner"
 
+import { MediaLightbox, type LightboxItem } from "@/components/media/MediaLightbox"
 import { useUploadQueue, validarArquivo } from "@/components/tickets/AttachmentsCard.upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -175,6 +176,7 @@ export function AttachmentsCard({
   const [arrastando, setArrastando] = useState(false)
   const [removendo, setRemovendo] = useState<Attachment | null>(null)
   const [excluindo, setExcluindo] = useState(false)
+  const [lightboxItem, setLightboxItem] = useState<LightboxItem | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // Anexos cujo preview ficou pendente alem do orcamento de polling abaixo.
   const [previewEsgotado, setPreviewEsgotado] = useState<Set<string>>(() => new Set())
@@ -277,12 +279,28 @@ export function AttachmentsCard({
     processarArquivos(event.dataTransfer.files)
   }
 
+  // Abre o visualizador compartilhado em vez de uma aba nova: mostra os
+  // metadados na hora (vindos do proprio anexo) e busca a URL assinada em
+  // paralelo — imagem usa a variante "medio" (o servidor cai para o original
+  // se nao houver preview), PDF e video usam sempre o original.
   async function onOpen(attachment: Attachment) {
+    setLightboxItem({
+      kind: attachment.kind,
+      filename: attachment.filename,
+      contentType: attachment.content_type,
+      sizeBytes: attachment.size_bytes,
+      createdAt: attachment.created_at ?? new Date().toISOString(),
+      url: null,
+    })
     try {
-      const { url } = await attachmentUrl(ticketId, attachment.id, "medio")
-      window.open(url, "_blank", "noopener")
+      const variant = attachment.kind === "imagem" ? "medio" : "original"
+      const { url } = await attachmentUrl(ticketId, attachment.id, variant)
+      setLightboxItem((current) =>
+        current && current.filename === attachment.filename ? { ...current, url } : current,
+      )
     } catch (error) {
       toast.error(errorMessage(error))
+      setLightboxItem(null)
     }
   }
 
@@ -437,6 +455,12 @@ export function AttachmentsCard({
           </div>
         ) : null}
       </CardContent>
+
+      <MediaLightbox
+        item={lightboxItem}
+        onClose={() => setLightboxItem(null)}
+        showTicketLink={false}
+      />
 
       <Dialog open={removendo != null} onOpenChange={(open) => !open && setRemovendo(null)}>
         <DialogContent>

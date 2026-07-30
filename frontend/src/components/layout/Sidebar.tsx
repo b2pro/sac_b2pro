@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   Contact,
   FileBarChart,
+  Images,
   LayoutDashboard,
   Package,
   Store,
@@ -38,6 +39,7 @@ export function Sidebar() {
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { to: "/tickets", label: "Tickets", icon: Ticket },
         { to: "/relatorios", label: "Relatorios", icon: FileBarChart },
+        { to: "/midias", label: "Midias", icon: Images },
       ],
     })
     groups.push({
