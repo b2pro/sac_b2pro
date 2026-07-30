@@ -157,6 +157,16 @@ async def test_dashboard_kpis_distribuicao_rankings_e_tempo_medio(
     assert kpis["aprovados_no_mes"] == 1
     assert kpis["declinados_no_mes"] == 0  # declinado foi em junho
     assert kpis["finalizados_no_mes"] == 1
+    kpi_filters = {k.key: k.filters for k in data.kpis}
+    assert kpi_filters == {
+        "total": {},
+        "abertos": {"status": "aberto"},
+        "aguardando_analise": {"status": "aguardando_analise"},
+        "atrasados": {"overdue": "1"},
+        "aprovados_no_mes": {"status": "aprovado"},
+        "declinados_no_mes": {"status": "declinado"},
+        "finalizados_no_mes": {"status": "finalizado"},
+    }
     assert data.status_counts[TicketStatus.ABERTO] == 1
     assert data.status_counts[TicketStatus.FINALIZADO] == 1
     # ranking pondera quantidade: Alicate 2+1=3, Esmalte 1

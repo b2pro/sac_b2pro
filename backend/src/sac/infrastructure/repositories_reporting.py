@@ -74,6 +74,12 @@ class SqlReportingRepository:
                 ),
                 {"overdue": "1"},
             ),
+            # Os 3 KPIs "no_mes" abaixo contam pelo timestamp do marco (approved_at/
+            # declined_at/closed_at), mas o filtro do card clicavel busca pelo status
+            # ATUAL do ticket. Um ticket aprovado e depois finalizado no mesmo mes
+            # entra na contagem de aprovados_no_mes mas nao aparece na lista filtrada
+            # por status=aprovado (o status atual dele e finalizado). Aproximacao
+            # intencional, mantida do comportamento do sistema legado.
             DashboardKpi(
                 "aprovados_no_mes",
                 await self._count(
