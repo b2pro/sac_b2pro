@@ -1365,6 +1365,7 @@ Decisoes fechadas com o usuario em 2026-07-30, quando mockup e docs divergiam:
 1. **Grafico de distribuicao por status usa Recharts** (`BarChart layout="vertical"`), como manda `Componentes.md`, e nao as divs do mockup. O mockup define a aparencia-alvo; o Recharts deve chegar nela.
 2. **Relatorios exige filtrar primeiro**: abrir `/relatorios` sem nenhum filtro na URL mostra o estado "Nenhum filtro aplicado" e **nao dispara consulta**.
 3. **`SlaBadge` evolui** para a forma compacta do mockup (tempo restante em `font-mono`, travessao quando encerrado, pulso Paprika quando atrasado/vence em breve) e a mudanca vale tambem para a lista de tickets existente — um formato de SLA so no sistema.
+4. **Numero do ticket continua `#489`.** Os mockups mostram `#2026-0489`, formato que **nao** e adotado: renderizar sempre `#{numero}` como o resto do sistema ja faz.
 
 Sem testes unitarios de front no projeto: o gate de cada task e `pnpm build` + `pnpm lint` (e `pnpm e2e` onde indicado), mais conferencia visual contra o mockup.
 
