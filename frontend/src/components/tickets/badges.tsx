@@ -1,3 +1,4 @@
+import { slaRemaining } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
   PRIORITY_LABELS,
@@ -68,18 +69,32 @@ function relativeDue(dueAt: string): string {
   return diffMs >= 0 ? `em ${spec}` : `ha ${spec}`
 }
 
-const SLA_STYLES: Record<SlaState, string> = {
-  no_prazo: "text-emerald-700",
-  vence_em_breve: "text-primary font-medium",
-  atrasado: "text-primary font-semibold",
-  encerrado: "text-zinc-500",
+function slaTitle(sla: SlaState, dueAt: string): string {
+  if (sla === "encerrado") return SLA_LABELS.encerrado
+  const verb = sla === "atrasado" ? "venceu" : "vence"
+  return `${SLA_LABELS[sla]} — ${verb} ${relativeDue(dueAt)}`
+}
+
+const SLA_STYLES: Record<Exclude<SlaState, "encerrado">, string> = {
+  no_prazo: "text-muted-foreground",
+  vence_em_breve: "text-amber-700 motion-safe:animate-pulse",
+  atrasado: "text-primary font-semibold motion-safe:animate-pulse",
 }
 
 export function SlaBadge({ sla, dueAt }: { sla: SlaState; dueAt: string }) {
+  if (sla === "encerrado") {
+    return (
+      <span className="text-xs text-muted-foreground" title={SLA_LABELS.encerrado}>
+        —
+      </span>
+    )
+  }
   return (
-    <span className={cn("text-xs", SLA_STYLES[sla])}>
-      {SLA_LABELS[sla]}
-      {sla !== "encerrado" ? ` (${relativeDue(dueAt)})` : ""}
+    <span
+      className={cn("font-mono text-xs", SLA_STYLES[sla])}
+      title={slaTitle(sla, dueAt)}
+    >
+      {slaRemaining(dueAt)}
     </span>
   )
 }
