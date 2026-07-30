@@ -43,6 +43,7 @@ from sac.infrastructure.repositories_cadastros import (
     SqlCustomerRepository,
     SqlProductRepository,
 )
+from sac.infrastructure.repositories_reporting import SqlReportingRepository
 from sac.infrastructure.repositories_tickets import TicketRepos, build_ticket_repos
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
@@ -229,6 +230,12 @@ def get_product_repository(
 
 def get_ticket_repos(session: AsyncSession = Depends(get_tenant_session)) -> TicketRepos:
     return build_ticket_repos(session)
+
+
+def get_reporting_repository(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> SqlReportingRepository:
+    return SqlReportingRepository(session)
 
 
 def get_storage(request: Request) -> S3Storage:
