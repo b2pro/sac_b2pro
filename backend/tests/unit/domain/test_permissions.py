@@ -21,5 +21,5 @@ def test_atendente_nao_decide_nem_gerencia_cadastros() -> None:
 
 def test_visualizador_so_leitura() -> None:
     assert ROLE_PERMISSIONS[Role.VISUALIZADOR] == frozenset(
-        {Permission.VER_TODOS_TICKETS, Permission.LISTAR_CADASTROS}
+        {Permission.VER_TODOS_TICKETS, Permission.LISTAR_CADASTROS, Permission.VER_VISIBILIDADE}
     )

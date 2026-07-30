@@ -23,6 +23,7 @@ class Permission(StrEnum):
     CRIAR_LISTAR_CADASTROS = "criar_listar_cadastros"
     LISTAR_CADASTROS = "listar_cadastros"
     GERENCIAR_USUARIOS = "gerenciar_usuarios"
+    VER_VISIBILIDADE = "ver_visibilidade"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -38,12 +39,14 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.COMENTAR_ANEXAR,
             Permission.CRIAR_LISTAR_CADASTROS,
             Permission.LISTAR_CADASTROS,
+            Permission.VER_VISIBILIDADE,
         }
     ),
     Role.VISUALIZADOR: frozenset(
         {
             Permission.VER_TODOS_TICKETS,
             Permission.LISTAR_CADASTROS,
+            Permission.VER_VISIBILIDADE,
         }
     ),
 }
