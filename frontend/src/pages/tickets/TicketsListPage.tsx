@@ -50,20 +50,40 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "due_at", label: "Prazo SLA" },
 ]
 
+const SORT_FIELDS = SORT_OPTIONS.map((option) => option.value)
+const STATUS_VALUES = Object.keys(STATUS_LABELS) as TicketStatus[]
+const PRIORITY_VALUES = Object.keys(PRIORITY_LABELS) as TicketPriority[]
+const ORDER_VALUES = ["asc", "desc"] as const
+
 export default function TicketsListPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const status = (searchParams.get("status") as TicketStatus | null) ?? ""
+  const statusParam = searchParams.get("status")
+  const status = (
+    statusParam && STATUS_VALUES.includes(statusParam as TicketStatus) ? statusParam : ""
+  ) as TicketStatus | ""
   const brandId = searchParams.get("brand_id") ?? ""
   const customer = searchParams.get("customer") ?? ""
   const productId = searchParams.get("product_id") ?? ""
   const orderCode = searchParams.get("order_code") ?? ""
-  const priority = (searchParams.get("priority") as TicketPriority | null) ?? ""
+  const priorityParam = searchParams.get("priority")
+  const priority = (
+    priorityParam && PRIORITY_VALUES.includes(priorityParam as TicketPriority)
+      ? priorityParam
+      : ""
+  ) as TicketPriority | ""
   const overdue = searchParams.get("overdue") === "1"
-  const page = Math.max(Number(searchParams.get("page") ?? "1"), 1)
-  const sort = (searchParams.get("sort") as SortField | null) ?? "last_activity_at"
-  const order = (searchParams.get("order") as "asc" | "desc" | null) ?? "desc"
+  const paginaBruta = Number(searchParams.get("page"))
+  const page = Number.isFinite(paginaBruta) ? Math.max(Math.trunc(paginaBruta), 1) : 1
+  const sortParam = searchParams.get("sort")
+  const sort = (
+    sortParam && SORT_FIELDS.includes(sortParam as SortField) ? sortParam : "last_activity_at"
+  ) as SortField
+  const orderParam = searchParams.get("order")
+  const order = (
+    orderParam && ORDER_VALUES.includes(orderParam as "asc" | "desc") ? orderParam : "desc"
+  ) as "asc" | "desc"
   const [productQuery, setProductQuery] = useState("")
   const customerId = searchParams.get("customer_id") ?? undefined
 
