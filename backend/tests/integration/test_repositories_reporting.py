@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from sac.application.ports_reporting import DashboardData
+from sac.application.ports_reporting import DashboardData, ReportFilters
 from sac.domain.tickets import TicketStatus
 from sac.infrastructure.models_tenant import (
     BrandModel,
@@ -190,3 +190,75 @@ async def test_dashboard_filtra_por_marca_e_sem_finalizados_da_none(
     )
     assert {k.key: k.count for k in data.kpis}["total"] == 0
     assert data.avg_resolution_hours is None
+
+
+async def test_report_aplica_mesmo_recorte_em_kpis_rankings_e_tabela(
+    session: AsyncSession, tenant_session: AsyncSession
+) -> None:
+    user = await seed_user(session, email="rep3@t.dev")
+    ids = await seed_catalog(tenant_session)
+    dentro = make_ticket(
+        ids,
+        user.id,
+        status=TicketStatus.FINALIZADO,
+        opened_at=datetime(2026, 7, 10, tzinfo=UTC),
+        closed_at=datetime(2026, 7, 12, tzinfo=UTC),
+        solution=True,
+    )
+    fora_do_periodo = make_ticket(ids, user.id, opened_at=datetime(2026, 5, 1, tzinfo=UTC))
+    tenant_session.add_all([dentro, fora_do_periodo])
+    await tenant_session.flush()
+    tenant_session.add(make_item(dentro.id, ids["product"], ids["defect"], quantity=2))
+    await tenant_session.flush()
+
+    filters = ReportFilters(
+        date_from=datetime(2026, 7, 1, tzinfo=UTC),
+        date_to=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    repo = SqlReportingRepository(tenant_session)
+    data = await repo.report(filters, page=1, per_page=20, unread_for=user.id)
+    assert data.kpis.total == 1
+    assert data.kpis.finalized == 1
+    assert data.kpis.declined == 0
+    assert data.total == 1
+    assert len(data.tickets) == 1
+    assert data.products[0].count == 2
+
+    # filtro por produto usa EXISTS nos itens
+    com_produto = await repo.report(
+        ReportFilters(product_id=ids["product2"]), page=1, per_page=20, unread_for=user.id
+    )
+    assert com_produto.kpis.total == 0
+
+
+async def test_export_rows_traz_cliente_produtos_e_pagina(
+    session: AsyncSession, tenant_session: AsyncSession
+) -> None:
+    user = await seed_user(session, email="rep4@t.dev", name="Atendente Rep")
+    ids = await seed_catalog(tenant_session)
+    t = make_ticket(ids, user.id, status=TicketStatus.FINALIZADO, closed_at=NOW, solution=True)
+    tenant_session.add(t)
+    await tenant_session.flush()
+    tenant_session.add_all(
+        [
+            make_item(t.id, ids["product"], ids["defect"], quantity=2),
+            make_item(t.id, ids["product2"], ids["defect"], quantity=1),
+        ]
+    )
+    await tenant_session.flush()
+
+    rows = await SqlReportingRepository(tenant_session).export_rows(
+        ReportFilters(), page=1, per_page=10
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.customer_name == "Cliente Rep"
+    assert row.brand == "KODI"
+    assert row.products == "Alicate x2; Esmalte x1"
+    assert row.solution == "Troca pelo mesmo item"
+    assert row.attendant == "Atendente Rep"
+
+    vazia = await SqlReportingRepository(tenant_session).export_rows(
+        ReportFilters(), page=2, per_page=10
+    )
+    assert vazia == []

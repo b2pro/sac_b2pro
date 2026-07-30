@@ -1,22 +1,36 @@
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnExpressionArgument, Select, func, select
+from sqlalchemy import ColumnExpressionArgument, Select, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from sac.application.ports_reporting import DashboardData, DashboardKpi, RankingEntry
-from sac.application.ports_tickets import TicketFilters
+from sac.application.ports_reporting import (
+    DashboardData,
+    DashboardKpi,
+    RankingEntry,
+    ReportData,
+    ReportExportRow,
+    ReportFilters,
+    ReportKpis,
+)
+from sac.application.ports_tickets import TicketFilters, TicketListRow
 from sac.domain.tickets import CLOSED_STATUSES, TicketStatus
+from sac.infrastructure.models import UserModel
 from sac.infrastructure.models_tenant import (
+    BrandModel,
+    CustomerModel,
     DefectTypeModel,
     ProductModel,
+    PurchaseChannelModel,
     SolutionTypeModel,
     TicketItemModel,
     TicketModel,
+    TicketReadModel,
 )
-from sac.infrastructure.repositories_tickets import SqlTicketRepository
+from sac.infrastructure.repositories_tickets import SqlTicketRepository, _ticket_entity
 
 _CLOSED = [str(s) for s in CLOSED_STATUSES]
 
@@ -44,9 +58,48 @@ class SqlReportingRepository:
     def _tickets(self, brand_id: UUID | None) -> Select[tuple[TicketModel]]:
         return select(TicketModel).where(*self._conditions(brand_id))
 
+    def _ids(self, stmt: Select[Any]) -> Select[Any]:
+        return stmt.with_only_columns(TicketModel.id)
+
     async def _count(self, stmt: Select[Any]) -> int:
         total = await self._session.scalar(select(func.count()).select_from(stmt.subquery()))
         return int(total or 0)
+
+    def _report_stmt(self, filters: ReportFilters) -> Select[tuple[TicketModel]]:
+        stmt = select(TicketModel).where(TicketModel.deleted_at.is_(None))
+        if filters.date_from is not None:
+            stmt = stmt.where(TicketModel.opened_at >= filters.date_from)
+        if filters.date_to is not None:
+            stmt = stmt.where(TicketModel.opened_at < filters.date_to)
+        if filters.brand_id is not None:
+            stmt = stmt.where(TicketModel.brand_id == filters.brand_id)
+        if filters.status is not None:
+            stmt = stmt.where(TicketModel.status == str(filters.status))
+        if filters.solution_type_id is not None:
+            stmt = stmt.where(TicketModel.solution_type_id == filters.solution_type_id)
+        if filters.attendant_user_id is not None:
+            stmt = stmt.where(TicketModel.attendant_user_id == filters.attendant_user_id)
+        if filters.purchase_channel_id is not None:
+            stmt = stmt.where(TicketModel.purchase_channel_id == filters.purchase_channel_id)
+        if filters.product_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(TicketItemModel.id).where(
+                        TicketItemModel.ticket_id == TicketModel.id,
+                        TicketItemModel.product_id == filters.product_id,
+                    )
+                )
+            )
+        if filters.defect_type_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(TicketItemModel.id).where(
+                        TicketItemModel.ticket_id == TicketModel.id,
+                        TicketItemModel.defect_type_id == filters.defect_type_id,
+                    )
+                )
+            )
+        return stmt
 
     async def dashboard(
         self, brand_id: UUID | None, unread_for: UUID, now: datetime
@@ -122,11 +175,12 @@ class SqlReportingRepository:
         for status, count in status_rows.all():
             status_counts[TicketStatus(status)] = int(count)
 
-        products = await self._ranking_items(brand_id, ProductModel, TicketItemModel.product_id)
+        base_ids = self._ids(base)
+        products = await self._ranking_items(base_ids, ProductModel, TicketItemModel.product_id)
         defects = await self._ranking_items(
-            brand_id, DefectTypeModel, TicketItemModel.defect_type_id
+            base_ids, DefectTypeModel, TicketItemModel.defect_type_id
         )
-        solutions = await self._ranking_solutions(brand_id)
+        solutions = await self._ranking_solutions(base_ids)
 
         avg_seconds = await self._session.scalar(
             select(
@@ -159,15 +213,14 @@ class SqlReportingRepository:
 
     async def _ranking_items(
         self,
-        brand_id: UUID | None,
+        base_ids: Select[Any],
         model: type[Any],
         fk: InstrumentedAttribute[UUID],
     ) -> list[RankingEntry]:
         stmt = (
             select(model.id, model.name, func.sum(TicketItemModel.quantity))
             .join(TicketItemModel, fk == model.id)
-            .join(TicketModel, TicketItemModel.ticket_id == TicketModel.id)
-            .where(*self._conditions(brand_id))
+            .where(TicketItemModel.ticket_id.in_(base_ids))
             .group_by(model.id, model.name)
             .order_by(func.sum(TicketItemModel.quantity).desc(), model.name.asc())
             .limit(5)
@@ -175,14 +228,201 @@ class SqlReportingRepository:
         rows = await self._session.execute(stmt)
         return [RankingEntry(id=r[0], name=r[1], count=int(r[2])) for r in rows.all()]
 
-    async def _ranking_solutions(self, brand_id: UUID | None) -> list[RankingEntry]:
+    async def _ranking_solutions(self, base_ids: Select[Any]) -> list[RankingEntry]:
         stmt = (
             select(SolutionTypeModel.id, SolutionTypeModel.name, func.count())
             .join(TicketModel, TicketModel.solution_type_id == SolutionTypeModel.id)
-            .where(*self._conditions(brand_id))
+            .where(TicketModel.id.in_(base_ids))
             .group_by(SolutionTypeModel.id, SolutionTypeModel.name)
             .order_by(func.count().desc(), SolutionTypeModel.name.asc())
             .limit(5)
         )
         rows = await self._session.execute(stmt)
         return [RankingEntry(id=r[0], name=r[1], count=int(r[2])) for r in rows.all()]
+
+    async def report(
+        self, filters: ReportFilters, page: int, per_page: int, unread_for: UUID
+    ) -> ReportData:
+        stmt = self._report_stmt(filters)
+        total = await self._count(stmt)
+        finalized = await self._count(
+            stmt.where(TicketModel.status == str(TicketStatus.FINALIZADO))
+        )
+        declined = await self._count(stmt.where(TicketModel.status == str(TicketStatus.DECLINADO)))
+
+        base_ids = self._ids(stmt)
+        avg_seconds = await self._session.scalar(
+            select(
+                func.avg(func.extract("epoch", TicketModel.closed_at - TicketModel.opened_at))
+            ).where(
+                TicketModel.id.in_(base_ids),
+                TicketModel.status == str(TicketStatus.FINALIZADO),
+                TicketModel.closed_at.is_not(None),
+            )
+        )
+        products = await self._ranking_items(base_ids, ProductModel, TicketItemModel.product_id)
+        defects = await self._ranking_items(
+            base_ids, DefectTypeModel, TicketItemModel.defect_type_id
+        )
+        solutions = await self._ranking_solutions(base_ids)
+
+        rows_stmt = (
+            stmt.add_columns(CustomerModel.name, TicketReadModel.last_read_at)
+            .outerjoin(CustomerModel, TicketModel.customer_id == CustomerModel.id)
+            .outerjoin(
+                TicketReadModel,
+                (TicketReadModel.ticket_id == TicketModel.id)
+                & (TicketReadModel.user_id == unread_for),
+            )
+            .order_by(TicketModel.opened_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        result = await self._session.execute(rows_stmt)
+        models: list[tuple[TicketModel, str | None, datetime | None]] = [
+            (row[0], row[1], row[2]) for row in result.all()
+        ]
+        ticket_ids = [m.id for m, _, _ in models]
+        counts: dict[UUID, int] = {}
+        first_products: dict[UUID, str] = {}
+        if ticket_ids:
+            count_rows = await self._session.execute(
+                select(TicketItemModel.ticket_id, func.count())
+                .where(TicketItemModel.ticket_id.in_(ticket_ids))
+                .group_by(TicketItemModel.ticket_id)
+            )
+            counts = {row[0]: int(row[1]) for row in count_rows.all()}
+            first_rows = await self._session.execute(
+                select(TicketItemModel.ticket_id, ProductModel.name)
+                .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
+                .where(TicketItemModel.ticket_id.in_(ticket_ids))
+                .order_by(TicketItemModel.ticket_id, TicketItemModel.created_at)
+                .distinct(TicketItemModel.ticket_id)
+            )
+            first_products = {row[0]: row[1] for row in first_rows.all()}
+        tickets: list[TicketListRow] = [
+            TicketListRow(
+                ticket=_ticket_entity(m),
+                customer_name=customer_name,
+                first_product_name=first_products.get(m.id),
+                items_count=counts.get(m.id, 0),
+                unread=last_read is None or last_read < m.last_activity_at,
+            )
+            for m, customer_name, last_read in models
+        ]
+
+        return ReportData(
+            kpis=ReportKpis(
+                total=total,
+                finalized=finalized,
+                declined=declined,
+                avg_resolution_hours=float(avg_seconds) / 3600 if avg_seconds is not None else None,
+            ),
+            products=products,
+            defects=defects,
+            solutions=solutions,
+            tickets=tickets,
+            total=total,
+        )
+
+    async def export_rows(
+        self, filters: ReportFilters, page: int, per_page: int
+    ) -> list[ReportExportRow]:
+        stmt = self._report_stmt(filters)
+        rows_stmt = (
+            stmt.add_columns(
+                BrandModel.name,
+                CustomerModel.name,
+                CustomerModel.document,
+                CustomerModel.phone,
+                CustomerModel.email,
+                SolutionTypeModel.name,
+                PurchaseChannelModel.name,
+            )
+            .outerjoin(BrandModel, TicketModel.brand_id == BrandModel.id)
+            .outerjoin(CustomerModel, TicketModel.customer_id == CustomerModel.id)
+            .outerjoin(SolutionTypeModel, TicketModel.solution_type_id == SolutionTypeModel.id)
+            .outerjoin(
+                PurchaseChannelModel,
+                TicketModel.purchase_channel_id == PurchaseChannelModel.id,
+            )
+            .order_by(TicketModel.opened_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        result = await self._session.execute(rows_stmt)
+        rows = result.all()
+        if not rows:
+            return []
+
+        ticket_ids = [row[0].id for row in rows]
+        attendant_ids = {row[0].attendant_user_id for row in rows}
+        name_rows = await self._session.execute(
+            select(UserModel.id, UserModel.name).where(UserModel.id.in_(attendant_ids))
+        )
+        attendant_names = {r[0]: r[1] for r in name_rows.all()}
+
+        item_rows = await self._session.execute(
+            select(TicketItemModel)
+            .where(TicketItemModel.ticket_id.in_(ticket_ids))
+            .order_by(TicketItemModel.created_at)
+        )
+        items = list(item_rows.scalars().all())
+        product_ids = {i.product_id for i in items}
+        defect_ids = {i.defect_type_id for i in items}
+        product_names: dict[UUID, str] = {}
+        defect_names: dict[UUID, str] = {}
+        if product_ids:
+            product_rows = await self._session.execute(
+                select(ProductModel.id, ProductModel.name).where(ProductModel.id.in_(product_ids))
+            )
+            product_names = {r[0]: r[1] for r in product_rows.all()}
+        if defect_ids:
+            defect_rows = await self._session.execute(
+                select(DefectTypeModel.id, DefectTypeModel.name).where(
+                    DefectTypeModel.id.in_(defect_ids)
+                )
+            )
+            defect_names = {r[0]: r[1] for r in defect_rows.all()}
+        products_by_ticket: dict[UUID, list[str]] = defaultdict(list)
+        defects_by_ticket: dict[UUID, list[str]] = defaultdict(list)
+        for item in items:
+            products_by_ticket[item.ticket_id].append(
+                f"{product_names[item.product_id]} x{item.quantity}"
+            )
+            defects_by_ticket[item.ticket_id].append(
+                f"{defect_names[item.defect_type_id]} x{item.quantity}"
+            )
+
+        export_rows: list[ReportExportRow] = []
+        for (
+            m,
+            brand_name,
+            customer_name,
+            customer_document,
+            customer_phone,
+            customer_email,
+            solution_name,
+            channel_name,
+        ) in rows:
+            export_rows.append(
+                ReportExportRow(
+                    number=m.number,
+                    brand=brand_name,
+                    status=m.status,
+                    priority=m.priority,
+                    customer_name=customer_name,
+                    customer_document=customer_document,
+                    customer_phone=customer_phone,
+                    customer_email=customer_email,
+                    products="; ".join(products_by_ticket.get(m.id, [])),
+                    defects="; ".join(defects_by_ticket.get(m.id, [])),
+                    solution=solution_name,
+                    channel=channel_name,
+                    attendant=attendant_names.get(m.attendant_user_id),
+                    order_code=m.order_code,
+                    opened_at=m.opened_at,
+                    closed_at=m.closed_at,
+                )
+            )
+        return export_rows
