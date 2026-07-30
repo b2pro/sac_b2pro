@@ -53,21 +53,27 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
 export default function TicketsListPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [status, setStatus] = useState<TicketStatus | "">(
-    (searchParams.get("status") as TicketStatus) ?? "",
-  )
-  const [brandId, setBrandId] = useState("")
-  const [customer, setCustomer] = useState(searchParams.get("customer") ?? "")
-  const [orderCode, setOrderCode] = useState("")
-  const [priority, setPriority] = useState<TicketPriority | "">("")
-  const [overdue, setOverdue] = useState(searchParams.get("overdue") === "1")
-  const [productId, setProductId] = useState("")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const status = (searchParams.get("status") as TicketStatus | null) ?? ""
+  const brandId = searchParams.get("brand_id") ?? ""
+  const customer = searchParams.get("customer") ?? ""
+  const productId = searchParams.get("product_id") ?? ""
+  const orderCode = searchParams.get("order_code") ?? ""
+  const priority = (searchParams.get("priority") as TicketPriority | null) ?? ""
+  const overdue = searchParams.get("overdue") === "1"
+  const page = Math.max(Number(searchParams.get("page") ?? "1"), 1)
+  const sort = (searchParams.get("sort") as SortField | null) ?? "last_activity_at"
+  const order = (searchParams.get("order") as "asc" | "desc" | null) ?? "desc"
   const [productQuery, setProductQuery] = useState("")
-  const [sort, setSort] = useState<SortField>("last_activity_at")
-  const [order, setOrder] = useState<"asc" | "desc">("desc")
-  const [page, setPage] = useState(1)
   const customerId = searchParams.get("customer_id") ?? undefined
+
+  function setParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    if (key !== "page") next.delete("page")
+    setSearchParams(next, { replace: true })
+  }
 
   const debouncedCustomer = useDebounce(customer)
   const debouncedOrder = useDebounce(orderCode)
@@ -117,60 +123,40 @@ export default function TicketsListPage() {
   const columnCount = 8
 
   function onStatusChange(value: string) {
-    setStatus(value === ALL ? "" : (value as TicketStatus))
-    setPage(1)
+    setParam("status", value === ALL ? "" : value)
   }
 
   function onBrandChange(value: string) {
-    setBrandId(value === ALL ? "" : value)
-    setPage(1)
+    setParam("brand_id", value === ALL ? "" : value)
   }
 
   function onCustomerChange(value: string) {
-    setCustomer(value)
-    setPage(1)
+    setParam("customer", value)
   }
 
   function onOrderChange(value: string) {
-    setOrderCode(value)
-    setPage(1)
+    setParam("order_code", value)
   }
 
   function onPriorityChange(value: string) {
-    setPriority(value === ALL ? "" : (value as TicketPriority))
-    setPage(1)
+    setParam("priority", value === ALL ? "" : value)
   }
 
   function onOverdueChange(checked: boolean) {
-    setOverdue(checked)
-    setPage(1)
-  }
-
-  function onProductClear() {
-    setProductId("")
-    setProductQuery("")
-    setPage(1)
+    setParam("overdue", checked ? "1" : "")
   }
 
   function onSortChange(value: string) {
-    setSort(value as SortField)
-    setPage(1)
+    setParam("sort", value)
   }
 
   function onToggleOrder() {
-    setOrder((current) => (current === "asc" ? "desc" : "asc"))
-    setPage(1)
+    setParam("order", order === "asc" ? "desc" : "asc")
   }
 
   function onClear() {
-    setStatus("")
-    setBrandId("")
-    setCustomer("")
-    setOrderCode("")
-    setPriority("")
-    setOverdue(false)
-    onProductClear()
-    setPage(1)
+    setProductQuery("")
+    setSearchParams(new URLSearchParams(), { replace: true })
   }
 
   return (
@@ -232,13 +218,11 @@ export default function TicketsListPage() {
               value={productQuery}
               onValueChange={(value) => {
                 setProductQuery(value)
-                setProductId("")
-                setPage(1)
+                setParam("product_id", "")
               }}
               onSelect={(option) => {
-                setProductId(option.id)
                 setProductQuery(option.label)
-                setPage(1)
+                setParam("product_id", option.id)
               }}
               queryKey="filtro-produto"
               fetchOptions={async (search) => {
@@ -438,7 +422,7 @@ export default function TicketsListPage() {
               variant="ghost"
               size="sm"
               disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
+              onClick={() => setParam("page", String(page - 1))}
             >
               Anterior
             </Button>
@@ -449,7 +433,7 @@ export default function TicketsListPage() {
               variant="ghost"
               size="sm"
               disabled={!data || page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
+              onClick={() => setParam("page", String(page + 1))}
             >
               Proxima
             </Button>
