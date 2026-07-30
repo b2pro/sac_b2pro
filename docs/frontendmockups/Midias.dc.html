@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400..800&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet">
+<style>
+:root{--background:#fffcf2;--foreground:#403d39;--card:#fffcf2;--heading:#252422;--primary:#eb5e28;--secondary:#ece7da;--muted:#f5f0e3;--muted-foreground:#736e66;--border:#ccc5b9;--ring:#eb5e28;--sidebar:#252422;--radius:5px}
+body{margin:0;background:var(--background);color:var(--foreground);font-family:"Public Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--primary);text-decoration:none}a:hover{color:#c84b1d}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+::placeholder{color:#a39d92}
+@keyframes skel{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div data-screen-label="Midias" style="display:flex;min-height:100vh;background:var(--background)">
+  <aside style="width:240px;flex:none;background:var(--sidebar);display:flex;flex-direction:column">
+    <div style="height:56px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #3a3835;color:#fffcf2;font-weight:700;font-size:14px;letter-spacing:.06em">SAC&nbsp;<span style="color:var(--primary)">B2PRO</span></div>
+    <nav style="padding:16px 0;display:flex;flex-direction:column;gap:20px">
+      <div>
+        <div style="padding:0 20px 8px;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8a857c">Operação</div>
+        <div style="display:flex;flex-direction:column">
+          <a href="Dashboard.dc.html" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Dashboard</a>
+          <a href="#" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Tickets</a>
+          <a href="Relatorios.dc.html" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Relatórios</a>
+          <a href="Midias.dc.html" style="display:flex;align-items:center;padding:8px 20px 8px 18px;border-left:2px solid var(--primary);background:rgba(255,252,242,.05);color:#fffcf2;font-size:13.5px;font-weight:600">Mídias</a>
+        </div>
+      </div>
+      <div>
+        <div style="padding:0 20px 8px;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8a857c">Cadastros</div>
+        <div style="display:flex;flex-direction:column">
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Marcas</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Produtos</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Defeitos</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Soluções</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Canais</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Clientes</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:56px;flex:none;display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--background)">
+      <span style="font-size:13px;color:var(--foreground)">Camila Ferreira</span>
+      <button style="height:32px;padding:0 12px;border:none;background:transparent;border-radius:var(--radius);font:inherit;font-size:13px;color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--muted);color:var(--foreground)">Sair</button>
+    </header>
+    <main style="flex:1;overflow-y:auto;padding:24px">
+      <div style="margin-bottom:24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700;color:var(--heading)">Mídias</h1>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--muted-foreground)">Todos os anexos de tickets do tenant — fotos, notas fiscais e vídeos</p>
+      </div>
+
+      <section style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px">
+        <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+          <sc-for list="{{ selectFields }}" as="f" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <select style="appearance:none;box-sizing:border-box;width:100%;height:34px;padding:0 30px 0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font:inherit;font-size:13px;color:{{ f.color }};cursor:pointer" style-hover="border-color:#403d39"><option>{{ f.value }}</option></select>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:9px;top:9px;pointer-events:none"><path d="m6 9 6 6 6-6"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+          <sc-for list="{{ autoFields }}" as="f" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <input type="text" placeholder="{{ f.placeholder }}" style="box-sizing:border-box;width:100%;height:34px;padding:0 10px 0 30px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font:inherit;font-size:13px;color:var(--foreground)" style-hover="border-color:#403d39" style-focus="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:9px;top:9px;pointer-events:none"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+          <sc-for list="{{ dateFields }}" as="f" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <input type="text" placeholder="dd/mm/aaaa" readonly style="box-sizing:border-box;width:100%;height:34px;padding:0 32px 0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--foreground)" style-hover="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:9px;top:9px;pointer-events:none"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <sc-if value="{{ isCarregando }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+          <sc-for list="{{ skel12 }}" as="s" hint-placeholder-count="12">
+            <div><div style="aspect-ratio:1;background:#e9e3d4;border-radius:var(--radius);animation:skel 1.6s ease-in-out infinite"></div><div style="height:12px;width:70%;background:#e9e3d4;border-radius:3px;margin-top:8px;animation:skel 1.6s ease-in-out infinite"></div></div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isVazio }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed var(--border);border-radius:var(--radius);padding:56px 24px;text-align:center">
+          <p style="margin:0;font-size:14px;font-weight:600;color:var(--heading)">Nenhum anexo para este filtro</p>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--muted-foreground)">Ajuste os critérios acima ou limpe os filtros para ver todos os anexos.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPadrao }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <span style="font-size:12.5px;color:var(--muted-foreground)"><span style="font-family:'JetBrains Mono',monospace">342</span> anexos encontrados</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+          <sc-for list="{{ items }}" as="m" hint-placeholder-count="18">
+            <button onClick="{{ m.open }}" title="{{ m.filename }}" style="display:block;width:100%;padding:0;border:none;background:transparent;text-align:left;cursor:pointer;font:inherit">
+              <div style="position:relative;aspect-ratio:1;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:{{ m.tileBg }};display:flex;align-items:center;justify-content:center" style-hover="border-color:#403d39">
+                <sc-if value="{{ m.hasPreview }}" hint-placeholder-val="{{ true }}">
+                  <sc-if value="{{ m.isVideo }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:rgba(37,36,34,.65)">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#fffcf2" stroke="#fffcf2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:2px"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+                    </span>
+                  </sc-if>
+                </sc-if>
+                <sc-if value="{{ m.noPreview }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:#a39d92">
+                    <sc-if value="{{ m.isImagem }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></sc-if>
+                    <sc-if value="{{ m.isPdf }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg></sc-if>
+                    <sc-if value="{{ m.isVideo }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg></sc-if>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;color:#736e66">{{ m.ext }}</span>
+                  </div>
+                </sc-if>
+                <span style="position:absolute;right:6px;bottom:6px;display:{{ m.chipDisplay }};align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;background:rgba(37,36,34,.65);color:#fffcf2">
+                  <sc-if value="{{ m.isImagem }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></sc-if>
+                  <sc-if value="{{ m.isVideo }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg></sc-if>
+                </span>
+              </div>
+              <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11.5px">
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--primary);white-space:nowrap">#{{ m.ticket }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;color:var(--muted-foreground);white-space:nowrap">{{ m.date }}</span>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ sentinelaCarregando }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:28px 0;color:var(--muted-foreground);font-size:12.5px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+            Carregando mais anexos...
+          </div>
+        </sc-if>
+        <sc-if value="{{ sentinelaFim }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:28px 0;color:var(--muted-foreground);font-size:12.5px">
+            <span style="flex:none;width:48px;height:1px;background:var(--border)"></span>
+            Fim da lista — <span style="font-family:'JetBrains Mono',monospace">342</span> anexos
+            <span style="flex:none;width:48px;height:1px;background:var(--border)"></span>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ lbAberto }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ closeLb }}" style="position:fixed;inset:0;background:rgba(37,36,34,.8);display:flex;align-items:center;justify-content:center;padding:32px;z-index:50">
+          <div onClick="{{ stop }}" role="dialog" aria-label="Visualizar anexo" style="display:flex;flex-wrap:wrap;max-width:920px;width:100%;max-height:100%;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+            <div style="flex:1 1 420px;min-width:0;min-height:380px;background:{{ lbTileBg }};display:flex;align-items:center;justify-content:center">
+              <sc-if value="{{ lbIsVideo }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:rgba(37,36,34,.65)"><svg width="26" height="26" viewBox="0 0 24 24" fill="#fffcf2" stroke="#fffcf2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg></span>
+              </sc-if>
+              <sc-if value="{{ lbIsPdf }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:12px;color:#a39d92">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+                  <a href="#" style="font-size:13px;font-weight:600">Abrir PDF em nova aba</a>
+                </div>
+              </sc-if>
+            </div>
+            <div style="flex:1 1 260px;max-width:300px;padding:20px;display:flex;flex-direction:column;gap:14px;border-left:1px solid var(--border)">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+                <h3 style="margin:0;font-size:14px;font-weight:600;color:var(--heading);word-break:break-all">{{ lbFilename }}</h3>
+                <button onClick="{{ closeLb }}" title="Fechar" style="flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:transparent;border-radius:var(--radius);color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--muted);color:var(--foreground)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+              </div>
+              <dl style="margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px">
+                <dt style="color:var(--muted-foreground)">Tipo</dt><dd style="margin:0">{{ lbKind }}</dd>
+                <dt style="color:var(--muted-foreground)">Tamanho</dt><dd style="margin:0;font-family:'JetBrains Mono',monospace">{{ lbSize }}</dd>
+                <dt style="color:var(--muted-foreground)">Enviado em</dt><dd style="margin:0;font-family:'JetBrains Mono',monospace">{{ lbDate }}</dd>
+                <dt style="color:var(--muted-foreground)">Formato</dt><dd style="margin:0;font-family:'JetBrains Mono',monospace">{{ lbContentType }}</dd>
+              </dl>
+              <a href="#" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;margin-top:auto">
+                Ver ticket <span style="font-family:'JetBrains Mono',monospace">#{{ lbTicket }}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;estado&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;padrao&quot;,&quot;carregando&quot;,&quot;vazio&quot;],&quot;default&quot;:&quot;padrao&quot;,&quot;tsType&quot;:&quot;\&quot;padrao\&quot; | \&quot;carregando\&quot; | \&quot;vazio\&quot;&quot;,&quot;section&quot;:&quot;Estado da tela&quot;},&quot;sentinela&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;carregando&quot;,&quot;fim&quot;],&quot;default&quot;:&quot;carregando&quot;,&quot;tsType&quot;:&quot;\&quot;carregando\&quot; | \&quot;fim\&quot;&quot;,&quot;section&quot;:&quot;Estado da tela&quot;}}">
+class Component extends DCLogic {
+  state = { lb: null };
+  renderVals() {
+    const estado = this.props.estado ?? "padrao";
+    const sentinela = this.props.sentinela ?? "carregando";
+    const tones = ["#d9cfbe","#cbbfa8","#c2b8a6","#d3c6ae","#bfb49e","#d6ccbb"];
+    const kindLabel = {imagem:"Imagem",pdf:"PDF",video:"Vídeo"};
+    const raw = [
+      ["2026-0489","foto-lamina-01.jpg","imagem",true,"2.4 MB","30/07 14:20"],
+      ["2026-0489","foto-lamina-02.jpg","imagem",true,"1.9 MB","30/07 14:21"],
+      ["2026-0488","nota-fiscal-58231.pdf","pdf",false,"312 KB","30/07 13:02"],
+      ["2026-0487","video-vazamento.mp4","video",true,"18.7 MB","30/07 11:45"],
+      ["2026-0486","foto-embalagem.jpg","imagem",true,"3.1 MB","30/07 10:28"],
+      ["2026-0485","foto-pincel-solto.jpg","imagem",false,"2.2 MB","30/07 09:14"],
+      ["2026-0484","nota-fiscal-58102.pdf","pdf",false,"288 KB","29/07 17:50"],
+      ["2026-0483","foto-mola-quebrada.jpg","imagem",true,"2.8 MB","29/07 16:37"],
+      ["2026-0483","video-teste-corte.mp4","video",false,"22.4 MB","29/07 16:39"],
+      ["2026-0482","foto-tesoura.jpg","imagem",true,"1.6 MB","29/07 14:58"],
+      ["2026-0481","foto-esmalte-01.jpg","imagem",true,"2.0 MB","29/07 11:22"],
+      ["2026-0481","foto-esmalte-02.jpg","imagem",false,"2.3 MB","29/07 11:23"],
+      ["2026-0480","nota-fiscal-57960.pdf","pdf",false,"301 KB","28/07 18:10"],
+      ["2026-0479","foto-cabo.jpg","imagem",true,"2.7 MB","28/07 15:44"],
+      ["2026-0478","video-pigmentacao.mp4","video",true,"15.2 MB","28/07 12:31"],
+      ["2026-0477","foto-lixa.jpg","imagem",true,"1.8 MB","27/07 17:06"],
+      ["2026-0476","foto-alicate-afiacao.jpg","imagem",true,"2.5 MB","27/07 16:38"],
+      ["2026-0475","foto-caixa-danificada.jpg","imagem",true,"3.4 MB","27/07 10:12"]
+    ];
+    const items = raw.map((r, i) => {
+      const [ticket, filename, kind, hasPreview, size, date] = r;
+      const it = {
+        ticket, filename, kind, size, date, hasPreview, noPreview: !hasPreview,
+        isImagem: kind === "imagem", isPdf: kind === "pdf", isVideo: kind === "video",
+        ext: filename.split(".").pop().toUpperCase(),
+        tileBg: hasPreview ? tones[i % tones.length] : "#f5f0e3",
+        chipDisplay: hasPreview && kind !== "pdf" ? "flex" : "none",
+        contentType: kind === "imagem" ? "image/jpeg" : kind === "pdf" ? "application/pdf" : "video/mp4"
+      };
+      it.open = () => this.setState({ lb: it });
+      return it;
+    });
+    const lb = this.state.lb;
+    return {
+      isPadrao: estado === "padrao", isCarregando: estado === "carregando", isVazio: estado === "vazio",
+      sentinelaCarregando: sentinela === "carregando", sentinelaFim: sentinela === "fim",
+      items, skel12: Array.from({length:12},(_,i)=>i),
+      lbAberto: !!lb,
+      lbFilename: lb?.filename, lbKind: lb ? kindLabel[lb.kind] : "", lbSize: lb?.size,
+      lbDate: lb?.date, lbContentType: lb?.contentType, lbTicket: lb?.ticket,
+      lbTileBg: lb ? (lb.hasPreview ? lb.tileBg : "#f5f0e3") : "#f5f0e3",
+      lbIsVideo: lb?.kind === "video", lbIsPdf: lb?.kind === "pdf",
+      closeLb: () => this.setState({ lb: null }),
+      stop: (e) => e.stopPropagation()
+    };
+  }
+}
+</script>
+</body>
+</html>

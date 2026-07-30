@@ -55,7 +55,15 @@ Galeria paginada sobre `ticket_attachments` com `status = disponivel` e `deleted
 
 ## 3. Frontend
 
-Tres rotas novas no grupo Tickets da sidebar, na ordem do legado: **Dashboard** (`/dashboard`), **Relatorios** (`/relatorios`), **Midias** (`/midias`). O Dashboard vira a rota inicial apos o login (hoje cai na lista de tickets). Implementacao com o skill `frontend-design` e `docs/identidade-visual.md`; graficos com **Recharts** (dependencia nova), direcao visual com o skill `dataviz`.
+Tres rotas novas no grupo Operacao da sidebar: **Dashboard** (`/dashboard`), **Relatorios** (`/relatorios`), **Midias** (`/midias`). O Dashboard vira a rota inicial apos o login (hoje cai na lista de tickets). Implementacao com o skill `frontend-design` e `docs/identidade-visual.md`; graficos com **Recharts** (dependencia nova).
+
+**Fonte de verdade visual (2026-07-30):** as tres telas foram desenhadas em sessao propria e os mockups aprovados estao em `docs/frontendmockups/` — `Dashboard.dc.html`, `Relatorios.dc.html`, `Midias.dc.html` (todos os estados alternaveis) e `Componentes.md` (contrato dos componentes novos e o que reusa o que ja existe). O prompt de design usado esta em `docs/prompt-design-fase-3.md`. O HTML e normativo para layout, densidade, colunas e copy; as secoes abaixo resumem o comportamento.
+
+Decisoes tomadas onde mockup e documentacao divergiam:
+
+1. **Grafico de distribuicao por status em Recharts** (`BarChart layout="vertical"`), como manda `Componentes.md` — o mockup desenha com divs por limitacao do formato, mas define a aparencia-alvo (coluna de rotulo de 172px, barra de 16px sobre trilho visivel, contagem em mono a direita, eixo X com 5 ticks).
+2. **Relatorios exige filtro antes de consultar**: abrir `/relatorios` sem filtro na URL mostra o estado "Nenhum filtro aplicado" e nao dispara requisicao. A tela e de recorte; a listagem completa continua sendo a lista de tickets.
+3. **`SlaBadge` evolui** para a forma compacta do mockup (tempo restante em `font-mono`, travessao quando encerrado, pulso Paprika quando atrasado ou vencendo) e a mudanca vale tambem para a lista de tickets — um formato de SLA so no sistema.
 
 ### Dashboard
 
@@ -65,8 +73,9 @@ Tres rotas novas no grupo Tickets da sidebar, na ordem do legado: **Dashboard** 
 
 ### Relatorios
 
-- Card de filtros com os 8 campos (periodo com date pickers, selects de marca/status/atendente, autocompletes de produto/defeito/solucao/canal), botoes Filtrar/Limpar e chips de filtros ativos.
-- 4 KPI cards do recorte, rankings e tabela paginada com linhas como links reais para o detalhe do ticket (correcao sobre o legado, que nao tinha paginacao nem links).
+- Card de filtros colapsavel (comeca aberto) com 9 campos (periodo de/ate, selects de marca/status/atendente, autocompletes de produto/defeito/solucao/canal), botoes Filtrar/Limpar e chips de filtros ativos removiveis. O formulario e rascunho local; "Filtrar" e que escreve o recorte na URL.
+- Quatro estados: inicial (nenhum filtro aplicado, sem consulta), carregando, sem resultado e padrao.
+- 4 KPI cards do recorte (nao clicaveis, ao contrario dos do dashboard), rankings e tabela paginada de 8 colunas com linhas navegaveis para o detalhe do ticket (correcao sobre o legado, que nao tinha paginacao nem links).
 - Botao Exportar CSV: fetch autenticado com os mesmos params da tela, download via blob; resposta nao-2xx vira toast de erro.
 
 ### Midias

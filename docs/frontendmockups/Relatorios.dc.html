@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400..800&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet">
+<style>
+:root{--background:#fffcf2;--foreground:#403d39;--card:#fffcf2;--heading:#252422;--primary:#eb5e28;--secondary:#ece7da;--muted:#f5f0e3;--muted-foreground:#736e66;--border:#ccc5b9;--ring:#eb5e28;--sidebar:#252422;--radius:5px}
+body{margin:0;background:var(--background);color:var(--foreground);font-family:"Public Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--primary);text-decoration:none}a:hover{color:#c84b1d}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+::placeholder{color:#a39d92}
+@keyframes slaPulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes skel{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div data-screen-label="Relatorios" style="display:flex;min-height:100vh;background:var(--background)">
+  <aside style="width:240px;flex:none;background:var(--sidebar);display:flex;flex-direction:column">
+    <div style="height:56px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #3a3835;color:#fffcf2;font-weight:700;font-size:14px;letter-spacing:.06em">SAC&nbsp;<span style="color:var(--primary)">B2PRO</span></div>
+    <nav style="padding:16px 0;display:flex;flex-direction:column;gap:20px">
+      <div>
+        <div style="padding:0 20px 8px;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8a857c">Operação</div>
+        <div style="display:flex;flex-direction:column">
+          <a href="Dashboard.dc.html" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Dashboard</a>
+          <a href="#" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Tickets</a>
+          <a href="Relatorios.dc.html" style="display:flex;align-items:center;padding:8px 20px 8px 18px;border-left:2px solid var(--primary);background:rgba(255,252,242,.05);color:#fffcf2;font-size:13.5px;font-weight:600">Relatórios</a>
+          <a href="Midias.dc.html" style="display:flex;align-items:center;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Mídias</a>
+        </div>
+      </div>
+      <div>
+        <div style="padding:0 20px 8px;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8a857c">Cadastros</div>
+        <div style="display:flex;flex-direction:column">
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Marcas</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Produtos</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Defeitos</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Soluções</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Canais</a>
+          <a href="#" style="display:flex;padding:8px 20px;border-left:2px solid transparent;color:#ccc5b9;font-size:13.5px" style-hover="color:#fffcf2">Clientes</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:56px;flex:none;display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--background)">
+      <span style="font-size:13px;color:var(--foreground)">Camila Ferreira</span>
+      <button style="height:32px;padding:0 12px;border:none;background:transparent;border-radius:var(--radius);font:inherit;font-size:13px;color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--muted);color:var(--foreground)">Sair</button>
+    </header>
+    <main style="flex:1;overflow-y:auto;padding:24px">
+      <div style="margin-bottom:24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700;color:var(--heading)">Relatórios</h1>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--muted-foreground)">Recorte de tickets por período, marca, status e catálogo</p>
+      </div>
+
+      <section style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)">
+          <h2 style="margin:0;font-size:13.5px;font-weight:600;color:var(--heading)">Filtros</h2>
+          <button title="Recolher filtros" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:none;background:transparent;border-radius:var(--radius);font:inherit;font-size:12px;color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--muted);color:var(--foreground)">Recolher<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+        </div>
+        <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+          <sc-for list="{{ dateFields }}" as="f" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <input type="text" value="{{ f.value }}" readonly style="box-sizing:border-box;width:100%;height:34px;padding:0 32px 0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--foreground)" style-hover="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:9px;top:9px;pointer-events:none"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+          <sc-for list="{{ selectFields }}" as="f" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <select style="appearance:none;box-sizing:border-box;width:100%;height:34px;padding:0 30px 0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font:inherit;font-size:13px;color:{{ f.color }};cursor:pointer" style-hover="border-color:#403d39"><option>{{ f.value }}</option></select>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:9px;top:9px;pointer-events:none"><path d="m6 9 6 6 6-6"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+          <sc-for list="{{ autoFields }}" as="f" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+              <label style="font-size:12px;font-weight:500;color:var(--foreground)">{{ f.label }}</label>
+              <div style="position:relative">
+                <input type="text" value="{{ f.value }}" placeholder="{{ f.placeholder }}" style="box-sizing:border-box;width:100%;height:34px;padding:0 10px 0 30px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font:inherit;font-size:13px;color:var(--foreground)" style-hover="border-color:#403d39" style-focus="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:9px;top:9px;pointer-events:none"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:0 16px 16px">
+          <button style="height:34px;padding:0 14px;border:none;background:transparent;border-radius:var(--radius);font:inherit;font-size:13px;color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--muted);color:var(--foreground)">Limpar</button>
+          <button style="height:34px;padding:0 18px;border:1px solid var(--primary);background:var(--primary);border-radius:var(--radius);font:inherit;font-size:13px;font-weight:600;color:#fffcf2;cursor:pointer" style-hover="background:#c84b1d;border-color:#c84b1d">Filtrar</button>
+        </div>
+      </section>
+
+      <sc-if value="{{ temChips }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:20px">
+          <span style="font-size:12px;color:var(--muted-foreground)">Filtros ativos:</span>
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="3">
+            <button title="Remover filtro" style="display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 9px;border:1px solid var(--border);background:var(--muted);border-radius:var(--radius);font:inherit;font-size:12px;color:var(--foreground);cursor:pointer" style-hover="border-color:#403d39">
+              {{ c.label }}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#736e66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isInicial }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed var(--border);border-radius:var(--radius);padding:56px 24px;text-align:center">
+          <p style="margin:0;font-size:14px;font-weight:600;color:var(--heading)">Nenhum filtro aplicado</p>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--muted-foreground)">Defina um período ou outro critério acima e clique em Filtrar para gerar o relatório.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCarregando }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">
+          <sc-for list="{{ skel4 }}" as="s" hint-placeholder-count="4"><div style="height:84px;background:#e9e3d4;border-radius:var(--radius);animation:skel 1.6s ease-in-out infinite"></div></sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+          <sc-for list="{{ skel3 }}" as="s" hint-placeholder-count="3"><div style="height:190px;background:#e9e3d4;border-radius:var(--radius);animation:skel 1.6s ease-in-out infinite;animation-delay:.15s"></div></sc-for>
+        </div>
+        <div style="height:420px;background:#e9e3d4;border-radius:var(--radius);animation:skel 1.6s ease-in-out infinite;animation-delay:.3s"></div>
+      </sc-if>
+
+      <sc-if value="{{ isSemResultado }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed var(--border);border-radius:var(--radius);padding:56px 24px;text-align:center">
+          <p style="margin:0;font-size:14px;font-weight:600;color:var(--heading)">Nenhum ticket para este filtro</p>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--muted-foreground)">Amplie o período ou remova um dos critérios ativos.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPadrao }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px">
+              <div style="font-size:12px;color:var(--muted-foreground);line-height:1.3">{{ k.label }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;color:var(--heading);margin-top:6px">{{ k.value }}</div>
+              <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">do recorte atual</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+          <sc-for list="{{ rankings }}" as="r" hint-placeholder-count="3">
+            <section style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
+              <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--heading)">{{ r.title }}</div>
+              <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ r.rows }}" as="row" hint-placeholder-count="5">
+                  <div style="min-width:0">
+                    <div style="display:flex;justify-content:space-between;gap:12px;font-size:12.5px;align-items:baseline">
+                      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ row.name }}">{{ row.name }}</span>
+                      <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-foreground)">{{ row.count }}</span>
+                    </div>
+                    <div style="height:4px;background:var(--muted);border-radius:2px;margin-top:4px"><div style="height:4px;width:{{ row.pct }};background:#403d39;border-radius:2px"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </sc-for>
+        </div>
+
+        <section style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+            <h2 style="margin:0;font-size:13.5px;font-weight:600;color:var(--heading)">Resultados <span style="font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted-foreground)">64 tickets</span></h2>
+            <sc-if value="{{ exportando }}" hint-placeholder-val="{{ false }}">
+              <button disabled style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid var(--border);background:var(--card);border-radius:var(--radius);font:inherit;font-size:12.5px;color:var(--muted-foreground);cursor:wait">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                Exportando...
+              </button>
+            </sc-if>
+            <sc-if value="{{ naoExportando }}" hint-placeholder-val="{{ true }}">
+              <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid var(--border);background:var(--card);border-radius:var(--radius);font:inherit;font-size:12.5px;color:var(--foreground);cursor:pointer" style-hover="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>
+                Exportar CSV
+              </button>
+            </sc-if>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr>
+                <th style="text-align:left;padding:8px 10px 8px 13px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Nº</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Cliente</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Produto</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Status</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Prioridade</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">SLA</th>
+                <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Atendente</th>
+                <th style="text-align:right;padding:8px 16px 8px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);border-bottom:1px solid var(--border)">Última atividade</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ rows }}" as="t" hint-placeholder-count="10">
+                  <tr tabindex="0" title="Abrir detalhe do ticket" style="border-bottom:1px solid #eae4d6;border-left:3px solid {{ t.accent }};cursor:pointer" style-hover="background:#f5f0e3">
+                    <td style="padding:8px 10px 8px 13px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--primary);white-space:nowrap">#{{ t.number }}</td>
+                    <td style="padding:8px 10px;white-space:nowrap">{{ t.customer }}</td>
+                    <td style="padding:8px 10px;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ t.product }}">{{ t.product }}</td>
+                    <td style="padding:8px 10px"><span style="display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:var(--radius);background:{{ t.badgeBg }};color:{{ t.badgeFg }};border:1px solid {{ t.badgeBorder }};white-space:nowrap">{{ t.statusLabel }}</span></td>
+                    <td style="padding:8px 10px"><span style="font-size:12px;font-weight:{{ t.prioWeight }};color:{{ t.prioColor }}">{{ t.prio }}</span></td>
+                    <td style="padding:8px 10px"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ t.slaColor }};animation:{{ t.slaAnim }};white-space:nowrap">{{ t.sla }}</span></td>
+                    <td style="padding:8px 10px;white-space:nowrap;color:var(--muted-foreground)">{{ t.attendant }}</td>
+                    <td style="padding:8px 16px 8px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-foreground);text-align:right;white-space:nowrap">{{ t.lastActivity }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-top:1px solid var(--border);flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--muted-foreground)">Mostrando <span style="font-family:'JetBrains Mono',monospace">1–25</span> de <span style="font-family:'JetBrains Mono',monospace">64</span></span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button disabled title="Página anterior" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid var(--border);background:var(--card);border-radius:var(--radius);color:#a39d92;cursor:default">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+              </button>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--foreground);padding:0 6px">1 / 3</span>
+              <button title="Próxima página" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid var(--border);background:var(--card);border-radius:var(--radius);color:var(--foreground);cursor:pointer" style-hover="border-color:#403d39">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;estado&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;padrao&quot;,&quot;inicial&quot;,&quot;carregando&quot;,&quot;sem_resultado&quot;],&quot;default&quot;:&quot;padrao&quot;,&quot;tsType&quot;:&quot;\&quot;padrao\&quot; | \&quot;inicial\&quot; | \&quot;carregando\&quot; | \&quot;sem_resultado\&quot;&quot;,&quot;section&quot;:&quot;Estado da tela&quot;},&quot;exportandoCsv&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Estado da tela&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const estado = this.props.estado ?? "padrao";
+    const exportando = this.props.exportandoCsv ?? false;
+    const STATUS = {
+      aberto:{label:"Aberto",bar:"#0ea5e9",fg:"#0369a1"},
+      aguardando_cliente:{label:"Aguardando cliente",bar:"#f59e0b",fg:"#b45309"},
+      aguardando_analise:{label:"Aguardando análise",bar:"#8b5cf6",fg:"#6d28d9"},
+      aprovado:{label:"Aprovado",bar:"#059669",fg:"#047857"},
+      aguardando_envio_reverso:{label:"Aguardando envio reverso",bar:"#6366f1",fg:"#4338ca"},
+      produto_recebido:{label:"Produto recebido",bar:"#14b8a6",fg:"#0f766e"},
+      finalizado:{label:"Finalizado",bar:"#047857",fg:"#065f46"},
+      declinado:{label:"Declinado",bar:"#f43f5e",fg:"#be123c"},
+      cancelado:{label:"Cancelado",bar:"#71717a",fg:"#52525b"}
+    };
+    const mix = (hex) => `color-mix(in srgb, ${hex} 12%, #fffcf2)`;
+    const bmix = (hex) => `color-mix(in srgb, ${hex} 35%, #fffcf2)`;
+    const inicial = estado === "inicial";
+    const dateFields = [
+      {label:"Período — de", value: inicial ? "" : "01/06/2026"},
+      {label:"Período — até", value: inicial ? "" : "30/07/2026"}
+    ];
+    const selectFields = [
+      {label:"Marca", value: inicial ? "Todas" : "STALEKS", color: inicial ? "#a39d92" : "#403d39"},
+      {label:"Status", value:"Todos", color:"#a39d92"},
+      {label:"Atendente", value:"Todos", color:"#a39d92"}
+    ];
+    const autoFields = [
+      {label:"Produto", value:"", placeholder:"Buscar produto"},
+      {label:"Defeito", value: inicial ? "" : "Lâmina cega", placeholder:"Buscar defeito"},
+      {label:"Solução", value:"", placeholder:"Buscar solução"},
+      {label:"Canal", value:"", placeholder:"Buscar canal"}
+    ];
+    const chips = [
+      {label:"Período: 01/06–30/07"},
+      {label:"Marca: STALEKS"},
+      {label:"Defeito: Lâmina cega"}
+    ];
+    const kpis = [
+      {label:"Total", value:64},{label:"Finalizados", value:41},
+      {label:"Declinados", value:5},{label:"Tempo médio de resolução", value:"1d 22h"}
+    ];
+    const rank = (title, rows) => {
+      const max = Math.max(...rows.map(r => r[1]));
+      return {title, rows: rows.map(r => ({name:r[0], count:r[1], pct:(r[1]/max*100).toFixed(0)+"%"}))};
+    };
+    const rankings = [
+      rank("Top 5 produtos", [["Alicate de cutícula Staleks Expert 11",22],["Tesoura de cutícula Staleks SE-11/1",14],["Empurrador de cutícula Staleks PE-10/1",11],["Lixa reta Staleks Expert 180/240",9],["Alicate de unha Staleks Classic 62",8]]),
+      rank("Top 5 defeitos", [["Lâmina cega",64]]),
+      rank("Top 5 soluções", [["Reparo / afiação",29],["Troca do produto",21],["Crédito em loja",8],["Devolução com estorno",4],["Reenvio de item",2]])
+    ];
+    const prio = {alta:{prio:"Alta",prioColor:"#eb5e28",prioWeight:600},media:{prio:"Média",prioColor:"#403d39",prioWeight:400},baixa:{prio:"Baixa",prioColor:"#736e66",prioWeight:400}};
+    const T = (number, customer, product, status, p, sla, late, soon, attendant, lastActivity) => ({
+      number, customer, product, attendant, lastActivity,
+      statusLabel: STATUS[status].label, accent: STATUS[status].bar,
+      badgeBg: mix(STATUS[status].bar), badgeFg: STATUS[status].fg, badgeBorder: bmix(STATUS[status].bar),
+      ...prio[p],
+      sla, slaColor: late ? "#eb5e28" : (soon ? "#b45309" : "#736e66"),
+      slaAnim: (late || soon) ? "slaPulse 2s ease-in-out infinite" : "none"
+    });
+    const rows = [
+      T("2026-0476","Helena Duarte","Alicate de cutícula Staleks Expert 11","finalizado","media","—",false,false,"Camila Ferreira","28/07 16:40"),
+      T("2026-0469","Marcos Vinícius Rocha","Tesoura de cutícula Staleks SE-11/1","finalizado","baixa","—",false,false,"Rafael Souza","27/07 14:12"),
+      T("2026-0463","Aline Castro","Alicate de cutícula Staleks Expert 11","aprovado","alta","1d 3h",false,false,"Camila Ferreira","27/07 09:55"),
+      T("2026-0458","Gustavo Pereira","Empurrador de cutícula Staleks PE-10/1","aguardando_envio_reverso","media","2d 8h",false,false,"Juliana Prado","26/07 18:03"),
+      T("2026-0451","Renata Farias","Lixa reta Staleks Expert 180/240","finalizado","baixa","—",false,false,"Rafael Souza","25/07 11:47"),
+      T("2026-0447","Diego Antunes","Alicate de unha Staleks Classic 62","aguardando_analise","alta","-4h",true,false,"Camila Ferreira","25/07 08:30"),
+      T("2026-0440","Sofia Barbosa","Alicate de cutícula Staleks Expert 11","declinado","media","—",false,false,"Juliana Prado","23/07 15:21"),
+      T("2026-0433","Thiago Moreira","Tesoura de cutícula Staleks SE-11/1","produto_recebido","media","3d 1h",false,false,"Rafael Souza","22/07 10:09"),
+      T("2026-0429","Larissa Campos","Empurrador de cutícula Staleks PE-10/1","finalizado","baixa","—",false,false,"Camila Ferreira","21/07 17:36"),
+      T("2026-0421","Eduardo Nunes","Alicate de cutícula Staleks Expert 11","aguardando_cliente","media","9h",false,true,"Juliana Prado","20/07 13:58")
+    ];
+    return {
+      isPadrao: estado === "padrao", isInicial: inicial,
+      isCarregando: estado === "carregando", isSemResultado: estado === "sem_resultado",
+      temChips: !inicial && estado !== "carregando",
+      exportando, naoExportando: !exportando,
+      dateFields, selectFields, autoFields, chips, kpis, rankings, rows,
+      skel4:[1,2,3,4], skel3:[1,2,3]
+    };
+  }
+}
+</script>
+</body>
+</html>
