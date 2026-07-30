@@ -8,6 +8,7 @@ import { MediaLightbox, type LightboxItem } from "@/components/media/MediaLightb
 import { MediaTile } from "@/components/media/MediaTile"
 import { EmptyState } from "@/components/reporting/EmptyState"
 import { FiltersCard } from "@/components/reporting/FiltersCard"
+import { Skeleton } from "@/components/reporting/Skeleton"
 import { AutocompleteField } from "@/components/tickets/AutocompleteField"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,9 +22,15 @@ import {
 import { ApiError } from "@/lib/api"
 import { attachmentUrl } from "@/lib/attachments"
 import { listCatalog, listProducts } from "@/lib/cadastros"
+import {
+  isoEndExclusive,
+  isoEndExclusiveToDateInput,
+  isoStart,
+  isoToDateInput,
+  isValidIso,
+} from "@/lib/format"
 import { listMedia, type MediaItem, type MediaKindFilter, type MediaParams } from "@/lib/reporting"
 import { STATUS_LABELS, type TicketStatus } from "@/lib/tickets"
-import { cn } from "@/lib/utils"
 
 const ALL = "all"
 const PER_PAGE = 30
@@ -35,42 +42,8 @@ const KIND_LABELS: Record<MediaKindFilter, string> = {
 }
 const STATUS_VALUES = Object.keys(STATUS_LABELS) as TicketStatus[]
 
-function isValidIso(value: string): boolean {
-  return !Number.isNaN(new Date(value).getTime())
-}
-
-// a API filtra created_at < ate, entao o dia final escolhido precisa entrar
-// inteiro: guardamos o dia seguinte a meia-noite UTC (mesma convencao de
-// Relatorios).
-function isoStart(dateInput: string): string {
-  return new Date(`${dateInput}T00:00:00Z`).toISOString()
-}
-
-function isoEndExclusive(dateInput: string): string {
-  const date = new Date(`${dateInput}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + 1)
-  return date.toISOString()
-}
-
-function isoToDateInput(iso: string): string {
-  return iso.slice(0, 10)
-}
-
-// "ate" invalido (URL editada a mao) e tratado como ausente: nao vai para a
-// API e nao quebra o input de data com um Invalid Date.
-function isoEndExclusiveToDateInput(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ""
-  date.setUTCDate(date.getUTCDate() - 1)
-  return date.toISOString().slice(0, 10)
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
-}
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("rounded-md bg-muted motion-safe:animate-pulse", className)} />
 }
 
 export default function MidiasPage() {
@@ -122,21 +95,23 @@ export default function MidiasPage() {
     perPage: PER_PAGE,
   }
 
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
-    queryKey: ["midias", params],
-    queryFn: ({ pageParam }) => listMedia({ ...params, page: pageParam }),
-    initialPageParam: 1,
-    getNextPageParam: (last) =>
-      last.page * last.per_page < last.total ? last.page + 1 : undefined,
-  })
+  const { data, isLoading, isError, error, isFetchingNextPage, hasNextPage, fetchNextPage } =
+    useInfiniteQuery({
+      queryKey: ["midias", params],
+      queryFn: ({ pageParam }) => listMedia({ ...params, page: pageParam }),
+      initialPageParam: 1,
+      getNextPageParam: (last) =>
+        last.page * last.per_page < last.total ? last.page + 1 : undefined,
+    })
 
   const { data: brands } = useQuery({ queryKey: ["marcas"], queryFn: () => listCatalog("marcas") })
 
   const items: MediaItem[] = data?.pages.flatMap((page) => page.items) ?? []
   const total = data?.pages[0]?.total ?? 0
   const isCarregandoInicial = isLoading
-  const isVazio = !isLoading && total === 0
-  const isPadrao = !isLoading && total > 0
+  const isErro = !isLoading && isError
+  const isVazio = !isLoading && !isError && total === 0
+  const isPadrao = !isLoading && !isError && total > 0
 
   async function openLightbox(item: MediaItem) {
     setLightboxItem({
@@ -335,6 +310,13 @@ export default function MidiasPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {isErro && (
+        <EmptyState
+          title="Nao foi possivel carregar os anexos"
+          description={errorMessage(error)}
+        />
       )}
 
       {isVazio && (

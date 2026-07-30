@@ -2,7 +2,7 @@ import { ArrowUpRight, FileText, Loader2, X } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 import { Link } from "react-router-dom"
 
-import { formatBytes } from "@/lib/format"
+import { formatBytes, formatShortDateTime } from "@/lib/format"
 
 export type LightboxItem = {
   kind: "imagem" | "pdf" | "video"
@@ -20,17 +20,6 @@ const KIND_LABELS: Record<LightboxItem["kind"], string> = {
   imagem: "Imagem",
   pdf: "PDF",
   video: "Video",
-}
-
-/** dd/mm hh:mm sem virgula (o que toLocaleString com dateStyle/timeStyle produziria
- *  em pt-BR) — mesmo formato compacto usado na legenda do MediaTile. */
-function formatShortDateTime(iso: string): string {
-  const date = new Date(iso)
-  const dd = String(date.getDate()).padStart(2, "0")
-  const mm = String(date.getMonth() + 1).padStart(2, "0")
-  const hh = String(date.getHours()).padStart(2, "0")
-  const min = String(date.getMinutes()).padStart(2, "0")
-  return `${dd}/${mm} ${hh}:${min}`
 }
 
 function MediaPane({ item }: { item: LightboxItem }) {

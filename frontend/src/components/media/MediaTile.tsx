@@ -1,5 +1,6 @@
 import { FileText, Image, Play, Video } from "lucide-react"
 
+import { formatShortDateTime } from "@/lib/format"
 import type { MediaItem } from "@/lib/reporting"
 
 const KIND_ICONS = { imagem: Image, pdf: FileText, video: Video } as const
@@ -7,17 +8,6 @@ const KIND_ICONS = { imagem: Image, pdf: FileText, video: Video } as const
 function fileExtension(filename: string): string {
   const dot = filename.lastIndexOf(".")
   return dot > 0 ? filename.slice(dot + 1).toUpperCase() : ""
-}
-
-/** dd/mm hh:mm, o mesmo formato compacto usado no painel de metadados do
- *  MediaLightbox — sem virgula, ao contrario do que toLocaleString produziria. */
-function formatShortDateTime(iso: string): string {
-  const date = new Date(iso)
-  const dd = String(date.getDate()).padStart(2, "0")
-  const mm = String(date.getMonth() + 1).padStart(2, "0")
-  const hh = String(date.getHours()).padStart(2, "0")
-  const min = String(date.getMinutes()).padStart(2, "0")
-  return `${dd}/${mm} ${hh}:${min}`
 }
 
 /** Tile quadrado da galeria de midias. Sem preview, mostra um icone por tipo e

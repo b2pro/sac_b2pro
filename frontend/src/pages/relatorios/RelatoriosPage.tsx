@@ -9,6 +9,8 @@ import { FiltersCard } from "@/components/reporting/FiltersCard"
 import { KpiCard } from "@/components/reporting/KpiCard"
 import { Pagination } from "@/components/reporting/Pagination"
 import { RankingList } from "@/components/reporting/RankingList"
+import { Skeleton } from "@/components/reporting/Skeleton"
+import { ThCell } from "@/components/reporting/ThCell"
 import { TicketRow } from "@/components/reporting/TicketRow"
 import { AutocompleteField } from "@/components/tickets/AutocompleteField"
 import { Button } from "@/components/ui/button"
@@ -23,11 +25,17 @@ import {
 } from "@/components/ui/select"
 import { ApiError } from "@/lib/api"
 import { listCatalog, listProducts, type CatalogItem } from "@/lib/cadastros"
-import { formatDuration } from "@/lib/format"
+import {
+  formatDuration,
+  isoEndExclusive,
+  isoEndExclusiveToDateInput,
+  isoStart,
+  isoToDateInput,
+  isValidIso,
+} from "@/lib/format"
 import { listMembers } from "@/lib/members"
 import { downloadReportCsv, getReport, type ReportParams } from "@/lib/reporting"
 import { STATUS_LABELS, type TicketStatus } from "@/lib/tickets"
-import { cn } from "@/lib/utils"
 
 const ALL = "all"
 const PER_PAGE = 25
@@ -89,36 +97,6 @@ function emptyDraft(): Draft {
   }
 }
 
-// a API filtra opened_at < ate, entao o dia final escolhido precisa entrar
-// inteiro: guardamos o dia seguinte a meia-noite UTC.
-function isoStart(dateInput: string): string {
-  return new Date(`${dateInput}T00:00:00Z`).toISOString()
-}
-
-function isoEndExclusive(dateInput: string): string {
-  const date = new Date(`${dateInput}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + 1)
-  return date.toISOString()
-}
-
-function isoToDateInput(iso: string): string {
-  return iso.slice(0, 10)
-}
-
-function isValidIso(value: string): boolean {
-  return !Number.isNaN(new Date(value).getTime())
-}
-
-// valor de "ate" pode vir de uma URL editada a mao (link truncado, parametro
-// incompleto); se nao for uma data valida, tratamos como se o filtro nao
-// existisse em vez de deixar o Invalid Date estourar no toISOString().
-function isoEndExclusiveToDateInput(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ""
-  date.setUTCDate(date.getUTCDate() - 1)
-  return date.toISOString().slice(0, 10)
-}
-
 function formatDateBR(dateInput: string): string {
   const [y, m, d] = dateInput.split("-")
   return `${d}/${m}/${y}`
@@ -151,23 +129,6 @@ function errorMessage(error: unknown): string {
 
 function catalogName(list: CatalogItem[] | undefined, id: string, fallback: string): string {
   return list?.find((item) => item.id === id)?.name || fallback
-}
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("rounded-md bg-muted motion-safe:animate-pulse", className)} />
-}
-
-function ThCell({ align = "left", children }: { align?: "left" | "right"; children: string }) {
-  return (
-    <th
-      className={cn(
-        "border-b border-border px-2.5 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase",
-        align === "left" ? "pl-3.5 text-left" : "pr-4 text-right",
-      )}
-    >
-      {children}
-    </th>
-  )
 }
 
 export default function RelatoriosPage() {

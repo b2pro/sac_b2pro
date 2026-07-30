@@ -2,17 +2,9 @@ import type { KeyboardEvent } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { PriorityBadge, SlaBadge, StatusBadge, STATUS_ACCENTS } from "@/components/tickets/badges"
-import { cn } from "@/lib/utils"
+import { formatShortDateTime } from "@/lib/format"
 import type { TicketListItem } from "@/lib/tickets"
-
-function formatLastActivity(iso: string): string {
-  const date = new Date(iso)
-  const dd = String(date.getDate()).padStart(2, "0")
-  const mm = String(date.getMonth() + 1).padStart(2, "0")
-  const hh = String(date.getHours()).padStart(2, "0")
-  const min = String(date.getMinutes()).padStart(2, "0")
-  return `${dd}/${mm} ${hh}:${min}`
-}
+import { cn } from "@/lib/utils"
 
 export function TicketRow({
   item,
@@ -70,7 +62,7 @@ export function TicketRow({
         </td>
       )}
       <td className="whitespace-nowrap px-2.5 py-2 pr-4 text-right font-mono text-xs text-muted-foreground">
-        {formatLastActivity(item.last_activity_at)}
+        {formatShortDateTime(item.last_activity_at)}
       </td>
     </tr>
   )

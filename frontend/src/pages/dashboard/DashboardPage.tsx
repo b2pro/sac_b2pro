@@ -6,7 +6,9 @@ import { AvgResolutionStat } from "@/components/reporting/AvgResolutionStat"
 import { EmptyState } from "@/components/reporting/EmptyState"
 import { KpiCard } from "@/components/reporting/KpiCard"
 import { RankingList } from "@/components/reporting/RankingList"
+import { Skeleton } from "@/components/reporting/Skeleton"
 import { StatusDistributionChart } from "@/components/reporting/StatusDistributionChart"
+import { ThCell } from "@/components/reporting/ThCell"
 import { TicketRow } from "@/components/reporting/TicketRow"
 import {
   Select,
@@ -17,7 +19,6 @@ import {
 } from "@/components/ui/select"
 import { ApiError } from "@/lib/api"
 import { listCatalog } from "@/lib/cadastros"
-import { cn } from "@/lib/utils"
 import { getDashboard } from "@/lib/reporting"
 
 const ALL = "all"
@@ -46,23 +47,6 @@ const RECENT_COLUMNS = ["No", "Cliente", "Produto", "Status", "SLA", "Ultima ati
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
-}
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("rounded-md bg-muted motion-safe:animate-pulse", className)} />
-}
-
-function ThCell({ align = "left", children }: { align?: "left" | "right"; children: string }) {
-  return (
-    <th
-      className={cn(
-        "border-b border-border px-2.5 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase",
-        align === "left" ? "pl-3.5 text-left" : "pr-4 text-right",
-      )}
-    >
-      {children}
-    </th>
-  )
 }
 
 export default function DashboardPage() {
