@@ -136,6 +136,7 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
   - Anexos (Wasabi S3) ficam para a Fase 2B — o detalhe já reserva o espaço com um card placeholder desabilitado.
 - **Fase 2B — Anexos, previews e membros**: anexos de ticket com upload direto por presigned URL (imagem, PDF e vídeo até 50 MB, 10 por ticket), compressão de imagem e captura da thumb de vídeo no navegador, previews WebP (thumb 400px e média 1200px) gerados por worker assíncrono com fila em tabela (`preview_jobs`) e retry com backoff, soft delete preservando o objeto no storage para auditoria, foto de catálogo do produto (mesmo pipeline de upload e preview) e endpoint de membros do tenant com seletor de supervisor no ticket. A galeria de mídias (visualização agrupada de todos os anexos do tenant) fica para a Fase 3.
   - **Antes do primeiro deploy em produção** aplique o checklist de bucket de `docs/armazenamento-anexos.md`. O CORS sai por script — `cd backend && python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br` — porque sem a política o upload direto pelo navegador falha no Wasabi com um erro opaco. Restam o bucket privado e a decisão sobre objetos órfãos (prefixo de staging ou varredura no worker; **não** existe regra de ciclo de vida que resolva isso com o layout de chaves atual). O MinIO de desenvolvimento é permissivo justamente onde o Wasabi não é, então nenhuma verificação local cobre esses pontos.
+- **Fase 3 — Visibilidade**: dashboard como rota inicial, com KPI cards clicaveis que pre-filtram a lista, grafico de distribuicao por status (Recharts), rankings top 5 e tempo medio de resolucao, tudo com filtro por marca; relatorios com card de filtros de 9 campos, chips de filtros ativos, KPIs do recorte, rankings, tabela paginada com linhas navegaveis e export CSV com exatamente os mesmos filtros da tela (a tela exige um filtro antes de consultar); galeria de midias do tenant com filtros, scroll infinito e lightbox compartilhado com o detalhe do ticket. Layout implementado a partir dos mockups aprovados em `docs/frontendmockups/`. O importador das planilhas KODI/STALEKS saiu do escopo por decisao de produto (2026-07-30).
 
 ## Documentação
 
@@ -148,6 +149,10 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
 - `docs/superpowers/plans/2026-07-28-fase-2a-tickets.md` — plano de implementação da Fase 2A.
 - `docs/superpowers/specs/2026-07-28-sac-b2pro-fase-2b-anexos-design.md` — design técnico da Fase 2B (anexos, previews e membros).
 - `docs/superpowers/plans/2026-07-28-fase-2b-anexos.md` — plano de implementação da Fase 2B.
+- `docs/superpowers/specs/2026-07-30-sac-b2pro-fase-3-visibilidade-design.md` — design técnico da Fase 3 (visibilidade: dashboard, relatórios e galeria de mídias).
+- `docs/superpowers/plans/2026-07-30-fase-3-visibilidade.md` — plano de implementação da Fase 3.
+- `docs/frontendmockups/Componentes.md` — inventário dos componentes de UI compartilhados usados nos mockups aprovados da Fase 3.
+- `docs/prompt-design-fase-3.md` — prompt de design usado para gerar os mockups da Fase 3.
 - `docs/armazenamento-anexos.md` — desenho do armazenamento de anexos (Wasabi/S3, presigned URLs, previews) e o **checklist de bucket antes do primeiro deploy em produção** (CORS por script, bucket privado, objetos órfãos).
 - `docs/identidade-visual.md` — identidade visual do frontend.
 - `CLAUDE.md` — decisões de arquitetura e regras obrigatórias do projeto.
