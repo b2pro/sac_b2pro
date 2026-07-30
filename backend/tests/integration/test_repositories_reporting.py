@@ -223,6 +223,7 @@ async def test_report_aplica_mesmo_recorte_em_kpis_rankings_e_tabela(
     assert data.total == 1
     assert len(data.tickets) == 1
     assert data.products[0].count == 2
+    assert data.tickets[0].first_product_name == "Alicate"
 
     # filtro por produto usa EXISTS nos itens
     com_produto = await repo.report(

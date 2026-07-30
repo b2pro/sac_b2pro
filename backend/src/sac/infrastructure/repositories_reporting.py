@@ -292,14 +292,23 @@ class SqlReportingRepository:
                 .group_by(TicketItemModel.ticket_id)
             )
             counts = {row[0]: int(row[1]) for row in count_rows.all()}
-            first_rows = await self._session.execute(
-                select(TicketItemModel.ticket_id, ProductModel.name)
-                .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
+            item_rows = await self._session.execute(
+                select(TicketItemModel)
                 .where(TicketItemModel.ticket_id.in_(ticket_ids))
-                .order_by(TicketItemModel.ticket_id, TicketItemModel.created_at)
-                .distinct(TicketItemModel.ticket_id)
+                .order_by(TicketItemModel.created_at)
             )
-            first_products = {row[0]: row[1] for row in first_rows.all()}
+            items = list(item_rows.scalars().all())
+            product_ids = {i.product_id for i in items}
+            product_names: dict[UUID, str] = {}
+            if product_ids:
+                product_rows = await self._session.execute(
+                    select(ProductModel.id, ProductModel.name).where(
+                        ProductModel.id.in_(product_ids)
+                    )
+                )
+                product_names = {r[0]: r[1] for r in product_rows.all()}
+            for item in items:
+                first_products.setdefault(item.ticket_id, product_names[item.product_id])
         tickets: list[TicketListRow] = [
             TicketListRow(
                 ticket=_ticket_entity(m),
