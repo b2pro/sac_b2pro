@@ -1898,7 +1898,7 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
 
   test("galeria mostra anexo e lightbox leva ao ticket", async ({ page, request }) => {
     const ticket = await apiFullTicket(request, "admin")
-    await apiUploadAttachment(request, "admin", ticket.id)
+    await apiUploadAttachment(request, "admin", ticket.id, "e2e/fixtures/defeito.png")
     await login(page, request, "admin")
 
     await page.getByRole("link", { name: "Midias" }).click()
@@ -1914,7 +1914,7 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
 })
 ```
 
-Conferir a assinatura real de `apiUploadAttachment` (ver como `05-anexos.spec.ts` a chama) e ajustar os argumentos, alem dos rotulos exatos que a UI renderizar. O terceiro teste nao depende do preview estar pronto: com o worker parado o tile mostra placeholder e o fluxo do lightbox segue valido.
+Assinaturas confirmadas: `apiFullTicket(request, who)` devolve `{ id, number }`; `apiUploadAttachment(request, who, ticketId, caminho)` sobe um PNG e confirma o anexo — a fixture disponivel e `e2e/fixtures/defeito.png`. Ajustar apenas os rotulos exatos que a UI renderizar. O terceiro teste nao depende do preview estar pronto: com o worker parado o tile mostra placeholder e o fluxo do lightbox segue valido.
 
 - [ ] **Step 2: Rodar o spec**
 
