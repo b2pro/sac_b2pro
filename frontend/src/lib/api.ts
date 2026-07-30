@@ -86,15 +86,19 @@ async function tryRefresh(): Promise<Session | null> {
   return next
 }
 
-export async function api<T>(
+/** Faz a chamada com o access token atual e, se a API responder 401, tenta
+ *  renovar a sessao uma vez e repete — a mesma logica de refresh-and-retry
+ *  usada por toda chamada autenticada, aqui compartilhada entre `api` (json)
+ *  e `apiRaw` (Response crua, para respostas binarias como o CSV). */
+async function apiRaw(
   path: string,
-  init: { method?: string; body?: unknown } = {},
-): Promise<T> {
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<Response> {
   const doFetch = (token: string | null) =>
     fetch(`/api${path}`, {
       method: init.method ?? "GET",
       headers: {
-        "Content-Type": "application/json",
+        ...init.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -110,7 +114,23 @@ export async function api<T>(
     }
     res = await doFetch(session.accessToken)
   }
+  return res
+}
+
+export async function api<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const res = await apiRaw(path, { ...init, headers: { "Content-Type": "application/json" } })
   if (!res.ok) throw await parseError(res)
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
+}
+
+/** Como `api`, mas devolve a Response crua (sem parsear json) — usado pelo
+ *  download de CSV, que precisa do blob e nao de um corpo json. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await apiRaw(path)
+  if (!res.ok) throw await parseError(res)
+  return res.blob()
 }

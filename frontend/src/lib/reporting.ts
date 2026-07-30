@@ -1,4 +1,4 @@
-import { api, loadSession } from "@/lib/api"
+import { api, apiBlob } from "@/lib/api"
 import type { TicketListItem, TicketStatus } from "@/lib/tickets"
 
 export type RankingEntry = { id: string; name: string; count: number }
@@ -119,12 +119,7 @@ export const listMedia = (params: MediaParams) =>
   api<MediaPage>(`/midias${query(mapMediaParams(params))}`)
 
 export async function downloadReportCsv(params: ReportParams): Promise<void> {
-  const session = loadSession()
-  const res = await fetch(`/api/relatorios/export${query(mapReportParams(params))}`, {
-    headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {},
-  })
-  if (!res.ok) throw new Error("falha ao exportar relatorio")
-  const blob = await res.blob()
+  const blob = await apiBlob(`/relatorios/export${query(mapReportParams(params))}`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
