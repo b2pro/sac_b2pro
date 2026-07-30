@@ -55,6 +55,30 @@ def _ranking_out(entries: list[RankingEntry]) -> list[RankingOut]:
     return [RankingOut(id=e.id, name=e.name, count=e.count) for e in entries]
 
 
+def _report_filters(
+    de: datetime | None = None,
+    ate: datetime | None = None,
+    brand_id: UUID | None = None,
+    product_id: UUID | None = None,
+    defect_type_id: UUID | None = None,
+    solution_type_id: UUID | None = None,
+    status: TicketStatus | None = None,
+    atendente_id: UUID | None = None,
+    channel_id: UUID | None = None,
+) -> ReportFilters:
+    return ReportFilters(
+        date_from=de,
+        date_to=ate,
+        brand_id=brand_id,
+        product_id=product_id,
+        defect_type_id=defect_type_id,
+        solution_type_id=solution_type_id,
+        status=status,
+        attendant_user_id=atendente_id,
+        purchase_channel_id=channel_id,
+    )
+
+
 @dashboard_router.get("", response_model=DashboardOut)
 async def get_dashboard(
     brand_id: UUID | None = None,
@@ -84,29 +108,10 @@ async def get_dashboard(
 
 @relatorios_router.get("/export")
 async def export_relatorio(
-    de: datetime | None = None,
-    ate: datetime | None = None,
-    brand_id: UUID | None = None,
-    product_id: UUID | None = None,
-    defect_type_id: UUID | None = None,
-    solution_type_id: UUID | None = None,
-    status: TicketStatus | None = None,
-    atendente_id: UUID | None = None,
-    channel_id: UUID | None = None,
+    filters: ReportFilters = Depends(_report_filters),
     identity: TokenPayload = Depends(_view),
     repo: SqlReportingRepository = Depends(get_reporting_repository),
 ) -> StreamingResponse:
-    filters = ReportFilters(
-        date_from=de,
-        date_to=ate,
-        brand_id=brand_id,
-        product_id=product_id,
-        defect_type_id=defect_type_id,
-        solution_type_id=solution_type_id,
-        status=status,
-        attendant_user_id=atendente_id,
-        purchase_channel_id=channel_id,
-    )
     use_case = ExportReportUseCase(repo)
     chunks = [chunk async for chunk in use_case.stream(filters)]
 
@@ -125,32 +130,13 @@ async def export_relatorio(
 
 @relatorios_router.get("", response_model=ReportOut)
 async def get_report(
-    de: datetime | None = None,
-    ate: datetime | None = None,
-    brand_id: UUID | None = None,
-    product_id: UUID | None = None,
-    defect_type_id: UUID | None = None,
-    solution_type_id: UUID | None = None,
-    status: TicketStatus | None = None,
-    atendente_id: UUID | None = None,
-    channel_id: UUID | None = None,
+    filters: ReportFilters = Depends(_report_filters),
     page: int = 1,
     per_page: int = 20,
     identity: TokenPayload = Depends(_view),
     repo: SqlReportingRepository = Depends(get_reporting_repository),
     ticket_repos: TicketRepos = Depends(get_ticket_repos),
 ) -> ReportOut:
-    filters = ReportFilters(
-        date_from=de,
-        date_to=ate,
-        brand_id=brand_id,
-        product_id=product_id,
-        defect_type_id=defect_type_id,
-        solution_type_id=solution_type_id,
-        status=status,
-        attendant_user_id=atendente_id,
-        purchase_channel_id=channel_id,
-    )
     page = max(page, 1)
     per_page = min(max(per_page, 1), 100)
     data, names = await GetReportUseCase(repo, ticket_repos.users).execute(
