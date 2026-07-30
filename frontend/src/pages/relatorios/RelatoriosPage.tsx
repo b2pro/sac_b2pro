@@ -105,8 +105,16 @@ function isoToDateInput(iso: string): string {
   return iso.slice(0, 10)
 }
 
+function isValidIso(value: string): boolean {
+  return !Number.isNaN(new Date(value).getTime())
+}
+
+// valor de "ate" pode vir de uma URL editada a mao (link truncado, parametro
+// incompleto); se nao for uma data valida, tratamos como se o filtro nao
+// existisse em vez de deixar o Invalid Date estourar no toISOString().
 function isoEndExclusiveToDateInput(iso: string): string {
   const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ""
   date.setUTCDate(date.getUTCDate() - 1)
   return date.toISOString().slice(0, 10)
 }
@@ -141,8 +149,8 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
 }
 
-function catalogName(list: CatalogItem[] | undefined, id: string): string {
-  return list?.find((item) => item.id === id)?.name ?? id
+function catalogName(list: CatalogItem[] | undefined, id: string, fallback: string): string {
+  return list?.find((item) => item.id === id)?.name || fallback
 }
 
 function Skeleton({ className }: { className?: string }) {
@@ -171,7 +179,14 @@ export default function RelatoriosPage() {
     setDraft((current) => ({ ...current, ...patch }))
   }
 
-  const temFiltro = FILTER_KEYS.some((key) => !!searchParams.get(key))
+  // "ate" invalido (URL editada a mao) e tratado como ausente em toda a tela:
+  // nao conta para temFiltro, nao vai para a API e nao gera chip.
+  const rawAte = searchParams.get("ate")
+  const ateParam = rawAte && isValidIso(rawAte) ? rawAte : null
+
+  const temFiltro = FILTER_KEYS.some((key) =>
+    key === "ate" ? !!ateParam : !!searchParams.get(key),
+  )
 
   const pageBruta = Number(searchParams.get("page"))
   const page = Number.isFinite(pageBruta) && pageBruta > 0 ? Math.trunc(pageBruta) : 1
@@ -184,7 +199,7 @@ export default function RelatoriosPage() {
 
   const params: ReportParams = {
     de: searchParams.get("de") || undefined,
-    ate: searchParams.get("ate") || undefined,
+    ate: ateParam ?? undefined,
     brandId: searchParams.get("brand_id") || undefined,
     productId: searchParams.get("product_id") || undefined,
     defectTypeId: searchParams.get("defect_type_id") || undefined,
@@ -265,7 +280,6 @@ export default function RelatoriosPage() {
 
   const chips: { key: string; label: string }[] = []
   const deParam = searchParams.get("de")
-  const ateParam = searchParams.get("ate")
   const brandIdParam = searchParams.get("brand_id")
   const atendenteIdParam = searchParams.get("atendente_id")
   const productIdParam = searchParams.get("product_id")
@@ -278,28 +292,34 @@ export default function RelatoriosPage() {
   if (brandIdParam)
     chips.push({
       key: "brand_id",
-      label: `Marca: ${brands?.find((brand) => brand.id === brandIdParam)?.name ?? brandIdParam}`,
+      label: `Marca: ${brands?.find((brand) => brand.id === brandIdParam)?.name || "Marca selecionada"}`,
     })
   if (status) chips.push({ key: "status", label: `Status: ${STATUS_LABELS[status]}` })
   if (atendenteIdParam)
     chips.push({
       key: "atendente_id",
-      label: `Atendente: ${members?.find((member) => member.id === atendenteIdParam)?.name ?? atendenteIdParam}`,
+      label: `Atendente: ${members?.find((member) => member.id === atendenteIdParam)?.name || "Atendente selecionado"}`,
     })
   if (productIdParam)
     chips.push({
       key: "product_id",
-      label: `Produto: ${appliedProductLabel ?? draft.productQuery ?? productIdParam}`,
+      label: `Produto: ${appliedProductLabel || draft.productQuery || "Produto selecionado"}`,
     })
   if (defectIdParam)
-    chips.push({ key: "defect_type_id", label: `Defeito: ${catalogName(defectsAll, defectIdParam)}` })
+    chips.push({
+      key: "defect_type_id",
+      label: `Defeito: ${catalogName(defectsAll, defectIdParam, "Defeito selecionado")}`,
+    })
   if (solutionIdParam)
     chips.push({
       key: "solution_type_id",
-      label: `Solucao: ${catalogName(solutionsAll, solutionIdParam)}`,
+      label: `Solucao: ${catalogName(solutionsAll, solutionIdParam, "Solucao selecionada")}`,
     })
   if (channelIdParam)
-    chips.push({ key: "channel_id", label: `Canal: ${catalogName(channelsAll, channelIdParam)}` })
+    chips.push({
+      key: "channel_id",
+      label: `Canal: ${catalogName(channelsAll, channelIdParam, "Canal selecionado")}`,
+    })
 
   const isInicial = !temFiltro
   const isCarregando = temFiltro && isLoading
