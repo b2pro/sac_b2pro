@@ -28,13 +28,17 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
 
     await page.getByLabel("Periodo — de").fill("2026-01-01")
     await page.getByRole("button", { name: "Filtrar" }).click()
-    await expect(
-      page.locator("table tbody tr").filter({ hasText: `#${ticket.number}` }),
-    ).toBeVisible()
+    const row = page.locator("table tbody tr").filter({ hasText: `#${ticket.number}` })
+    await expect(row).toBeVisible()
 
     const download = page.waitForEvent("download")
     await page.getByRole("button", { name: "Exportar CSV" }).click()
     expect((await download).suggestedFilename()).toBe("relatorio-tickets.csv")
+
+    // a linha e clicavel (TicketRow navega no clique) e leva ao detalhe do
+    // ticket certo — nao so aparece na tabela, funciona como link de verdade
+    await row.click()
+    await expect(page).toHaveURL(new RegExp(`/tickets/${ticket.id}$`))
   })
 
   test("galeria mostra anexo e lightbox leva ao ticket", async ({ page, request }) => {
