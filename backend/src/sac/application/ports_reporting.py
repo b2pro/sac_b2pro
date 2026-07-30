@@ -4,6 +4,7 @@ from typing import Protocol
 from uuid import UUID
 
 from sac.application.ports_tickets import TicketListRow
+from sac.domain.attachments import AttachmentKind, TicketAttachment
 from sac.domain.tickets import TicketStatus
 
 
@@ -84,6 +85,24 @@ class ReportExportRow:
     closed_at: datetime | None
 
 
+@dataclass(frozen=True)
+class MediaFilters:
+    kind: AttachmentKind | None = None  # de sac.domain.attachments
+    brand_id: UUID | None = None
+    product_id: UUID | None = None
+    defect_type_id: UUID | None = None
+    solution_type_id: UUID | None = None
+    status: TicketStatus | None = None
+    date_from: datetime | None = None  # created_at do anexo
+    date_to: datetime | None = None
+
+
+@dataclass(frozen=True)
+class MediaItemRow:
+    attachment: TicketAttachment
+    ticket_number: int
+
+
 class ReportingRepository(Protocol):
     async def dashboard(
         self, brand_id: UUID | None, unread_for: UUID, now: datetime
@@ -94,3 +113,6 @@ class ReportingRepository(Protocol):
     async def export_rows(
         self, filters: ReportFilters, page: int, per_page: int
     ) -> list[ReportExportRow]: ...
+    async def list_media(
+        self, filters: MediaFilters, page: int, per_page: int
+    ) -> tuple[list[MediaItemRow], int]: ...

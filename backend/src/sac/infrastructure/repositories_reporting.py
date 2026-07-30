@@ -10,6 +10,8 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sac.application.ports_reporting import (
     DashboardData,
     DashboardKpi,
+    MediaFilters,
+    MediaItemRow,
     RankingEntry,
     ReportData,
     ReportExportRow,
@@ -17,6 +19,7 @@ from sac.application.ports_reporting import (
     ReportKpis,
 )
 from sac.application.ports_tickets import TicketFilters, TicketListRow
+from sac.domain.attachments import AttachmentStatus
 from sac.domain.tickets import CLOSED_STATUSES, TicketStatus
 from sac.infrastructure.models import UserModel
 from sac.infrastructure.models_tenant import (
@@ -26,10 +29,12 @@ from sac.infrastructure.models_tenant import (
     ProductModel,
     PurchaseChannelModel,
     SolutionTypeModel,
+    TicketAttachmentModel,
     TicketItemModel,
     TicketModel,
     TicketReadModel,
 )
+from sac.infrastructure.repositories_attachments import attachment_entity
 from sac.infrastructure.repositories_tickets import SqlTicketRepository, _ticket_entity
 
 _CLOSED = [str(s) for s in CLOSED_STATUSES]
@@ -100,6 +105,65 @@ class SqlReportingRepository:
                 )
             )
         return stmt
+
+    def _media_stmt(self, filters: MediaFilters) -> Select[tuple[TicketAttachmentModel, int]]:
+        stmt = (
+            select(TicketAttachmentModel, TicketModel.number)
+            .join(TicketModel, TicketAttachmentModel.ticket_id == TicketModel.id)
+            .where(
+                TicketAttachmentModel.deleted_at.is_(None),
+                TicketAttachmentModel.status == str(AttachmentStatus.DISPONIVEL),
+                TicketModel.deleted_at.is_(None),
+            )
+        )
+        if filters.kind is not None:
+            stmt = stmt.where(TicketAttachmentModel.kind == str(filters.kind))
+        if filters.date_from is not None:
+            stmt = stmt.where(TicketAttachmentModel.created_at >= filters.date_from)
+        if filters.date_to is not None:
+            stmt = stmt.where(TicketAttachmentModel.created_at < filters.date_to)
+        if filters.brand_id is not None:
+            stmt = stmt.where(TicketModel.brand_id == filters.brand_id)
+        if filters.status is not None:
+            stmt = stmt.where(TicketModel.status == str(filters.status))
+        if filters.solution_type_id is not None:
+            stmt = stmt.where(TicketModel.solution_type_id == filters.solution_type_id)
+        if filters.product_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(TicketItemModel.id).where(
+                        TicketItemModel.ticket_id == TicketModel.id,
+                        TicketItemModel.product_id == filters.product_id,
+                    )
+                )
+            )
+        if filters.defect_type_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(TicketItemModel.id).where(
+                        TicketItemModel.ticket_id == TicketModel.id,
+                        TicketItemModel.defect_type_id == filters.defect_type_id,
+                    )
+                )
+            )
+        return stmt
+
+    async def list_media(
+        self, filters: MediaFilters, page: int, per_page: int
+    ) -> tuple[list[MediaItemRow], int]:
+        stmt = self._media_stmt(filters)
+        total = await self._count(stmt)
+        rows_stmt = (
+            stmt.order_by(TicketAttachmentModel.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        result = await self._session.execute(rows_stmt)
+        rows = [
+            MediaItemRow(attachment=attachment_entity(m), ticket_number=number)
+            for m, number in result.all()
+        ]
+        return rows, total
 
     async def dashboard(
         self, brand_id: UUID | None, unread_for: UUID, now: datetime

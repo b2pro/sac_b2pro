@@ -5,7 +5,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from sac.application.ports_reporting import DashboardData, ReportFilters
+from sac.application.ports_reporting import DashboardData, MediaFilters, ReportFilters
+from sac.domain.attachments import AttachmentKind
 from sac.domain.tickets import TicketStatus
 from sac.infrastructure.models_tenant import (
     BrandModel,
@@ -13,6 +14,7 @@ from sac.infrastructure.models_tenant import (
     DefectTypeModel,
     ProductModel,
     SolutionTypeModel,
+    TicketAttachmentModel,
     TicketItemModel,
     TicketModel,
 )
@@ -263,3 +265,60 @@ async def test_export_rows_traz_cliente_produtos_e_pagina(
         ReportFilters(), page=2, per_page=10
     )
     assert vazia == []
+
+
+def make_attachment(
+    ticket_id: UUID,
+    author: UUID,
+    *,
+    kind: str = "imagem",
+    status: str = "disponivel",
+    deleted_at: datetime | None = None,
+) -> TicketAttachmentModel:
+    return TicketAttachmentModel(
+        id=uuid4(),
+        ticket_id=ticket_id,
+        filename="foto.jpg",
+        content_type="image/jpeg",
+        size_bytes=1000,
+        object_key=f"rep/{ticket_id}/{uuid4()}.jpg",
+        kind=kind,
+        status=status,
+        preview_status="pronto" if kind == "imagem" else "sem_preview",
+        preview_key="k.webp" if kind == "imagem" else None,
+        author_user_id=author,
+        deleted_at=deleted_at,
+    )
+
+
+async def test_list_media_filtra_confirmados_por_kind_e_dados_do_ticket(
+    session: AsyncSession, tenant_session: AsyncSession
+) -> None:
+    user = await seed_user(session, email="rep5@t.dev")
+    ids = await seed_catalog(tenant_session)
+    t = make_ticket(ids, user.id, solution=True)
+    tenant_session.add(t)
+    await tenant_session.flush()
+    tenant_session.add(make_item(t.id, ids["product"], ids["defect"], quantity=1))
+    ok = make_attachment(t.id, user.id)
+    pendente = make_attachment(t.id, user.id, status="pendente")
+    excluido = make_attachment(t.id, user.id, deleted_at=NOW)
+    pdf = make_attachment(t.id, user.id, kind="pdf")
+    tenant_session.add_all([ok, pendente, excluido, pdf])
+    await tenant_session.flush()
+
+    repo = SqlReportingRepository(tenant_session)
+    rows, total = await repo.list_media(MediaFilters(), page=1, per_page=10)
+    assert total == 2  # pendente e excluido ficam fora
+    assert rows[0].ticket_number == t.number
+
+    so_imagem, total_imagem = await repo.list_media(
+        MediaFilters(kind=AttachmentKind.IMAGEM), page=1, per_page=10
+    )
+    assert total_imagem == 1
+    assert so_imagem[0].attachment.id == ok.id
+
+    por_produto, _ = await repo.list_media(
+        MediaFilters(product_id=ids["product2"]), page=1, per_page=10
+    )
+    assert por_produto == []

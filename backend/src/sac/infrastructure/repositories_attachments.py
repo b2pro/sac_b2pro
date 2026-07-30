@@ -21,7 +21,7 @@ from sac.infrastructure.models_tenant import ProductModel, TicketAttachmentModel
 from sac.infrastructure.repositories_tickets import flush_tickets
 
 
-def _entity(m: TicketAttachmentModel) -> TicketAttachment:
+def attachment_entity(m: TicketAttachmentModel) -> TicketAttachment:
     return TicketAttachment(
         id=m.id,
         ticket_id=m.ticket_id,
@@ -68,7 +68,7 @@ class SqlAttachmentRepository:
 
     async def get(self, attachment_id: UUID) -> TicketAttachment | None:
         m = await self._session.get(TicketAttachmentModel, attachment_id)
-        return _entity(m) if m is not None else None
+        return attachment_entity(m) if m is not None else None
 
     async def list_by_ticket(self, ticket_id: UUID) -> list[TicketAttachment]:
         rows = await self._session.scalars(
@@ -80,7 +80,7 @@ class SqlAttachmentRepository:
             )
             .order_by(TicketAttachmentModel.created_at)
         )
-        return [_entity(m) for m in rows]
+        return [attachment_entity(m) for m in rows]
 
     async def count_active(self, ticket_id: UUID) -> int:
         total = await self._session.scalar(
@@ -115,7 +115,7 @@ class SqlAttachmentRepository:
                 TicketAttachmentModel.created_at < moment,
             )
         )
-        return [_entity(m) for m in rows]
+        return [attachment_entity(m) for m in rows]
 
 
 def _job_entity(m: PreviewJobModel) -> PreviewJob:
