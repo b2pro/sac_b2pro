@@ -284,19 +284,25 @@ export function AttachmentsCard({
   // paralelo — imagem usa a variante "medio" (o servidor cai para o original
   // se nao houver preview), PDF e video usam sempre o original.
   async function onOpen(attachment: Attachment) {
+    const createdAt = attachment.created_at ?? new Date().toISOString()
     setLightboxItem({
       kind: attachment.kind,
       filename: attachment.filename,
       contentType: attachment.content_type,
       sizeBytes: attachment.size_bytes,
-      createdAt: attachment.created_at ?? new Date().toISOString(),
+      createdAt,
       url: null,
     })
     try {
       const variant = attachment.kind === "imagem" ? "medio" : "original"
       const { url } = await attachmentUrl(ticketId, attachment.id, variant)
+      // Guarda por filename + createdAt (nao so filename): dois anexos com o
+      // mesmo nome no mesmo ticket, abertos em sequencia rapida, nao podem
+      // cruzar a URL assinada um do outro.
       setLightboxItem((current) =>
-        current && current.filename === attachment.filename ? { ...current, url } : current,
+        current && current.filename === attachment.filename && current.createdAt === createdAt
+          ? { ...current, url }
+          : current,
       )
     } catch (error) {
       toast.error(errorMessage(error))

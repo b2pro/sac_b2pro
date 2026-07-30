@@ -20,19 +20,31 @@ export function InfiniteScrollSentinel({
   onIntersect: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  // `onIntersect` costuma ser um closure novo a cada render de quem chama (ex.:
+  // `() => fetchNextPage()` em MidiasPage). Se ele entrasse na dependencia do
+  // efeito, qualquer re-render alheio a scroll (digitar num autocomplete,
+  // trocar um select) recriaria o IntersectionObserver — e um `observe()` novo
+  // dispara com o estado de intersecao atual do elemento, entao uma sentinela
+  // parada dentro do rootMargin buscaria mais uma pagina sem o usuario ter
+  // rolado nada. Guardar a versao mais recente numa ref mantem o ciclo de vida
+  // do observer preso so ao que realmente importa: `hasMore`/`loading`.
+  const onIntersectRef = useRef(onIntersect)
+  useEffect(() => {
+    onIntersectRef.current = onIntersect
+  }, [onIntersect])
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loading) onIntersect()
+        if (entries[0]?.isIntersecting && hasMore && !loading) onIntersectRef.current()
       },
       { rootMargin: "400px" },
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [hasMore, loading, onIntersect])
+  }, [hasMore, loading])
 
   if (loading) {
     return (
