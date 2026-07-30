@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
 
@@ -13,6 +13,7 @@ from sac.application.ports_reporting import (
     ReportingRepository,
 )
 from sac.application.ports_tickets import TicketActor, UserDirectoryPort
+from sac.application.use_cases.tickets_shared import restrict_to_own
 from sac.domain.attachments import PreviewStatus, TicketAttachment
 
 
@@ -20,6 +21,7 @@ from sac.domain.attachments import PreviewStatus, TicketAttachment
 class MediaView:
     attachment: TicketAttachment
     ticket_number: int
+    created_at: datetime
     preview_url: str | None
 
 
@@ -31,7 +33,8 @@ class GetDashboardUseCase:
     async def execute(
         self, actor: TicketActor, brand_id: UUID | None, now: datetime
     ) -> tuple[DashboardData, dict[UUID, str]]:
-        data = await self._repo.dashboard(brand_id, actor.user_id, now)
+        owner = restrict_to_own(actor)
+        data = await self._repo.dashboard(brand_id, actor.user_id, now, owner_user_id=owner)
         names = await self._users.names_by_ids(
             {row.ticket.attendant_user_id for row in data.recent}
         )
@@ -46,7 +49,8 @@ class GetReportUseCase:
     async def execute(
         self, actor: TicketActor, filters: ReportFilters, page: int, per_page: int
     ) -> tuple[ReportData, dict[UUID, str]]:
-        data = await self._repo.report(filters, page, per_page, actor.user_id)
+        owner = restrict_to_own(actor)
+        data = await self._repo.report(filters, page, per_page, actor.user_id, owner_user_id=owner)
         names = await self._users.names_by_ids(
             {row.ticket.attendant_user_id for row in data.tickets}
         )
@@ -58,10 +62,15 @@ class ExportReportUseCase:
         self._repo = repo
         self._chunk_size = chunk_size
 
-    async def stream(self, filters: ReportFilters) -> AsyncIterator[list[ReportExportRow]]:
+    async def stream(
+        self, actor: TicketActor, filters: ReportFilters
+    ) -> AsyncIterator[list[ReportExportRow]]:
+        owner = restrict_to_own(actor)
         page = 1
         while True:
-            rows = await self._repo.export_rows(filters, page, self._chunk_size)
+            rows = await self._repo.export_rows(
+                filters, page, self._chunk_size, owner_user_id=owner
+            )
             if not rows:
                 return
             yield rows
@@ -77,13 +86,17 @@ class ListMediaUseCase:
         self._ttl_seconds = ttl_seconds
 
     async def execute(
-        self, filters: MediaFilters, page: int, per_page: int
+        self, actor: TicketActor, filters: MediaFilters, page: int, per_page: int
     ) -> tuple[list[MediaView], int]:
+        owner = restrict_to_own(actor)
+        if owner is not None:
+            filters = replace(filters, attendant_user_id=owner)
         rows, total = await self._repo.list_media(filters, page, per_page)
         views = [
             MediaView(
                 attachment=row.attachment,
                 ticket_number=row.ticket_number,
+                created_at=row.created_at,
                 preview_url=self._preview_url(row.attachment),
             )
             for row in rows
@@ -91,6 +104,12 @@ class ListMediaUseCase:
         return views, total
 
     def _preview_url(self, attachment: TicketAttachment) -> str | None:
-        if attachment.preview_status == PreviewStatus.PRONTO and attachment.preview_key:
+        if attachment.preview_status != PreviewStatus.PRONTO or not attachment.preview_key:
+            return None
+        try:
             return self._storage.presigned_get(attachment.preview_key, self._ttl_seconds)
-        return None
+        except Exception:
+            # falha ao assinar um item (chave invalida, storage indisponivel)
+            # nao pode derrubar a pagina inteira da galeria — o item so sai
+            # sem preview, como qualquer anexo sem thumbnail gerado.
+            return None

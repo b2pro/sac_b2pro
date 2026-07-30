@@ -16,6 +16,21 @@ EDITABLE_STATUSES: frozenset[TicketStatus] = frozenset(
 )
 
 
+def restrict_to_own(actor: TicketActor) -> UUID | None:
+    """Decide se o actor deve ficar restrito aos proprios tickets.
+
+    Retorna o attendant_user_id ao qual o actor deve ser restrito, ou None
+    quando ele pode ver tickets de todos. Regra unica reaproveitada por toda
+    listagem/relatorio de tickets (ListTicketsUseCase e os casos de uso de
+    visibilidade) para que a decisao nao seja rederivada em varios lugares.
+    """
+    if has_permission(actor.role, Permission.VER_TODOS_TICKETS):
+        return None
+    if not has_permission(actor.role, Permission.VER_PROPRIOS_TICKETS):
+        raise PermissionDeniedError("sem permissao para listar tickets")
+    return actor.user_id
+
+
 async def get_ticket_or_404(
     tickets: TicketRepository, actor: TicketActor, ticket_id: UUID
 ) -> Ticket:

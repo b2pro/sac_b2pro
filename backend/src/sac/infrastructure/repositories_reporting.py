@@ -40,6 +40,44 @@ from sac.infrastructure.repositories_tickets import SqlTicketRepository, _ticket
 _CLOSED = [str(s) for s in CLOSED_STATUSES]
 
 
+def _apply_ticket_filters(
+    stmt: Select[Any],
+    *,
+    brand_id: UUID | None,
+    status: TicketStatus | None,
+    solution_type_id: UUID | None,
+    product_id: UUID | None,
+    defect_type_id: UUID | None,
+) -> Select[Any]:
+    """Filtros de ticket compartilhados por _report_stmt e _media_stmt (marca,
+    status, tipo de solucao e os dois EXISTS sobre ticket_items)."""
+    if brand_id is not None:
+        stmt = stmt.where(TicketModel.brand_id == brand_id)
+    if status is not None:
+        stmt = stmt.where(TicketModel.status == str(status))
+    if solution_type_id is not None:
+        stmt = stmt.where(TicketModel.solution_type_id == solution_type_id)
+    if product_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(TicketItemModel.id).where(
+                    TicketItemModel.ticket_id == TicketModel.id,
+                    TicketItemModel.product_id == product_id,
+                )
+            )
+        )
+    if defect_type_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(TicketItemModel.id).where(
+                    TicketItemModel.ticket_id == TicketModel.id,
+                    TicketItemModel.defect_type_id == defect_type_id,
+                )
+            )
+        )
+    return stmt
+
+
 def _month_bounds(now: datetime) -> tuple[datetime, datetime]:
     start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     next_start = (
@@ -76,34 +114,18 @@ class SqlReportingRepository:
             stmt = stmt.where(TicketModel.opened_at >= filters.date_from)
         if filters.date_to is not None:
             stmt = stmt.where(TicketModel.opened_at < filters.date_to)
-        if filters.brand_id is not None:
-            stmt = stmt.where(TicketModel.brand_id == filters.brand_id)
-        if filters.status is not None:
-            stmt = stmt.where(TicketModel.status == str(filters.status))
-        if filters.solution_type_id is not None:
-            stmt = stmt.where(TicketModel.solution_type_id == filters.solution_type_id)
+        stmt = _apply_ticket_filters(
+            stmt,
+            brand_id=filters.brand_id,
+            status=filters.status,
+            solution_type_id=filters.solution_type_id,
+            product_id=filters.product_id,
+            defect_type_id=filters.defect_type_id,
+        )
         if filters.attendant_user_id is not None:
             stmt = stmt.where(TicketModel.attendant_user_id == filters.attendant_user_id)
         if filters.purchase_channel_id is not None:
             stmt = stmt.where(TicketModel.purchase_channel_id == filters.purchase_channel_id)
-        if filters.product_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(TicketItemModel.id).where(
-                        TicketItemModel.ticket_id == TicketModel.id,
-                        TicketItemModel.product_id == filters.product_id,
-                    )
-                )
-            )
-        if filters.defect_type_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(TicketItemModel.id).where(
-                        TicketItemModel.ticket_id == TicketModel.id,
-                        TicketItemModel.defect_type_id == filters.defect_type_id,
-                    )
-                )
-            )
         return stmt
 
     def _media_stmt(self, filters: MediaFilters) -> Select[tuple[TicketAttachmentModel, int]]:
@@ -122,30 +144,16 @@ class SqlReportingRepository:
             stmt = stmt.where(TicketAttachmentModel.created_at >= filters.date_from)
         if filters.date_to is not None:
             stmt = stmt.where(TicketAttachmentModel.created_at < filters.date_to)
-        if filters.brand_id is not None:
-            stmt = stmt.where(TicketModel.brand_id == filters.brand_id)
-        if filters.status is not None:
-            stmt = stmt.where(TicketModel.status == str(filters.status))
-        if filters.solution_type_id is not None:
-            stmt = stmt.where(TicketModel.solution_type_id == filters.solution_type_id)
-        if filters.product_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(TicketItemModel.id).where(
-                        TicketItemModel.ticket_id == TicketModel.id,
-                        TicketItemModel.product_id == filters.product_id,
-                    )
-                )
-            )
-        if filters.defect_type_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(TicketItemModel.id).where(
-                        TicketItemModel.ticket_id == TicketModel.id,
-                        TicketItemModel.defect_type_id == filters.defect_type_id,
-                    )
-                )
-            )
+        stmt = _apply_ticket_filters(
+            stmt,
+            brand_id=filters.brand_id,
+            status=filters.status,
+            solution_type_id=filters.solution_type_id,
+            product_id=filters.product_id,
+            defect_type_id=filters.defect_type_id,
+        )
+        if filters.attendant_user_id is not None:
+            stmt = stmt.where(TicketModel.attendant_user_id == filters.attendant_user_id)
         return stmt
 
     async def list_media(
@@ -154,19 +162,25 @@ class SqlReportingRepository:
         stmt = self._media_stmt(filters)
         total = await self._count(stmt)
         rows_stmt = (
-            stmt.order_by(TicketAttachmentModel.created_at.desc())
+            stmt.order_by(TicketAttachmentModel.created_at.desc(), TicketAttachmentModel.id)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
         result = await self._session.execute(rows_stmt)
         rows = [
-            MediaItemRow(attachment=attachment_entity(m), ticket_number=number)
+            MediaItemRow(
+                attachment=attachment_entity(m), ticket_number=number, created_at=m.created_at
+            )
             for m, number in result.all()
         ]
         return rows, total
 
     async def dashboard(
-        self, brand_id: UUID | None, unread_for: UUID, now: datetime
+        self,
+        brand_id: UUID | None,
+        unread_for: UUID,
+        now: datetime,
+        owner_user_id: UUID | None = None,
     ) -> DashboardData:
         base = self._tickets(brand_id)
         month_start, month_end = _month_bounds(now)
@@ -256,8 +270,11 @@ class SqlReportingRepository:
             )
         )
 
+        # KPIs, distribuicao por status e rankings acima permanecem tenant-wide
+        # (visao gerencial consolidada); so a lista "recent", exibida linha a
+        # linha, e restrita ao proprio actor quando ele nao pode ver tudo.
         recent, _ = await SqlTicketRepository(self._session).list(
-            TicketFilters(brand_id=brand_id),
+            TicketFilters(brand_id=brand_id, attendant_user_id=owner_user_id),
             page=1,
             per_page=10,
             sort="last_activity_at",
@@ -305,9 +322,18 @@ class SqlReportingRepository:
         return [RankingEntry(id=r[0], name=r[1], count=int(r[2])) for r in rows.all()]
 
     async def report(
-        self, filters: ReportFilters, page: int, per_page: int, unread_for: UUID
+        self,
+        filters: ReportFilters,
+        page: int,
+        per_page: int,
+        unread_for: UUID,
+        owner_user_id: UUID | None = None,
     ) -> ReportData:
         stmt = self._report_stmt(filters)
+        # KPIs, ranking e tempo medio ficam sobre o recorte tenant-wide (nao
+        # entram no escopo do actor) — visao gerencial consolidada, como no
+        # legado. Apenas a tabela de tickets abaixo (rows_stmt) e paginada e
+        # portanto restrita ao proprio actor quando ele nao pode ver tudo.
         total = await self._count(stmt)
         finalized = await self._count(
             stmt.where(TicketModel.status == str(TicketStatus.FINALIZADO))
@@ -330,15 +356,20 @@ class SqlReportingRepository:
         )
         solutions = await self._ranking_solutions(base_ids)
 
+        table_stmt = stmt
+        if owner_user_id is not None:
+            table_stmt = table_stmt.where(TicketModel.attendant_user_id == owner_user_id)
+        table_total = total if owner_user_id is None else await self._count(table_stmt)
+
         rows_stmt = (
-            stmt.add_columns(CustomerModel.name, TicketReadModel.last_read_at)
+            table_stmt.add_columns(CustomerModel.name, TicketReadModel.last_read_at)
             .outerjoin(CustomerModel, TicketModel.customer_id == CustomerModel.id)
             .outerjoin(
                 TicketReadModel,
                 (TicketReadModel.ticket_id == TicketModel.id)
                 & (TicketReadModel.user_id == unread_for),
             )
-            .order_by(TicketModel.opened_at.desc())
+            .order_by(TicketModel.opened_at.desc(), TicketModel.id)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -395,13 +426,19 @@ class SqlReportingRepository:
             defects=defects,
             solutions=solutions,
             tickets=tickets,
-            total=total,
+            total=table_total,
         )
 
     async def export_rows(
-        self, filters: ReportFilters, page: int, per_page: int
+        self,
+        filters: ReportFilters,
+        page: int,
+        per_page: int,
+        owner_user_id: UUID | None = None,
     ) -> list[ReportExportRow]:
         stmt = self._report_stmt(filters)
+        if owner_user_id is not None:
+            stmt = stmt.where(TicketModel.attendant_user_id == owner_user_id)
         rows_stmt = (
             stmt.add_columns(
                 BrandModel.name,
@@ -419,7 +456,7 @@ class SqlReportingRepository:
                 PurchaseChannelModel,
                 TicketModel.purchase_channel_id == PurchaseChannelModel.id,
             )
-            .order_by(TicketModel.opened_at.desc())
+            .order_by(TicketModel.opened_at.desc(), TicketModel.id)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )

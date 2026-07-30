@@ -17,9 +17,7 @@ from sac.application.ports_tickets import (
     UserDirectoryPort,
 )
 from sac.application.use_cases.customers import clamp_page
-from sac.application.use_cases.tickets_shared import get_ticket_or_404
-from sac.domain.errors import PermissionDeniedError
-from sac.domain.permissions import Permission, has_permission
+from sac.application.use_cases.tickets_shared import get_ticket_or_404, restrict_to_own
 from sac.domain.tickets import is_closed, sla_state
 
 ALLOWED_SORTS = frozenset({"number", "opened_at", "due_at", "last_activity_at"})
@@ -40,10 +38,9 @@ class ListTicketsUseCase:
         order: str = "desc",
     ) -> tuple[list[TicketListRow], int]:
         page, per_page = clamp_page(page, per_page)
-        if not has_permission(actor.role, Permission.VER_TODOS_TICKETS):
-            if not has_permission(actor.role, Permission.VER_PROPRIOS_TICKETS):
-                raise PermissionDeniedError("sem permissao para listar tickets")
-            filters = replace(filters, attendant_user_id=actor.user_id)
+        owner = restrict_to_own(actor)
+        if owner is not None:
+            filters = replace(filters, attendant_user_id=owner)
         if sort not in ALLOWED_SORTS:
             sort = "last_activity_at"
         if order not in {"asc", "desc"}:

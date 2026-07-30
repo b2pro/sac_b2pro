@@ -95,23 +95,40 @@ class MediaFilters:
     status: TicketStatus | None = None
     date_from: datetime | None = None  # created_at do anexo
     date_to: datetime | None = None
+    # escopo do actor (ver reporting.restrict_to_own), nao um filtro escolhido
+    # pelo usuario na tela — midias nao expoe filtro de atendente na UI.
+    attendant_user_id: UUID | None = None
 
 
 @dataclass(frozen=True)
 class MediaItemRow:
     attachment: TicketAttachment
     ticket_number: int
+    created_at: datetime
 
 
 class ReportingRepository(Protocol):
     async def dashboard(
-        self, brand_id: UUID | None, unread_for: UUID, now: datetime
+        self,
+        brand_id: UUID | None,
+        unread_for: UUID,
+        now: datetime,
+        owner_user_id: UUID | None = None,
     ) -> DashboardData: ...
     async def report(
-        self, filters: ReportFilters, page: int, per_page: int, unread_for: UUID
+        self,
+        filters: ReportFilters,
+        page: int,
+        per_page: int,
+        unread_for: UUID,
+        owner_user_id: UUID | None = None,
     ) -> ReportData: ...
     async def export_rows(
-        self, filters: ReportFilters, page: int, per_page: int
+        self,
+        filters: ReportFilters,
+        page: int,
+        per_page: int,
+        owner_user_id: UUID | None = None,
     ) -> list[ReportExportRow]: ...
     async def list_media(
         self, filters: MediaFilters, page: int, per_page: int

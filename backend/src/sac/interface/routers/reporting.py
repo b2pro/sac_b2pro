@@ -21,9 +21,11 @@ from sac.domain.tickets import TicketStatus
 from sac.infrastructure.csv_export import CSV_HEADER, csv_line, export_row_values
 from sac.infrastructure.repositories_reporting import SqlReportingRepository
 from sac.infrastructure.repositories_tickets import TicketRepos
+from sac.infrastructure.settings import Settings
 from sac.infrastructure.storage import S3Storage
 from sac.interface.deps import (
     get_reporting_repository,
+    get_settings,
     get_storage,
     get_ticket_repos,
     require_permission,
@@ -113,7 +115,12 @@ async def export_relatorio(
     repo: SqlReportingRepository = Depends(get_reporting_repository),
 ) -> StreamingResponse:
     use_case = ExportReportUseCase(repo)
-    chunks = [chunk async for chunk in use_case.stream(filters)]
+    # os chunks sao materializados aqui (dentro do handler, com a sessao do
+    # tenant ainda aberta) porque a sessao da dependency-with-yield e fechada
+    # no retorno do handler; um generator lazy ainda nao drenado estouraria
+    # ao tentar usar a sessao dentro do StreamingResponse, ja fora do escopo
+    # da dependency.
+    chunks = [chunk async for chunk in use_case.stream(_actor(identity), filters)]
 
     async def stream() -> AsyncIterator[str]:
         yield "﻿" + csv_line(list(CSV_HEADER))
@@ -180,6 +187,7 @@ async def list_media(
     identity: TokenPayload = Depends(_view),
     repo: SqlReportingRepository = Depends(get_reporting_repository),
     storage: S3Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
 ) -> MediaPageOut:
     filters = MediaFilters(
         kind=kind,
@@ -193,7 +201,8 @@ async def list_media(
     )
     page = max(page, 1)
     per_page = min(max(per_page, 1), 100)
-    views, total = await ListMediaUseCase(repo, storage).execute(filters, page, per_page)
+    use_case = ListMediaUseCase(repo, storage, settings.presigned_ttl_seconds)
+    views, total = await use_case.execute(_actor(identity), filters, page, per_page)
     items = [
         MediaItemOut(
             id=v.attachment.id,
@@ -203,7 +212,7 @@ async def list_media(
             kind=v.attachment.kind,
             content_type=v.attachment.content_type,
             size_bytes=v.attachment.size_bytes,
-            created_at=v.attachment.created_at,  # type: ignore[arg-type]
+            created_at=v.created_at,
             preview_url=v.preview_url,
         )
         for v in views
