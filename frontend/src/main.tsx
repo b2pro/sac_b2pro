@@ -23,7 +23,7 @@ import "./index.css"
 
 const queryClient = new QueryClient()
 
-// eslint-disable-next-line react-refresh/only-export-components -- componente local do entrypoint, pedido pelo brief da Task 10
+// eslint-disable-next-line react-refresh/only-export-components -- entrypoint sem exports; fast refresh nao tem como isolar este componente local
 function HomeRedirect() {
   const { session } = useAuth()
   if (session?.tenantSlug) return <Navigate to="/dashboard" replace />
