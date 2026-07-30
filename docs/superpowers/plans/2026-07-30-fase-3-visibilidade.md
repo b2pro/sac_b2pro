@@ -1592,7 +1592,7 @@ git commit -m "Move filtros da lista de tickets para a URL"
 - Modify: `frontend/src/components/layout/Sidebar.tsx`
 
 **Interfaces:**
-- Consumes: `getDashboard`, `Dashboard`, `RankingEntry`, `DashboardKpi` da Task 8; `formatDuration` de `@/lib/format`; `StatusBadge`, `SlaBadge`, `STATUS_ACCENTS`, `STATUS_LABELS` de `components/tickets/badges.tsx` e `@/lib/tickets`; `useQuery` de `@tanstack/react-query`; marcas via o client de cadastros usado em `CatalogPage` (conferir o nome exato do fetcher).
+- Consumes: `getDashboard`, `Dashboard`, `RankingEntry`, `DashboardKpi` da Task 8; `formatDuration` de `@/lib/format`; `StatusBadge`, `PriorityBadge`, `SlaBadge`, `STATUS_ACCENTS` de `components/tickets/badges.tsx` e `STATUS_LABELS` de `@/lib/tickets`; `useQuery` de `@tanstack/react-query`; marcas via o client de cadastros usado em `CatalogPage` (conferir o nome exato do fetcher).
 - Produces (tasks 11-12 reusam):
 
 ```tsx
@@ -1636,7 +1636,7 @@ Traduzir do mockup, com tokens:
 - **`KpiCard`**: card `bg-card border border-border rounded-md p-[14px_16px]`; label `text-xs text-muted-foreground leading-tight`; valor `font-mono text-[26px] font-semibold` em `text-accent-foreground` (ou `text-primary` quando `accent`); `caption` em `text-[11px] text-muted-foreground`. Com `to`: renderiza `<Link>` com `ArrowUpRight` (14px, `strokeWidth={1.5}`, `text-muted-foreground/70`) no topo direito, `hover:border-foreground`, foco visivel. Sem `to`: `<div>`, sem icone, sem hover de borda.
 - **`RankingList`**: card com header (`border-b border-border`, titulo `text-[13px] font-semibold text-accent-foreground`) e corpo `flex flex-col gap-2.5`; por linha: nome (`truncate` + `title`) e contagem (`font-mono text-xs text-muted-foreground`) em `flex justify-between items-baseline`, e abaixo uma trilha `h-1 bg-muted rounded-sm` com preenchimento `bg-foreground` de largura `count / max * 100%`. Lista vazia: uma linha `text-xs text-muted-foreground` com "Sem dados no recorte".
 - **`AvgResolutionStat`**: card com label `text-xs text-muted-foreground`, valor `font-mono text-3xl font-semibold text-accent-foreground` via `formatDuration(hours)`, e `caption` opcional (`text-[11.5px] text-muted-foreground`); no Dashboard a caption e "da abertura a finalizacao, no recorte atual".
-- **`StatusDistributionChart`** (Recharts, decisao 1): `ResponsiveContainer` com altura calculada (9 categorias, ~28px por linha) envolvendo `BarChart layout="vertical"`, `data` na ordem de `MAIN_FLOW` seguida de declinado/cancelado — usar a ordem dos 9 status de `STATUS_LABELS`. Config alvo (aparencia do mockup):
+- **`StatusDistributionChart`** (Recharts, decisao 1): `ResponsiveContainer` com altura calculada (9 categorias, ~28px por linha) envolvendo `BarChart layout="vertical"`, `data` na ordem em que os 9 status aparecem em `STATUS_LABELS` (`lib/tickets.ts`), que e exatamente a ordem do mockup: aberto, aguardando cliente, aguardando analise, aprovado, aguardando envio reverso, produto recebido, finalizado, declinado, cancelado. Config alvo (aparencia do mockup):
   - `YAxis type="category" dataKey="label" width={172}` com `tick` de `fontSize: 12.5` e `axisLine={false}`/`tickLine={false}`.
   - `XAxis type="number" tickCount={5} domain={[0, "dataMax"]}` com ticks em `font-mono` 10px `text-muted-foreground` e `axisLine={false}`/`tickLine={false}`.
   - `CartesianGrid horizontal={false}` na cor `border` (grade vertical apenas nos ticks).
