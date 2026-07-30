@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test"
 
+// A porta e configuravel por E2E_PORT porque `reuseExistingServer` reaproveita
+// qualquer servidor na porta: com 5173 ocupada por outro projeto, a suite roda
+// contra o app errado em vez de falhar. `--strictPort` faz o Vite recusar a
+// porta ocupada em vez de escorregar para a proxima.
+const porta = process.env.E2E_PORT ?? "5173"
+const baseURL = `http://localhost:${porta}`
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -9,7 +16,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL,
     locale: "pt-BR",
     timezoneId: "America/Sao_Paulo",
     trace: "retain-on-failure",
@@ -17,8 +24,8 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:5173",
+    command: `pnpm dev --port ${porta} --strictPort`,
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 120_000,
   },
