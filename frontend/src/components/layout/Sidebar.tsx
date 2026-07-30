@@ -2,6 +2,7 @@ import {
   Building2,
   ClipboardCheck,
   Contact,
+  LayoutDashboard,
   Package,
   Store,
   Tags,
@@ -32,7 +33,10 @@ export function Sidebar() {
   if (session?.tenantSlug) {
     groups.push({
       label: "Operacao",
-      items: [{ to: "/tickets", label: "Tickets", icon: Ticket }],
+      items: [
+        { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { to: "/tickets", label: "Tickets", icon: Ticket },
+      ],
     })
     groups.push({
       label: "Cadastros",

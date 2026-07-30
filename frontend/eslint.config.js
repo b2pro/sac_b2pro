@@ -36,4 +36,12 @@ export default tseslint.config([
       'react-refresh/only-export-components': 'warn',
     },
   },
+  {
+    // Componentes de reporting exportam mapas de estilo (STATUS_CHART_FILL etc.)
+    // junto dos componentes por design; regra de fast-refresh vira aviso, nao erro.
+    files: ['src/components/reporting/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'warn',
+    },
+  },
 ])
