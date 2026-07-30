@@ -108,3 +108,29 @@ async def test_midias_lista_vazia_sem_anexos(
     res = await client.get("/api/midias", headers=h_view)
     assert res.status_code == 200
     assert res.json() == {"items": [], "total": 0, "page": 1, "per_page": 20}
+
+
+async def test_export_csv_com_bom_e_mesmos_filtros_da_tela(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    h_admin, h_view, brand, product, *_ = await _setup(client, session, engine)
+
+    res = await client.get("/api/relatorios/export", headers=h_view)
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/csv")
+    assert "attachment" in res.headers["content-disposition"]
+    text = res.text
+    assert text.startswith("﻿numero,")
+    linhas = [linha for linha in text.splitlines() if linha.strip()]
+    assert len(linhas) == 2  # header + 1 ticket
+    assert "Cliente Vis" in linhas[1]
+    assert "Alicate x2" in linhas[1]
+
+    # paridade: filtro que zera a tela zera o CSV
+    produto_inexistente = uuid4()
+    tela = await client.get(f"/api/relatorios?product_id={produto_inexistente}", headers=h_view)
+    vazio = await client.get(
+        f"/api/relatorios/export?product_id={produto_inexistente}", headers=h_view
+    )
+    assert tela.json()["kpis"]["total"] == 0
+    assert len([linha for linha in vazio.text.splitlines() if linha.strip()]) == 1  # so o header

@@ -1,13 +1,16 @@
 import dataclasses
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from sac.application.ports import TokenPayload
 from sac.application.ports_reporting import MediaFilters, RankingEntry, ReportFilters
 from sac.application.ports_tickets import TicketActor
 from sac.application.use_cases.reporting import (
+    ExportReportUseCase,
     GetDashboardUseCase,
     GetReportUseCase,
     ListMediaUseCase,
@@ -15,6 +18,7 @@ from sac.application.use_cases.reporting import (
 from sac.domain.attachments import AttachmentKind
 from sac.domain.permissions import Permission
 from sac.domain.tickets import TicketStatus
+from sac.infrastructure.csv_export import CSV_HEADER, csv_line, export_row_values
 from sac.infrastructure.repositories_reporting import SqlReportingRepository
 from sac.infrastructure.repositories_tickets import TicketRepos
 from sac.infrastructure.storage import S3Storage
@@ -75,6 +79,47 @@ async def get_dashboard(
         solutions=_ranking_out(data.solutions),
         avg_resolution_hours=data.avg_resolution_hours,
         recent=recent,
+    )
+
+
+@relatorios_router.get("/export")
+async def export_relatorio(
+    de: datetime | None = None,
+    ate: datetime | None = None,
+    brand_id: UUID | None = None,
+    product_id: UUID | None = None,
+    defect_type_id: UUID | None = None,
+    solution_type_id: UUID | None = None,
+    status: TicketStatus | None = None,
+    atendente_id: UUID | None = None,
+    channel_id: UUID | None = None,
+    identity: TokenPayload = Depends(_view),
+    repo: SqlReportingRepository = Depends(get_reporting_repository),
+) -> StreamingResponse:
+    filters = ReportFilters(
+        date_from=de,
+        date_to=ate,
+        brand_id=brand_id,
+        product_id=product_id,
+        defect_type_id=defect_type_id,
+        solution_type_id=solution_type_id,
+        status=status,
+        attendant_user_id=atendente_id,
+        purchase_channel_id=channel_id,
+    )
+    use_case = ExportReportUseCase(repo)
+    chunks = [chunk async for chunk in use_case.stream(filters)]
+
+    async def stream() -> AsyncIterator[str]:
+        yield "﻿" + csv_line(list(CSV_HEADER))
+        for chunk in chunks:
+            for row in chunk:
+                yield csv_line(export_row_values(row))
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="relatorio-tickets.csv"'},
     )
 
 
