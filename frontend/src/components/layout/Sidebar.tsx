@@ -2,6 +2,7 @@ import {
   Building2,
   ClipboardCheck,
   Contact,
+  FileBarChart,
   LayoutDashboard,
   Package,
   Store,
@@ -36,6 +37,7 @@ export function Sidebar() {
       items: [
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { to: "/tickets", label: "Tickets", icon: Ticket },
+        { to: "/relatorios", label: "Relatorios", icon: FileBarChart },
       ],
     })
     groups.push({

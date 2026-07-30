@@ -14,6 +14,7 @@ import DashboardPage from "@/pages/dashboard/DashboardPage"
 import LoginPage from "@/pages/LoginPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
+import RelatoriosPage from "@/pages/relatorios/RelatoriosPage"
 import TicketCreatePage from "@/pages/tickets/TicketCreatePage"
 import TicketDetailPage from "@/pages/tickets/TicketDetailPage"
 import TicketsListPage from "@/pages/tickets/TicketsListPage"
@@ -48,6 +49,7 @@ const router = createBrowserRouter([
             element: <RequireTenant />,
             children: [
               { path: "/dashboard", element: <DashboardPage /> },
+              { path: "/relatorios", element: <RelatoriosPage /> },
               { path: "/tickets", element: <TicketsListPage /> },
               { path: "/tickets/novo", element: <TicketCreatePage /> },
               { path: "/tickets/:id", element: <TicketDetailPage /> },
