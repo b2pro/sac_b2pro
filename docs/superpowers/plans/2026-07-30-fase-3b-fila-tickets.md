@@ -122,6 +122,8 @@ async def test_filtra_por_atendente(...):
 
 async def test_busca_por_prefixo_do_numero(...):
     # tickets numerados; TicketFilters(search="48") acha #48 e #489, nao acha #7
+    # e, principalmente, NAO acha #148 — sem esse contra-exemplo o teste passaria
+    # igual com um like de substring, e a regra de prefixo ficaria sem guarda
 
 async def test_busca_por_nome_do_cliente(...):
     # TicketFilters(search="mari") acha o ticket de "Mariana Alves" (case-insensitive)
@@ -151,25 +153,25 @@ Expected: FAIL — `TicketFilters` nao aceita `search`.
 
 ```python
         if filters.search:
-            termo = filters.search.strip().lstrip("#")
-            if termo:
-                alvos = [
+            term = filters.search.strip().lstrip("#")
+            if term:
+                targets = [
                     TicketModel.customer_id.in_(
-                        select(CustomerModel.id).where(CustomerModel.name.ilike(f"%{termo}%"))
+                        select(CustomerModel.id).where(CustomerModel.name.ilike(f"%{term}%"))
                     ),
                     exists(
                         select(TicketItemModel.id)
                         .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
                         .where(
                             TicketItemModel.ticket_id == TicketModel.id,
-                            ProductModel.name.ilike(f"%{termo}%"),
+                            ProductModel.name.ilike(f"%{term}%"),
                         )
                     ),
-                    TicketModel.order_code.ilike(f"%{termo}%"),
+                    TicketModel.order_code.ilike(f"%{term}%"),
                 ]
-                if termo.isdigit():
-                    alvos.append(cast(TicketModel.number, String).like(f"{termo}%"))
-                stmt = stmt.where(or_(*alvos))
+                if term.isdigit():
+                    targets.append(cast(TicketModel.number, String).like(f"{term}%"))
+                stmt = stmt.where(or_(*targets))
 ```
 
 Importar `cast` e `String` de `sqlalchemy` (`or_` e `exists` ja estao importados). Duas notas:
