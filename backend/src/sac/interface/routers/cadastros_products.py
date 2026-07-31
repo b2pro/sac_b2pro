@@ -11,6 +11,7 @@ from sac.application.use_cases.product_photo import (
 )
 from sac.application.use_cases.products import (
     CreateProductUseCase,
+    GetProductUseCase,
     ListProductsUseCase,
     ProductInput,
     SetProductActiveUseCase,
@@ -67,6 +68,23 @@ async def list_products(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get(
+    "/{product_id}",
+    response_model=ProductOut,
+    dependencies=[Depends(require_permission(Permission.LISTAR_CADASTROS))],
+)
+async def get_product(
+    product_id: UUID,
+    repo: SqlProductRepository = Depends(get_product_repository),
+    storage: S3Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+) -> ProductOut:
+    view = await GetProductUseCase(repo, storage, settings.presigned_ttl_seconds).execute(
+        product_id
+    )
+    return product_out(view.product, view.photo_url)
 
 
 @router.post(

@@ -78,6 +78,21 @@ class ListProductsUseCase:
         return [_photo_view_of(p, self._storage, self._ttl) for p in products], total
 
 
+class GetProductUseCase:
+    def __init__(
+        self, repo: ProductRepository, storage: StoragePort, ttl_seconds: int = 300
+    ) -> None:
+        self._repo = repo
+        self._storage = storage
+        self._ttl = ttl_seconds
+
+    async def execute(self, product_id: UUID) -> ProductView:
+        product = await self._repo.get(product_id)
+        if product is None:
+            raise NotFoundError("produto nao encontrado")
+        return _photo_view_of(product, self._storage, self._ttl)
+
+
 class CreateProductUseCase:
     def __init__(self, repo: ProductRepository) -> None:
         self._repo = repo

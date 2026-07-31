@@ -115,6 +115,8 @@ export const listProducts = (
     })}`,
   )
 
+export const getProduct = (id: string) => api<Product>(`/cadastros/produtos/${id}`)
+
 export const createProduct = (input: ProductInput) =>
   api<Product>("/cadastros/produtos", { method: "POST", body: input })
 

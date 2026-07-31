@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -44,6 +46,45 @@ async def test_crud_de_produtos_e_conflito_de_sku(
         headers=headers,
     )
     assert disabled.status_code == 200 and disabled.json()["active"] is False
+
+
+async def test_get_produto_por_id(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    user = await seed_user(session, email="prod-get@b2.com")
+    await seed_provisioned_tenant(session, engine, slug="prod_get")
+    headers = token_for(user, tenant_slug="prod_get", role=Role.SUPERVISOR)
+
+    created = await client.post(
+        "/api/cadastros/produtos",
+        json={"name": "Lixa", "sku": "SKU-GET-1", "segment": "Manicure"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    produto = created.json()
+
+    found = await client.get(f"/api/cadastros/produtos/{produto['id']}", headers=headers)
+    assert found.status_code == 200
+    assert found.json() == produto
+
+    missing = await client.get(f"/api/cadastros/produtos/{uuid4()}", headers=headers)
+    assert missing.status_code == 404
+
+    disabled = await client.patch(
+        f"/api/cadastros/produtos/{produto['id']}/active",
+        json={"active": False},
+        headers=headers,
+    )
+    assert disabled.status_code == 200
+
+    inativo = await client.get(f"/api/cadastros/produtos/{produto['id']}", headers=headers)
+    assert inativo.status_code == 200
+    assert inativo.json()["active"] is False
+    assert inativo.json()["name"] == "Lixa"
+
+
+async def test_get_produto_por_id_sem_token_recebe_401(client: AsyncClient) -> None:
+    assert (await client.get(f"/api/cadastros/produtos/{uuid4()}")).status_code == 401
 
 
 async def test_atendente_cria_mas_nao_edita_produto(
