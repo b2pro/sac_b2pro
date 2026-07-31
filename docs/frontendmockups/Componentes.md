@@ -26,7 +26,8 @@ Barras horizontais, Recharts (`BarChart layout="vertical"`).
 - `hours: number | null` — formata `"2d 6h"` (helper `formatDuration`); `null` renderiza travessão ("—").
 
 ### `RecentTicketsTable` / `TicketResultsTable`
-Mesma linha base (`TicketRow`): `border-left` 3px via `STATUS_ACCENTS`, linha inteira clicável (`role="link"`, `tabIndex=0`, Enter/Espaço navegam), hover `bg`-sutil, foco visível.
+Mesma linha base (`TicketRow`): `border-left` 3px via `STATUS_ACCENTS`, hover `bg`-sutil, foco visível.
+- Semântica: a `<tr>` **não** leva `role="link"` — isso a removia da árvore de acessibilidade da tabela (leitor de tela perdia `row`/`cell` na tabela inteira). O alvo real de teclado e leitor de tela é um `<Link>` de verdade na primeira célula (número do ticket), com `aria-label` descritivo; Enter funciona nativamente e Espaço é tratado via `onKeyDown` (links não respondem a Espaço por padrão). A linha inteira continua clicável para o mouse via `onClick` no `<tr>`, que ignora cliques que já caem sobre o link (ou outro elemento interativo), evitando disparo duplo de navegação. O foco visível aparece na linha inteira via `has-[:focus-visible]` no `<tr>`, refletindo o foco do link interno.
 - `RecentTicketsTable`: `items: TicketListItem[]` — colunas Nº, Cliente, Produto, Status, SLA, Última atividade.
 - `TicketResultsTable`: + colunas Prioridade e Atendente, e `pagination: { page, perPage, total, onPage }`.
 

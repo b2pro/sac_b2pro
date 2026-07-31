@@ -28,7 +28,7 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
 
     await page.getByLabel("Periodo — de").fill("2026-01-01")
     await page.getByRole("button", { name: "Filtrar" }).click()
-    const row = page.locator("table tbody tr").filter({ hasText: `#${ticket.number}` })
+    const row = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
     await expect(row).toBeVisible()
 
     const download = page.waitForEvent("download")
