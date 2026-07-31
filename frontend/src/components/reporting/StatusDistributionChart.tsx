@@ -18,20 +18,34 @@ const STATUS_ORDER = Object.keys(STATUS_LABELS) as TicketStatus[]
 
 const ROW_HEIGHT = 28
 
+const TICK_COUNT = 5
+// tickCount conta os rotulos; entre eles ha um intervalo a menos.
+const TICK_INTERVALS = TICK_COUNT - 1
+
 type Row = { status: TicketStatus; label: string; count: number }
 
 // Teto arredondado do eixo X (Componentes.md: "0 -> teto arredondado acima do
 // maximo"): sem isso ("dataMax" puro) a barra maior encosta na borda direita.
-// Arredonda para o primeiro "numero redondo" (1/2/5 x uma potencia de 10)
-// estritamente acima do maximo, na magnitude adequada aos dados; todos os
-// valores zerados caem no teto minimo (1) em vez de um dominio degenerado [0,0].
+// O teto e sempre TICK_INTERVALS vezes um passo redondo, para que os cinco
+// rotulos do eixo caiam em multiplos exatos desse passo (0/55/110/165/220 em
+// vez de numeros quebrados). O passo escolhido e o menor que cobre o maximo,
+// entao o teto fica logo acima dele (214 -> 220, como no mockup) em vez de
+// saltar para a proxima potencia de 10 e deixar a maior barra na metade do
+// card. Sem dados (tudo zero) cai no teto minimo, evitando um dominio [0, 0].
 function axisCeiling(max: number): number {
-  if (max <= 0) return 1
-  const magnitude = 10 ** Math.floor(Math.log10(max))
-  const normalized = max / magnitude
-  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
-  const ceiling = step * magnitude
-  return ceiling > max ? ceiling : ceiling * 2
+  if (max <= 0) return TICK_INTERVALS
+  const rough = max / TICK_INTERVALS
+  // Grade de passos que o Recharts aceita sem reescrever: unidades ate 9, de 5
+  // em 5 nas dezenas, de 50 em 50 nas centenas, e assim por diante. Um passo
+  // fora dessa grade e substituido por outro e os rotulos deixam de dividir o
+  // teto em partes iguais.
+  const digits = Math.floor(Math.log10(rough)) + 1
+  const grid = digits <= 1 ? 1 : 5 * 10 ** (digits - 2)
+  let step = Math.ceil(rough / grid) * grid
+  // Teto estritamente acima do maximo: no empate a maior barra encostaria na
+  // borda direita do grafico.
+  if (step * TICK_INTERVALS <= max) step += grid
+  return step * TICK_INTERVALS
 }
 
 export function StatusDistributionChart({ counts }: { counts: Record<TicketStatus, number> }) {
@@ -49,7 +63,9 @@ export function StatusDistributionChart({ counts }: { counts: Record<TicketStatu
         <XAxis
           type="number"
           domain={[0, axisCeiling(maxCount)]}
-          tickCount={5}
+          tickCount={TICK_COUNT}
+          // o eixo conta tickets: rotulo fracionado nao existe neste dominio
+          allowDecimals={false}
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--muted-foreground)" }}
