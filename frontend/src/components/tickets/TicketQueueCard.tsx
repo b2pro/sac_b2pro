@@ -20,6 +20,7 @@ export function TicketQueueCard({ item }: { item: TicketListItem }) {
       <div className="flex flex-wrap items-center gap-2.5">
         <span
           className={cn("size-2 shrink-0 rounded-full", item.unread ? "bg-primary" : "bg-transparent")}
+          role={item.unread ? "img" : undefined}
           title={item.unread ? "Atividade nao lida" : undefined}
           aria-label={item.unread ? "Atividade nao lida" : undefined}
         />

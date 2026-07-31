@@ -24,7 +24,7 @@ export function QuickFilterChips({
   onSelect,
 }: {
   counters: TicketCounters | undefined
-  active: QuickFilterKey
+  active: QuickFilterKey | null
   onSelect: (key: QuickFilterKey) => void
 }) {
   return (

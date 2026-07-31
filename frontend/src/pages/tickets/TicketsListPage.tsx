@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { ArrowDown, ArrowUp, Plus, Search } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
 import { EmptyState } from "@/components/reporting/EmptyState"
@@ -57,6 +57,10 @@ export default function TicketsListPage() {
   const overdue = searchParams.get("overdue") === "1"
   const unread = searchParams.get("unread") === "1"
   const q = searchParams.get("q") ?? ""
+  // Sem controle proprio na tela: so existe para o link "Ver historico" do
+  // cliente no detalhe do ticket (`/tickets?customer_id=...`), como na pagina
+  // antiga.
+  const customerId = searchParams.get("customer_id") ?? undefined
   const paginaBruta = Number(searchParams.get("page"))
   const page = Number.isFinite(paginaBruta) ? Math.max(Math.trunc(paginaBruta), 1) : 1
   const sortParam = searchParams.get("sort")
@@ -87,6 +91,18 @@ export default function TicketsListPage() {
   // identidade nova a cada navegacao) nao derruba a pagina atual.
   const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "")
   const debouncedSearch = useDebounce(searchText, 400)
+  // Guarda o ultimo valor de "q" que este componente colocou na URL, para
+  // distinguir "a URL mudou porque eu mesmo escrevi o debounce" de "a URL
+  // mudou por outro motivo" (ex.: navegar para /tickets pelo menu lateral
+  // enquanto ainda havia uma busca ativa). So no segundo caso o campo local
+  // e resincronizado — nunca a cada tecla digitada.
+  const committedSearchRef = useRef(q)
+  useEffect(() => {
+    if (q !== committedSearchRef.current) {
+      committedSearchRef.current = q
+      setSearchText(q)
+    }
+  }, [q])
   useEffect(() => {
     setSearchParams((prev) => {
       const currentQ = prev.get("q") ?? ""
@@ -97,22 +113,26 @@ export default function TicketsListPage() {
       next.delete("page")
       return next
     }, { replace: true })
+    committedSearchRef.current = debouncedSearch
   }, [debouncedSearch, setSearchParams])
 
   const role = session?.role ?? null
   const podeCriar = canCreateTicket(role)
 
-  const activeQuickFilter: QuickFilterKey = unread
-    ? "nao_lidos"
-    : overdue
-      ? "atrasados"
-      : userId && atendenteId === userId
-        ? "meus"
-        : status === "aguardando_analise"
-          ? "aguardando_analise"
-          : status === "aberto"
-            ? "abertos"
-            : "todos"
+  // Deriva o chip ativo (ou nenhum) so a partir da URL. "Nenhum chip" cobre
+  // recortes que os selects do header conseguem expressar mas os chips nao
+  // representam: um status sem chip equivalente (ex.: "aprovado",
+  // "declinado", "finalizado" — os cards de KPI do dashboard linkam para
+  // esses) ou um atendente_id que nao e o usuario logado (selecionado pelo
+  // proprio select de Atendente, nao pelo chip "Meus tickets").
+  let activeQuickFilter: QuickFilterKey | null
+  if (unread) activeQuickFilter = "nao_lidos"
+  else if (overdue) activeQuickFilter = "atrasados"
+  else if (atendenteId) activeQuickFilter = userId && atendenteId === userId ? "meus" : null
+  else if (status) {
+    activeQuickFilter =
+      status === "aguardando_analise" ? "aguardando_analise" : status === "aberto" ? "abertos" : null
+  } else activeQuickFilter = "todos"
 
   function onSelectQuickFilter(key: QuickFilterKey) {
     const next = new URLSearchParams(searchParams)
@@ -144,7 +164,7 @@ export default function TicketsListPage() {
   const { data, isLoading } = useQuery({
     queryKey: [
       "tickets",
-      { status, brandId, atendenteId, unread, overdue, q, sort, order, page },
+      { status, brandId, atendenteId, unread, overdue, q, customerId, sort, order, page },
     ],
     queryFn: () =>
       listTickets({
@@ -154,6 +174,7 @@ export default function TicketsListPage() {
         unread: unread || undefined,
         overdue: overdue || undefined,
         q: q || undefined,
+        customerId,
         sort,
         order,
         page,
