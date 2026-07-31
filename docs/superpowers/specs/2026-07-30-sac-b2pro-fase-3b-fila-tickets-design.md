@@ -19,7 +19,9 @@ Fora de escopo: redesenho do detalhe do ticket e da criacao de ticket; mudanca n
 
 ## 1. Backend
 
-O endpoint `GET /api/tickets` ganha tres filtros e nasce um endpoint de contadores. Nada de tabela nova; nada de migration.
+O endpoint `GET /api/tickets` ganha tres filtros e nasce um endpoint de contadores. Nada de tabela nova.
+
+**Revisao de 2026-07-31 (medicao de indices).** A versao original desta spec dizia "nada de migration". Isso mudou: a medicao em 100 mil tickets (`docs/medicao-indices-tenant.md`) mostrou que `ilike '%x%'` sobre `customers.name` custa 25,8 ms em Seq Scan de 40 mil clientes e cresce linear, e curinga a esquerda nao alcanca b-tree. A busca livre passa a depender de `pg_trgm` com indices GIN: **duas** migrations, uma na chain `public` (a extensao e por database) e uma na chain `tenant` (os indices sao por schema).
 
 ### `atendente_id` (filtro por atendente)
 
@@ -27,17 +29,22 @@ O endpoint `GET /api/tickets` ganha tres filtros e nasce um endpoint de contador
 
 ### `q` (busca livre)
 
-Um campo, tres alvos, unidos por `OR`:
+Um campo, quatro alvos, unidos por `OR`:
 
 - **numero**: quando `q` (sem `#` e sem espacos) e composto so de digitos, casa por prefixo em `number` convertido para texto — `"48"` acha `#48` e `#489`.
 - **cliente**: `ilike` no nome do cliente (o filtro `customer` atual tambem casa documento; `q` fica só no nome, porque documento continua disponivel no filtro dedicado).
 - **produto**: `EXISTS` em `ticket_items` juntando `products`, com `ilike` no nome do produto.
+- **pedido**: `ilike` em `tickets.order_code`. Entrou na revisao de 2026-07-31: o header repaginado remove o campo de pedido dedicado, e sem este alvo a capacidade de achar um ticket pelo codigo do pedido sumiria.
 
 Busca com trim, case-insensitive, acento como o Postgres devolve (sem `unaccent` — nao esta instalado). `q` e independente dos filtros `customer`/`product_id`, que continuam existindo para uso programatico e para os deep links do dashboard.
+
+Os tres `ilike` sao atendidos por indices GIN de trigrama (`customers.name`, `products.name`, `tickets.order_code`). Trigrama so ajuda a partir de 3 caracteres; abaixo disso o planner cai em Seq Scan, o que e aceitavel porque um termo de 1-2 letras casa quase tudo de qualquer forma.
 
 ### `unread` (nao lidos)
 
 Filtro booleano: entra o ticket que **nao tem** registro em `ticket_reads` para o usuario do token, ou cuja `last_read_at` e anterior a `last_activity_at` — exatamente a condicao que `SqlTicketRepository.list` ja usa para calcular a flag `unread` de cada linha, agora tambem como `WHERE`.
+
+Na forma de SQL, as duas condicoes colapsam numa negacao unica — "nao existe leitura minha igual ou posterior a ultima atividade" — expressa como `NOT EXISTS` correlacionado. A medicao mostrou por que a forma importa: como predicado sobre o LEFT JOIN com `ticket_reads` o planner materializa o join antes de paginar (Seq Scan, 2.001 buffers); como anti-join ele entra por `pk_ticket_reads (ticket_id, user_id)` e preserva o Index Scan ordenado por `last_activity_at`.
 
 ### `GET /api/tickets/contadores`
 
@@ -52,12 +59,13 @@ Alimenta os seis chips em uma requisicao (seis chamadas a lista seria desperdici
 - **Ignora os filtros do header** — os numeros do chip sao absolutos, para o usuario saber quanto existe antes de filtrar.
 - `todos` = todos os nao excluidos (o default da lista, incluindo encerrados); `ativos` = nao encerrados, usado no subtitulo "N tickets ativos".
 - Permissao: a mesma da lista (`VER_TODOS_TICKETS` ou `VER_PROPRIOS_TICKETS`).
+- **Uma varredura so**, com `count(*) FILTER` por recorte — nao uma contagem por chip. A Fase 3 ja colapsou os sete KPIs do dashboard assim. Nenhum indice e criado para servir esses `FILTER`: um `FILTER` de agregado e avaliado linha a linha depois da varredura e nunca vira predicado de indice.
 
 ## 2. Frontend
 
 `TicketsListPage` reescrita segundo `Tickets.dc.html`. A URL continua sendo a verdade dos filtros (feito na Fase 3), ganhando as chaves `q`, `atendente_id` e `unread`.
 
-- **Header**: titulo "Tickets" e subtitulo "Fila de trocas e defeitos — `N` tickets ativos" (numero em mono); a direita, campo de busca de 250px ("Buscar por no, cliente ou produto", com debounce), selects de Status / Marca / Atendente, select compacto de ordenacao e o botao "Novo ticket".
+- **Header**: titulo "Tickets" e subtitulo "Fila de trocas e defeitos — `N` tickets ativos" (numero em mono); a direita, campo de busca de 250px ("Buscar por no, cliente, produto ou pedido", com debounce), selects de Status / Marca / Atendente, select compacto de ordenacao e o botao "Novo ticket".
 - **Chips de filtro rapido**: Todos, Abertos, Aguardando analise, Atrasados, Nao lidos, Meus tickets — cada um com a contagem do endpoint de contadores. O chip ativo fica com fundo Carbon Black e texto claro; "Atrasados" usa Paprika quando nao esta ativo. Clicar troca o recorte na URL.
 - **Cards em vez de tabela**: um card por ticket, borda esquerda de 3px na cor do status, duas linhas — a primeira com bolinha de nao lido (Paprika), numero, cliente, badge de status, prioridade e SLA a direita; a segunda, em tom secundario, com produto (truncado), contagem de itens, atendente e, a direita, "aberto DD/MM · atividade DD/MM HH:MM". O card inteiro e link real para o detalhe.
 - **Paginacao** identica a de Relatorios (componente reusado).

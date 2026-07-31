@@ -25,6 +25,78 @@
 - **Numero do ticket continua `#489`** (decisao do usuario). O formato `#2026-0489` que aparece no mockup NAO e adotado.
 - **O botao "Novo ticket" permanece** no header (o mockup o omite; a omissao nao e adotada).
 - **A ordenacao permanece**, como select compacto no header.
+- Um `FILTER` de agregado e avaliado linha a linha **depois** da varredura e nunca vira predicado de indice. Nao criar indice esperando servir a um `FILTER`.
+
+## O que a medicao de indices mudou neste plano
+
+A medicao em 100 mil tickets (`docs/medicao-indices-tenant.md`, migration `0007`) e posterior a redacao original deste plano e altera tres pontos:
+
+1. **Busca livre exige trigram.** `ilike '%x%'` sobre `customers.name` custa 25,8 ms em Seq Scan de 40 mil clientes e cresce linear; curinga a esquerda nao alcanca b-tree em collation nenhuma. Entra a **Task 0**, nova. Os outros alvos da busca sao baratos (`products` tem 800 linhas; numero e prefixo em b-tree).
+2. **Nao lidos precisa de anti-join.** O predicado incide sobre o resultado do LEFT JOIN com `ticket_reads` e nenhum indice o resolve nessa forma. A Task 2 usa `NOT EXISTS` correlacionado, que entra por `pk_ticket_reads` e preserva o plano ordenado por `last_activity_at`.
+3. **Filtro por atendente ja esta resolvido.** Index Only Scan em 0,97 ms para 8.815 tickets, com os indices parciais da 0007. Nao ha indice a criar; na Task 1 sobra so o parametro de rota.
+
+---
+
+### Task 0: pg_trgm e indices de busca
+
+A busca livre da Task 1 depende deste indice para nao virar Seq Scan. Duas migrations em **chains diferentes**: `CREATE EXTENSION` e por database (chain `public`), os indices GIN sao por schema de tenant (chain `tenant`).
+
+**Files:**
+- Create: `backend/migrations/public/versions/0003_pg_trgm.py`
+- Create: `backend/migrations/tenant/versions/0008_indices_busca.py`
+- Test: `backend/tests/integration/test_migrations.py` (ou o arquivo de integracao que ja confere schema; ler antes e seguir o estilo)
+
+**Interfaces:**
+- Consumes: `migrate.upgrade_public` / `upgrade_tenant`, `AlembicTenantProvisioner`.
+- Produces: extensao `pg_trgm` no schema `public`; indices GIN `ix_customers_name_trgm` (`customers.name`), `ix_products_name_trgm` (`products.name`) e `ix_tickets_order_code_trgm` (`tickets.order_code`) em cada schema de tenant.
+
+Tres armadilhas, todas verificadas antes de escrever:
+
+- A migration de tenant roda com `search_path` no schema do tenant, entao o opclass **tem de ser qualificado**: `public.gin_trgm_ops`. Sem qualificar, a migration falha com "operator class gin_trgm_ops does not exist for access method gin".
+- `AlembicTenantProvisioner.provision` roda **apenas** a chain de tenant (ver `provisioning.py`). A extensao precisa existir antes; ela existe porque `sac-migrate all` roda `public` primeiro (`migrate.py:51-54`) e a aplicacao nao sobe sem as tabelas globais. Nao duplicar o `CREATE EXTENSION` na chain de tenant.
+- `pg_trgm` e extensao **trusted** desde o Postgres 13, logo o dono do banco a cria sem superusuario. Se o ambiente reclamar de permissao, parar e reportar em vez de rodar como superusuario.
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+Um teste de integracao que, contra o banco ja migrado, confere: a extensao `pg_trgm` esta instalada (`SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'`) e os tres indices GIN existem no schema do tenant de teste (`pg_indexes`, filtrando por `schemaname` e `indexname`).
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `./.venv/Scripts/python.exe -m pytest tests/integration/test_migrations.py -v -k trgm`
+Expected: FAIL — a extensao e os indices nao existem.
+
+- [ ] **Step 3: Implementar**
+
+`0003_pg_trgm.py` (public, `down_revision = "0002_preview_jobs"`):
+
+```python
+def upgrade() -> None:
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+
+
+def downgrade() -> None:
+    op.execute("DROP EXTENSION IF EXISTS pg_trgm")
+```
+
+O `downgrade` derruba a extensao inteira; deixar isso explicito no docstring, porque um downgrade da public com tenants ainda na 0008 quebraria os indices GIN deles. Ordem correta de downgrade: tenants primeiro.
+
+`0008_indices_busca.py` (tenant, `down_revision = "0007_indices_parciais"`), um `op.create_index` por indice com `postgresql_using="gin"` e `postgresql_ops={"<coluna>": "public.gin_trgm_ops"}`. Docstring registrando o numero que justifica: 25,8 ms de Seq Scan em 40 mil clientes, medido em `docs/medicao-indices-tenant.md`.
+
+- [ ] **Step 4: Rodar e ver passar**
+
+```bash
+./.venv/Scripts/python.exe -m sac.infrastructure.migrate all
+./.venv/Scripts/python.exe -m pytest tests/integration -v
+```
+Expected: PASS, e a suite inteira de integracao verde (provisionamento de tenant novo inclusive — e o que prova que a ordem das chains funciona).
+
+- [ ] **Step 5: Verificacoes e commit**
+
+```bash
+ruff check . && ruff format --check . && mypy && python -m pytest -q
+git add migrations tests/integration
+git commit -m "Adiciona pg_trgm e indices GIN para a busca livre de tickets"
+```
 
 ---
 
@@ -56,6 +128,9 @@ async def test_busca_por_nome_do_cliente(...):
 
 async def test_busca_por_nome_do_produto(...):
     # ticket com item de produto "Alicate de cuticula"; search="alicate" acha; search="esmalte" nao
+
+async def test_busca_por_codigo_do_pedido(...):
+    # ticket com order_code "PED-00042"; search="00042" acha; search="00043" nao
 
 async def test_busca_nao_casa_o_que_nao_deve(...):
     # search com termo inexistente devolve lista vazia e total zero
@@ -90,15 +165,19 @@ Expected: FAIL — `TicketFilters` nao aceita `search`.
                             ProductModel.name.ilike(f"%{termo}%"),
                         )
                     ),
+                    TicketModel.order_code.ilike(f"%{termo}%"),
                 ]
                 if termo.isdigit():
                     alvos.append(cast(TicketModel.number, String).like(f"{termo}%"))
                 stmt = stmt.where(or_(*alvos))
 ```
 
-Importar `cast` e `String` de `sqlalchemy` (`or_` e `exists` ja estao importados). Nota: a busca por numero e por **prefixo** (`like "48%"`), nao por trecho — `"48"` acha `#48` e `#489`, e nao `#148`, que confundiria mais do que ajudaria.
+Importar `cast` e `String` de `sqlalchemy` (`or_` e `exists` ja estao importados). Duas notas:
 
-`routers/tickets.py`, em `list_tickets`: acrescentar `atendente_id: UUID | None = None` e `q: str | None = None` a assinatura e passar `attendant_user_id=atendente_id, search=q` ao construir `TicketFilters`.
+- A busca por numero e por **prefixo** (`like "48%"`), nao por trecho — `"48"` acha `#48` e `#489`, e nao `#148`, que confundiria mais do que ajudaria.
+- `order_code` entra nos alvos (decisao do usuario): a busca livre substitui o campo de pedido dedicado, que a Task 4 remove do header. Sem isso a capacidade sumiria. Os tres `ilike` sao servidos pelos indices GIN da Task 0 a partir de 3 caracteres; abaixo disso o planner cai em Seq Scan, o que e aceitavel porque o termo curto casa quase tudo de qualquer forma.
+
+`routers/tickets.py`, em `list_tickets`: acrescentar `atendente_id: UUID | None = None` e `q: str | None = None` a assinatura e passar `attendant_user_id=atendente_id, search=q` ao construir `TicketFilters`. O filtro por atendente **nao precisa de indice novo** — a 0007 ja o resolve em Index Only Scan de 0,97 ms; esta parte da task e so a assinatura da rota, ja que `_base_stmt` aplica `attendant_user_id` desde a Fase 2A.
 
 - [ ] **Step 4: Rodar e ver passar**
 
@@ -142,6 +221,10 @@ async def test_filtra_nao_lidos(...):
 async def test_nao_lidos_e_por_usuario(...):
     # o mesmo ticket lido pelo usuario A e nao lido pelo usuario B:
     # filtrar como A devolve vazio; como B devolve o ticket
+
+async def test_lido_exatamente_na_ultima_atividade_conta_como_lido(...):
+    # last_read_at == last_activity_at -> fica FORA do filtro de nao lidos,
+    # coerente com a bolinha do card (unread = last_read < last_activity_at)
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
@@ -157,17 +240,18 @@ Expected: FAIL — `TicketFilters` nao aceita `unread`.
 
 ```python
         if filters.unread:
-            leitura = select(TicketReadModel.last_read_at).where(
-                TicketReadModel.ticket_id == TicketModel.id,
-                TicketReadModel.user_id == unread_for,
-            )
             stmt = stmt.where(
-                or_(
-                    ~exists(leitura),
-                    leitura.scalar_subquery() < TicketModel.last_activity_at,
+                ~exists(
+                    select(TicketReadModel.ticket_id).where(
+                        TicketReadModel.ticket_id == TicketModel.id,
+                        TicketReadModel.user_id == unread_for,
+                        TicketReadModel.last_read_at >= TicketModel.last_activity_at,
+                    )
                 )
             )
 ```
+
+Por que esta forma, e nao um `OR` de "nunca lido" com "lido antes da atividade": as duas condicoes sao a **negacao de uma so** — "nao existe leitura minha igual ou posterior a ultima atividade". Um `NOT EXISTS` correlacionado unico vira anti-join que entra por `pk_ticket_reads (ticket_id, user_id)` e preserva o Index Scan ordenado por `last_activity_at`; a versao com `OR` + `scalar_subquery` emite duas subconsultas e, na medicao, o predicado sobre o LEFT JOIN forcou materializar o join antes de paginar (Seq Scan em `ticket_reads`, 2.001 buffers). Cuidado com a fronteira: a lista ja considera lido quando `last_read_at >= last_activity_at` (ver o calculo de `unread` em `list()`, que e `last_read < last_activity_at`) — o `>=` aqui mantem o filtro coerente com a bolinha exibida no card. Um teste deve fixar exatamente esse empate.
 
 Ajustar as duas chamadas de `_base_stmt` em `list()` para repassar `unread_for`.
 
@@ -265,32 +349,42 @@ Expected: FAIL com 404.
 
 `repositories_tickets.py`, em `SqlTicketRepository`:
 
+**Uma varredura so, com `count(*) FILTER`** — nao sete contagens sequenciais. A Fase 3 ja pagou essa licao no dashboard (os sete KPIs colapsaram em uma query). O `FILTER` e avaliado linha a linha depois da varredura, entao os sete recortes saem do mesmo Seq Scan (~34 ms medidos em 100 mil tickets) em vez de sete idas ao banco.
+
 ```python
     async def counters(
         self, base: TicketFilters, unread_for: UUID, now: datetime
     ) -> TicketCounters:
-        async def conta(filtros: TicketFilters) -> int:
-            stmt = self._base_stmt(filtros, unread_for)
-            total = await self._session.scalar(select(func.count()).select_from(stmt.subquery()))
-            return int(total or 0)
-
         fechados = [str(s) for s in CLOSED_STATUSES]
-        ativos_stmt = self._base_stmt(base, unread_for).where(TicketModel.status.not_in(fechados))
-        ativos = await self._session.scalar(
-            select(func.count()).select_from(ativos_stmt.subquery())
+        ativo = TicketModel.status.not_in(fechados)
+        nao_lido = ~exists(
+            select(TicketReadModel.ticket_id).where(
+                TicketReadModel.ticket_id == TicketModel.id,
+                TicketReadModel.user_id == unread_for,
+                TicketReadModel.last_read_at >= TicketModel.last_activity_at,
+            )
         )
-        return TicketCounters(
-            todos=await conta(base),
-            ativos=int(ativos or 0),
-            abertos=await conta(replace(base, status=TicketStatus.ABERTO)),
-            aguardando_analise=await conta(replace(base, status=TicketStatus.AGUARDANDO_ANALISE)),
-            atrasados=await conta(replace(base, overdue=True)),
-            nao_lidos=await conta(replace(base, unread=True)),
-            meus=await conta(replace(base, attendant_user_id=unread_for)),
+        stmt = self._base_stmt(base, unread_for).with_only_columns(
+            func.count(),
+            func.count().filter(ativo),
+            func.count().filter(TicketModel.status == str(TicketStatus.ABERTO)),
+            func.count().filter(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE)),
+            func.count().filter(TicketModel.due_at < now, ativo),
+            func.count().filter(nao_lido),
+            func.count().filter(TicketModel.attendant_user_id == unread_for),
         )
+        row = (await self._session.execute(stmt)).one()
+        return TicketCounters(*(int(v or 0) for v in row))
 ```
 
-`replace` de `dataclasses`. `base` chega do use case ja com o escopo do papel aplicado (para atendente, `attendant_user_id` = ele mesmo), o que faz `todos` e os demais ja respeitarem a visao — e nesse caso `meus` coincide com `todos`, que e o correto.
+Quatro pontos de atencao:
+
+- `with_only_columns` preserva o FROM e o WHERE de `_base_stmt` (escopo do papel e `deleted_at IS NULL`) e troca so a lista de colunas — e por isso que os sete contadores respeitam a visao sem repetir filtro.
+- **`base` deve chegar sem `status`, `overdue` e `unread`.** Se o use case repassar os filtros da tela, cada `FILTER` viraria interseccao com o recorte ativo e os chips passariam a contar dentro de si mesmos. `base` carrega apenas o escopo do papel.
+- O `FILTER` de atrasados repete `ativo`, porque "atrasado" e `due_at` vencido **e** ticket nao encerrado — a mesma regra que `_base_stmt` aplica em `filters.overdue`. Sem isso, finalizados antigos entrariam na conta.
+- Subconsulta correlacionada dentro de `FILTER` e aceita pelo Postgres (verificado). Nao criar indice para servir esse `FILTER`: ele nunca vira predicado de indice.
+
+`base` chega do use case ja com o escopo do papel aplicado (para atendente, `attendant_user_id` = ele mesmo), o que faz `todos` e os demais ja respeitarem a visao — e nesse caso `meus` coincide com `todos`, que e o correto.
 
 `use_cases/tickets_queries.py`: `GetTicketCountersUseCase` monta o `TicketFilters` base com a mesma regra de escopo de `ListTicketsUseCase` e chama `counters`.
 
@@ -375,7 +469,7 @@ Cliente sem nome cai para "Cliente nao informado" em `text-muted-foreground`; pr
 
 - [ ] **Step 4: `TicketsListPage` reescrita**
 
-- Header: `flex flex-wrap items-end justify-between gap-4 mb-5`. Esquerda: `<h1>` "Tickets" (`text-xl font-bold text-accent-foreground`) e subtitulo "Fila de trocas e defeitos — `N` tickets ativos" (numero em `font-mono`, vindo de `counters.ativos`). Direita, `flex flex-wrap gap-2 items-center`: campo de busca de 250px com icone `Search` a esquerda e placeholder "Buscar por no, cliente ou produto" (estado local + `useDebounce` de 400ms escrevendo `q` na URL), selects de Status / Marca / Atendente, select compacto de ordenacao (as quatro opcoes atuais de `SORT_OPTIONS` mais o toggle de `order`, preservados) e o botao "Novo ticket" (`Button` primario, link para `/tickets/novo`).
+- Header: `flex flex-wrap items-end justify-between gap-4 mb-5`. Esquerda: `<h1>` "Tickets" (`text-xl font-bold text-accent-foreground`) e subtitulo "Fila de trocas e defeitos — `N` tickets ativos" (numero em `font-mono`, vindo de `counters.ativos`). Direita, `flex flex-wrap gap-2 items-center`: campo de busca de 250px com icone `Search` a esquerda e placeholder "Buscar por no, cliente, produto ou pedido" (estado local + `useDebounce` de 400ms escrevendo `q` na URL), selects de Status / Marca / Atendente, select compacto de ordenacao (as quatro opcoes atuais de `SORT_OPTIONS` mais o toggle de `order`, preservados) e o botao "Novo ticket" (`Button` primario, link para `/tickets/novo`).
 - Filtros na URL, como a Fase 3 deixou: `q`, `status`, `brand_id`, `atendente_id`, `unread`, `overdue`, `page`, `sort`, `order`. Reusar o helper `setParam`.
 - Chips: `QuickFilterChips` mapeando cada chave para o recorte na URL — `todos` limpa `status`/`overdue`/`unread`/`atendente_id`; `abertos` seta `status=aberto`; `aguardando_analise` seta `status=aguardando_analise`; `atrasados` seta `overdue=1`; `nao_lidos` seta `unread=1`; `meus` seta `atendente_id` = usuario do token (`useAuth`). O chip ativo e derivado da URL (nao de estado proprio).
 - Dados: `useQuery` da lista (chave com todos os params) e `useQuery` dos contadores (chave `["ticket-contadores"]`).
@@ -429,7 +523,7 @@ test.describe("Fila de tickets repaginada", () => {
     const card = page.getByRole("link").filter({ hasText: `#${ticket.number}` }).first()
     await expect(card).toBeVisible()
 
-    await page.getByPlaceholder("Buscar por no, cliente ou produto").fill(String(ticket.number))
+    await page.getByPlaceholder("Buscar por no, cliente, produto ou pedido").fill(String(ticket.number))
     await expect(card).toBeVisible()
 
     await page.getByRole("button", { name: /Atrasados/ }).click()
@@ -460,7 +554,7 @@ Expected: verde.
 
 - [ ] **Step 4: README**
 
-Acrescentar a Fase 3B em "Fases entregues", descrevendo a fila repaginada (filtros no header com busca livre, chips com contagem, cards de duas linhas, ordenacao preservada) e os filtros/endpoint novos do backend (`atendente_id`, `q`, `unread`, `GET /api/tickets/contadores`). Citar o mockup e a spec.
+Acrescentar a Fase 3B em "Fases entregues", descrevendo a fila repaginada (filtros no header com busca livre, chips com contagem, cards de duas linhas, ordenacao preservada) e os filtros/endpoint novos do backend (`atendente_id`, `q` sobre numero/cliente/produto/pedido, `unread`, `GET /api/tickets/contadores` numa varredura so). Mencionar as migrations da Task 0 (`public/0003_pg_trgm` e `tenant/0008_indices_busca`) na secao de migrations, se houver. Citar o mockup, a spec e `docs/medicao-indices-tenant.md` como origem da decisao de trigram.
 
 - [ ] **Step 5: Commit**
 
@@ -485,4 +579,12 @@ Expected: tudo verde.
 
 - [ ] **Step 3: Passeio manual**
 
-Login, fila: buscar por numero, por cliente e por produto; percorrer os seis chips conferindo contagem contra o resultado; ordenar por vencimento; abrir um card; voltar e conferir que o filtro sobreviveu; conferir o deep link vindo do dashboard.
+Login, fila: buscar por numero, por cliente, por produto e por codigo do pedido; percorrer os seis chips conferindo contagem contra o resultado; ordenar por vencimento; abrir um card; voltar e conferir que o filtro sobreviveu; conferir o deep link vindo do dashboard.
+
+- [ ] **Step 4: Conferir que os indices de busca existem**
+
+```bash
+docker exec -i sac-b2pro-db-1 psql -U sac -d sac -c "SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'"
+docker exec -i sac-b2pro-db-1 psql -U sac -d sac -c "SELECT schemaname, indexname FROM pg_indexes WHERE indexname LIKE '%_trgm' ORDER BY 1, 2"
+```
+Expected: a extensao presente e os tres indices em cada schema de tenant.
