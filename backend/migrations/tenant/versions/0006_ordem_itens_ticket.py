@@ -42,6 +42,9 @@ def _ticket_items() -> sa.Table:
 def upgrade() -> None:
     schema = _tenant_schema()
     items = _ticket_items()
+    # sem default de coluna no DDL de proposito: o valor vem do Sequence
+    # ticket_item_seq aplicado pelo ORM (default fica em models_tenant.py),
+    # mesma convencao ja usada por tickets.number em 0003_tickets.
     op.add_column("ticket_items", sa.Column("seq", sa.BigInteger(), nullable=True), schema=schema)
     # Backfill deterministico: created_at empata entre itens gravados na mesma
     # transacao, entao o id desempata. Nao depende da ordem de varredura do
@@ -55,9 +58,14 @@ def upgrade() -> None:
     # valor livre para nao colidir com o que acabou de ser preenchido.
     total = op.get_bind().execute(sa.select(sa.func.count()).select_from(items)).scalar() or 0
     op.execute(CreateSequence(sa.Sequence("ticket_item_seq", start=total + 1, schema="tenant")))
-    op.alter_column("ticket_items", "seq", nullable=False, schema=schema)
+    op.alter_column(
+        "ticket_items", "seq", existing_type=sa.BigInteger(), nullable=False, schema=schema
+    )
 
 
 def downgrade() -> None:
+    # Lossy: dropar a coluna descarta a ordem real de insercao, e um re-upgrade
+    # so consegue reconstruir a aproximacao por (created_at, id) — o round-trip
+    # nao e garantia de fidelidade da ordem original.
     op.drop_column("ticket_items", "seq", schema=_tenant_schema())
     op.execute(DropSequence(sa.Sequence("ticket_item_seq", schema="tenant")))
