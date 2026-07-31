@@ -36,7 +36,7 @@ Filtros: `de`/`ate` (periodo por `opened_at`), `brand_id`, `product_id`, `defect
 
 ### `GET /api/relatorios/export`
 
-Mesmos query params (sem paginacao), mesma query do relatorio — tela e arquivo nunca divergem (defeito conhecido do legado, onde o CSV aplicava menos filtros que a tela). Resposta `text/csv` em streaming: UTF-8 com BOM (abre correto no Excel), separador virgula, colunas da tabela da tela mais dados do cliente (nome, documento, telefone, e-mail). Gerado em chunks paginados do repositorio (500 linhas por pagina) para nao materializar tudo em memoria.
+Mesmos query params (sem paginacao), mesma query do relatorio — tela e arquivo nunca divergem (defeito conhecido do legado, onde o CSV aplicava menos filtros que a tela). Resposta `text/csv` em streaming: UTF-8 com BOM (abre correto no Excel), separador virgula, colunas da tabela da tela mais dados do cliente (nome, documento, telefone, e-mail). Buscado em chunks paginados do repositorio (500 linhas por pagina), mas o handler materializa todos os chunks numa lista antes de abrir o `StreamingResponse`: a sessao do tenant (dependency with-yield) fecha no retorno do handler, entao um generator ainda nao drenado quebraria ao tentar usar a sessao ja fora de escopo. O streaming resultante economiza memoria de payload HTTP (o corpo vai em pedacos, nao inteiro), mas nao de memoria de processo — o relatorio inteiro fica em lista antes do primeiro byte sair.
 
 ### `GET /api/midias`
 

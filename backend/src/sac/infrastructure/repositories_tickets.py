@@ -90,7 +90,7 @@ async def flush_tickets(session: AsyncSession) -> None:
         raise
 
 
-def _ticket_entity(m: TicketModel) -> Ticket:
+def ticket_entity(m: TicketModel) -> Ticket:
     return Ticket(
         id=m.id,
         number=m.number,
@@ -197,7 +197,7 @@ class SqlTicketRepository:
 
     async def get(self, ticket_id: UUID) -> Ticket | None:
         m = await self._session.get(TicketModel, ticket_id)
-        return _ticket_entity(m) if m and m.deleted_at is None else None
+        return ticket_entity(m) if m and m.deleted_at is None else None
 
     async def update(self, ticket: Ticket) -> None:
         m = await self._session.get(TicketModel, ticket.id)
@@ -285,7 +285,7 @@ class SqlTicketRepository:
         counts, first_products = await load_item_summaries(self._session, ticket_ids)
         rows = [
             TicketListRow(
-                ticket=_ticket_entity(m),
+                ticket=ticket_entity(m),
                 customer_name=customer_name,
                 first_product_name=first_products.get(m.id),
                 items_count=counts.get(m.id, 0),

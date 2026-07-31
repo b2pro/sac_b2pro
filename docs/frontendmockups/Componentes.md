@@ -11,11 +11,12 @@ Usado no Dashboard (clicável) e em Relatórios (estático). Um componente, dois
 - `to?: string` — rota de destino; quando presente renderiza como link (`<Link>`), mostra o ícone arrow-up-right e ganha hover de borda Charcoal. Ausente = card estático, sem affordance.
 - `accent?: boolean` — valor em Paprika (só "Atrasados (SLA)").
 - `caption?: string` — linha auxiliar ("do recorte atual", em Relatórios).
+- `title?: string` — tooltip nativo (atributo HTML `title`) sobre o card inteiro; usado no Dashboard para descrever o recorte de cada KPI clicável. Os dois KPIs "no mês" (aprovados/finalizados) dizem "mês atual" em vez de cravar o nome do mês do mockup, para o texto continuar correto o ano inteiro.
 
 ### `StatusDistributionChart`
 Barras horizontais, Recharts (`BarChart layout="vertical"`).
 - `counts: Record<TicketStatus, number>`
-- Eixo X com 4 ticks (0 → teto arredondado acima do máximo), grid vertical só nos ticks, labels de status no eixo Y (172px), cores de `STATUS_ACCENTS`. Contagem zero: barra ausente, trilho `bg-muted` visível e contagem "0" em `text-muted-foreground`. Tooltip: nome do status + contagem, fundo `bg-card` com borda Silver (sem sombra).
+- Eixo X com 5 ticks (0 → teto arredondado acima do máximo), grid vertical só nos ticks, labels de status no eixo Y (172px), cores de `STATUS_ACCENTS`. Contagem zero: barra ausente, trilho `bg-muted` visível e contagem "0" em `text-muted-foreground`. Tooltip: nome do status + contagem, fundo `bg-card` com borda Silver (sem sombra).
 
 ### `RankingList` (compartilhado Dashboard/Relatórios)
 - `title: string`

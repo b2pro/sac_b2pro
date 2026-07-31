@@ -37,8 +37,8 @@ from sac.infrastructure.models_tenant import (
 from sac.infrastructure.repositories_attachments import attachment_entity
 from sac.infrastructure.repositories_tickets import (
     SqlTicketRepository,
-    _ticket_entity,
     load_item_summaries,
+    ticket_entity,
 )
 
 _CLOSED = [str(s) for s in CLOSED_STATUSES]
@@ -384,7 +384,7 @@ class SqlReportingRepository:
         counts, first_products = await load_item_summaries(self._session, ticket_ids)
         tickets: list[TicketListRow] = [
             TicketListRow(
-                ticket=_ticket_entity(m),
+                ticket=ticket_entity(m),
                 customer_name=customer_name,
                 first_product_name=first_products.get(m.id),
                 items_count=counts.get(m.id, 0),

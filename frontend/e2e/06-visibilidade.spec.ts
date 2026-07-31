@@ -21,15 +21,28 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
     const ticket = await apiFullTicket(request, "admin")
     await login(page, request, "admin")
 
+    // Conta chamadas a GET /api/relatorios (exclui /export, que comeca com o
+    // mesmo prefixo) para provar que o estado inicial nao so mostra o empty
+    // state, mas realmente barra a consulta — nao so a esconde na tela.
+    let reportRequests = 0
+    await page.route("**/api/relatorios**", (route) => {
+      if (new URL(route.request().url()).pathname === "/api/relatorios") {
+        reportRequests += 1
+      }
+      return route.continue()
+    })
+
     await page.getByRole("link", { name: "Relatorios" }).click()
     await expect(page).toHaveURL(/\/relatorios$/)
     // estado inicial: nada consultado ate filtrar
     await expect(page.getByText("Nenhum filtro aplicado")).toBeVisible()
+    expect(reportRequests).toBe(0)
 
     await page.getByLabel("Periodo — de").fill("2026-01-01")
     await page.getByRole("button", { name: "Filtrar" }).click()
     const row = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
     await expect(row).toBeVisible()
+    expect(reportRequests).toBe(1)
 
     const download = page.waitForEvent("download")
     await page.getByRole("button", { name: "Exportar CSV" }).click()
