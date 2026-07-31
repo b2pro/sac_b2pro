@@ -87,7 +87,8 @@ Decisoes tomadas onde mockup e documentacao divergiam:
 ## 4. Permissoes e erros
 
 - Permissao nova `VER_VISIBILIDADE = "ver_visibilidade"` concedida a todos os papeis do tenant, inclusive `visualizador` (tudo leitura; visualizador ve todos os tickets por regra herdada do legado). Atendente ve os numeros do tenant inteiro: dashboard e relatorios sao visao gerencial consolidada, como no legado. As tres rotas usam a dependency de permissao existente.
-- Validacao de query params (periodo com `de > ate`, UUID malformado, pagina invalida): 422 pelo padrao FastAPI/Pydantic vigente.
+- Validacao de query params (UUID malformado, pagina invalida): 422 pelo padrao FastAPI/Pydantic vigente.
+- Periodo invertido nos relatorios (`/relatorios` e `/relatorios/export`): 422 de dominio quando `de >= ate`. O limite superior do filtro e **exclusivo** (`opened_at < ate`), entao `de == ate` descreve o conjunto vazio, nao "um unico dia" — e o front ja soma um dia ao valor escolhido (`isoEndExclusive`), de modo que `de == ate` na requisicao corresponde exatamente ao usuario ter invertido as datas em um dia, o caso mais comum de inversao. Antes de comparar, os dois valores sao normalizados para UTC: o Pydantic aceita tanto `?de=2026-08-01` (naive) quanto `?ate=2026-08-01T00:00:00Z` (aware), e compara-los direto levantaria `TypeError`. A normalizacao vale so para a comparacao; os filtros recebem os valores originais.
 - Galeria: falha ao assinar o preview de um item nao derruba a pagina — o item sai com `preview_url = null`.
 - Cada tela tem empty state com borda tracejada, no padrao do design system.
 

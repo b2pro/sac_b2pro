@@ -182,9 +182,56 @@ async def test_relatorio_periodo_invertido_retorna_422(
     assert invertido_export.status_code == 422
     assert invertido_export.json()["code"] == "validation_error"
 
-    # de == ate e um periodo valido (um unico dia), nao invertido
-    mesmo_dia = await client.get("/api/relatorios?de=2026-08-01&ate=2026-08-01", headers=h_view)
-    assert mesmo_dia.status_code == 200
+    # O limite superior da API e EXCLUSIVO (opened_at < ate), entao de == ate
+    # descreve o conjunto vazio, nao "um unico dia": tambem e periodo invertido.
+    # O front ja manda dia+1 em "ate" (isoEndExclusive), logo de == ate so chega
+    # aqui quando o usuario inverteu as datas em um dia.
+    mesmo_instante = await client.get(
+        "/api/relatorios?de=2026-08-01&ate=2026-08-01", headers=h_view
+    )
+    assert mesmo_instante.status_code == 422
+    assert mesmo_instante.json()["code"] == "validation_error"
+
+    mesmo_instante_export = await client.get(
+        "/api/relatorios/export?de=2026-08-01&ate=2026-08-01", headers=h_view
+    )
+    assert mesmo_instante_export.status_code == 422
+    assert mesmo_instante_export.json()["code"] == "validation_error"
+
+
+async def test_relatorio_periodo_com_awareness_mista_nao_quebra(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    """de naive + ate aware (e vice-versa) precisa comparar sem TypeError.
+
+    O Pydantic parseia "2026-08-01" como datetime naive e "2026-08-05T00:00:00Z"
+    como aware; comparar os dois direto levanta TypeError, que escaparia do
+    handler de erro de dominio como 500.
+    """
+    _, h_view, *_ = await _setup(client, session, engine)
+
+    de_naive = await client.get(
+        "/api/relatorios?de=2026-08-01&ate=2026-08-05T00:00:00Z", headers=h_view
+    )
+    assert de_naive.status_code == 200
+
+    ate_naive = await client.get(
+        "/api/relatorios?de=2026-08-01T00:00:00Z&ate=2026-08-05", headers=h_view
+    )
+    assert ate_naive.status_code == 200
+
+    # invertido continua 422 (e nao 500) mesmo com awareness mista
+    invertido_misto = await client.get(
+        "/api/relatorios?de=2026-08-05&ate=2026-08-01T00:00:00Z", headers=h_view
+    )
+    assert invertido_misto.status_code == 422
+    assert invertido_misto.json()["code"] == "validation_error"
+
+    invertido_misto_export = await client.get(
+        "/api/relatorios/export?de=2026-08-05T00:00:00Z&ate=2026-08-01", headers=h_view
+    )
+    assert invertido_misto_export.status_code == 422
+    assert invertido_misto_export.json()["code"] == "validation_error"
 
 
 async def test_midias_lista_vazia_sem_anexos(

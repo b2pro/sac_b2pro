@@ -58,6 +58,18 @@ def _ranking_out(entries: list[RankingEntry]) -> list[RankingOut]:
     return [RankingOut(id=e.id, name=e.name, count=e.count) for e in entries]
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Datetime comparavel em UTC.
+
+    "?de=2026-08-01" chega naive e "?ate=2026-08-01T00:00:00Z" chega aware:
+    comparar os dois direto levanta TypeError. O naive e lido como UTC, mesma
+    leitura que o Postgres faz do literal contra timestamptz. Usado SOMENTE na
+    comparacao abaixo — os filtros continuam recebendo os valores originais,
+    para nao mudar o que e efetivamente consultado.
+    """
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def _report_filters(
     de: datetime | None = None,
     ate: datetime | None = None,
@@ -69,9 +81,14 @@ def _report_filters(
     atendente_id: UUID | None = None,
     channel_id: UUID | None = None,
 ) -> ReportFilters:
-    if de is not None and ate is not None and de > ate:
+    # O limite superior e exclusivo (_report_stmt: opened_at < date_to), entao o
+    # intervalo vazio e "de >= ate", nao "de > ate": com de == ate o predicado
+    # vira opened_at >= X AND opened_at < X, que nunca casa. O front ja soma um
+    # dia em "ate" (isoEndExclusive), logo de == ate chega aqui exatamente
+    # quando o usuario inverteu as datas em um dia — o caso mais comum.
+    if de is not None and ate is not None and _as_utc(de) >= _as_utc(ate):
         raise ValidationError(
-            "data inicial nao pode ser maior que a data final",
+            "data inicial deve ser anterior a data final",
             details={"fields": ["de", "ate"]},
         )
     return ReportFilters(
