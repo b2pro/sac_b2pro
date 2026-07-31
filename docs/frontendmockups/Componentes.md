@@ -11,7 +11,7 @@ Usado no Dashboard (clicável) e em Relatórios (estático). Um componente, dois
 - `to?: string` — rota de destino; quando presente renderiza como link (`<Link>`), mostra o ícone arrow-up-right e ganha hover de borda Charcoal. Ausente = card estático, sem affordance.
 - `accent?: boolean` — valor em Paprika (só "Atrasados (SLA)").
 - `caption?: string` — linha auxiliar ("do recorte atual", em Relatórios).
-- `title?: string` — tooltip nativo (atributo HTML `title`) sobre o card inteiro; usado no Dashboard para descrever o recorte de cada KPI clicável. Os dois KPIs "no mês" (aprovados/finalizados) dizem "mês atual" em vez de cravar o nome do mês do mockup, para o texto continuar correto o ano inteiro.
+- `title?: string` — tooltip nativo (atributo HTML `title`) sobre o card inteiro; usado no Dashboard para descrever o recorte de cada KPI clicavel. Os tres KPIs "no mes" (aprovados/declinados/finalizados) dizem "mes atual" em vez de cravar o mes fixo do mockup ("julho"), para o texto continuar correto o ano inteiro.
 
 ### `StatusDistributionChart`
 Barras horizontais, Recharts (`BarChart layout="vertical"`).
