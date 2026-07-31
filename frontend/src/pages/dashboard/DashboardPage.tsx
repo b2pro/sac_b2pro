@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { AvgResolutionStat } from "@/components/reporting/AvgResolutionStat"
@@ -7,7 +7,6 @@ import { EmptyState } from "@/components/reporting/EmptyState"
 import { KpiCard } from "@/components/reporting/KpiCard"
 import { RankingList } from "@/components/reporting/RankingList"
 import { Skeleton } from "@/components/reporting/Skeleton"
-import { StatusDistributionChart } from "@/components/reporting/StatusDistributionChart"
 import { ThCell } from "@/components/reporting/ThCell"
 import { TicketRow } from "@/components/reporting/TicketRow"
 import {
@@ -20,6 +19,21 @@ import {
 import { ApiError } from "@/lib/api"
 import { listCatalog } from "@/lib/cadastros"
 import { getDashboard } from "@/lib/reporting"
+
+// Recharts (usado apenas pelo grafico) e pesado o suficiente para estourar o
+// aviso de chunk de 500kB, e Relatorios/Midias pagariam esse custo sem
+// desenhar grafico nenhum. Carregado sob demanda com React.lazy; a exportacao
+// e nomeada (nao default), entao adaptamos com .then(...).
+const StatusDistributionChart = lazy(() =>
+  import("@/components/reporting/StatusDistributionChart").then((mod) => ({
+    default: mod.StatusDistributionChart,
+  })),
+)
+
+// Mesma altura que o grafico calcula (9 status * ROW_HEIGHT de 28px + 24px de
+// margem, ver StatusDistributionChart), para o fallback nao causar salto de
+// layout enquanto o chunk carrega.
+const CHART_FALLBACK_HEIGHT = "h-[276px]"
 
 const ALL = "all"
 
@@ -173,7 +187,9 @@ export default function DashboardPage() {
                   </h2>
                 </div>
                 <div className="px-4 pt-3.5 pb-2.5">
-                  <StatusDistributionChart counts={data.status_counts} />
+                  <Suspense fallback={<Skeleton className={CHART_FALLBACK_HEIGHT} />}>
+                    <StatusDistributionChart counts={data.status_counts} />
+                  </Suspense>
                 </div>
               </section>
 
