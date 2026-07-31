@@ -28,10 +28,14 @@ export function FiltersCard({
   children,
   footer,
   storageKey,
+  minWidth = 190,
 }: {
   children: ReactNode
   footer?: ReactNode
   storageKey: string
+  /** Largura minima de cada campo no grid auto-fit, em px (Componentes.md usa
+   *  190 para Relatorios; Midias foi especificada com 170 por ter mais campos). */
+  minWidth?: number
 }) {
   const [collapsed, setCollapsed] = useState(() => readCollapsed(storageKey))
 
@@ -58,7 +62,10 @@ export function FiltersCard({
       </div>
       {!collapsed && (
         <>
-          <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+          <div
+            className="grid gap-3 p-4"
+            style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))` }}
+          >
             {children}
           </div>
           {footer && <div className="flex justify-end gap-2 px-4 pb-4">{footer}</div>}

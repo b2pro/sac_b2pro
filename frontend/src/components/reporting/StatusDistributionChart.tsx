@@ -33,12 +33,27 @@ export const STATUS_CHART_FILL: Record<TicketStatus, string> = {
 
 type Row = { status: TicketStatus; label: string; count: number }
 
+// Teto arredondado do eixo X (Componentes.md: "0 -> teto arredondado acima do
+// maximo"): sem isso ("dataMax" puro) a barra maior encosta na borda direita.
+// Arredonda para o primeiro "numero redondo" (1/2/5 x uma potencia de 10)
+// estritamente acima do maximo, na magnitude adequada aos dados; todos os
+// valores zerados caem no teto minimo (1) em vez de um dominio degenerado [0,0].
+function axisCeiling(max: number): number {
+  if (max <= 0) return 1
+  const magnitude = 10 ** Math.floor(Math.log10(max))
+  const normalized = max / magnitude
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  const ceiling = step * magnitude
+  return ceiling > max ? ceiling : ceiling * 2
+}
+
 export function StatusDistributionChart({ counts }: { counts: Record<TicketStatus, number> }) {
   const data: Row[] = STATUS_ORDER.map((status) => ({
     status,
     label: STATUS_LABELS[status],
     count: counts[status] ?? 0,
   }))
+  const maxCount = data.reduce((acc, row) => Math.max(acc, row.count), 0)
 
   return (
     <ResponsiveContainer width="100%" height={data.length * ROW_HEIGHT + 24}>
@@ -46,7 +61,7 @@ export function StatusDistributionChart({ counts }: { counts: Record<TicketStatu
         <CartesianGrid horizontal={false} stroke="var(--border)" />
         <XAxis
           type="number"
-          domain={[0, "dataMax"]}
+          domain={[0, axisCeiling(maxCount)]}
           tickCount={5}
           axisLine={false}
           tickLine={false}

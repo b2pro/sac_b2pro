@@ -30,8 +30,13 @@ export function formatDuration(hours: number | null): string {
   if (hours === null) return "—"
   const total = Math.round(hours)
   const d = Math.floor(total / 24)
-  const h = total % 24
-  if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`
+  // resto por divisao de piso (sempre em [0,24)), nao o "%" do JS: para total
+  // negativo "%" trunca em direcao a zero e devolveria um resto negativo,
+  // fazendo os dois componentes "herdarem" o sinal (ex.: total=-1 viraria
+  // "-1h" perdendo o "d"). slaRemaining hoje sempre chama com Math.abs, entao
+  // este ramo e inalcancavel em producao, mas o helper e publico e compartilhado.
+  const h = total - d * 24
+  if (d !== 0) return h > 0 ? `${d}d ${h}h` : `${d}d`
   return `${h}h`
 }
 

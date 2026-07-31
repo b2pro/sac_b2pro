@@ -9,12 +9,14 @@ export function KpiCard({
   to,
   accent,
   caption,
+  title,
 }: {
   label: string
   value: number | string
   to?: string
   accent?: boolean
   caption?: string
+  title?: string
 }) {
   const content = (
     <>
@@ -47,6 +49,7 @@ export function KpiCard({
     return (
       <Link
         to={to}
+        title={title}
         className={cn(
           shellClass,
           "block text-foreground outline-none hover:border-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -57,5 +60,9 @@ export function KpiCard({
     )
   }
 
-  return <div className={shellClass}>{content}</div>
+  return (
+    <div className={shellClass} title={title}>
+      {content}
+    </div>
+  )
 }

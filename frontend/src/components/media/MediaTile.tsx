@@ -1,4 +1,5 @@
 import { FileText, Image, Play, Video } from "lucide-react"
+import { useState } from "react"
 
 import { formatShortDateTime } from "@/lib/format"
 import type { MediaItem } from "@/lib/reporting"
@@ -21,7 +22,12 @@ export function MediaTile({
   onOpen: (item: MediaItem) => void
 }) {
   const Icon = KIND_ICONS[item.kind]
-  const showChip = item.preview_url !== null && item.kind !== "pdf"
+  // A URL assinada tem TTL curto; se expirar enquanto o usuario rola a galeria,
+  // o <img> dispara onError e caimos no mesmo placeholder por tipo usado
+  // quando nao ha preview_url — nunca no icone de imagem quebrada do navegador.
+  const [previewFailed, setPreviewFailed] = useState(false)
+  const showPreview = item.preview_url !== null && !previewFailed
+  const showChip = showPreview && item.kind !== "pdf"
 
   return (
     <button
@@ -32,12 +38,13 @@ export function MediaTile({
       className="w-full rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-md border border-border bg-muted hover:border-foreground">
-        {item.preview_url ? (
+        {showPreview ? (
           <img
-            src={item.preview_url}
+            src={item.preview_url ?? undefined}
             alt={item.filename}
             loading="lazy"
             className="size-full object-cover"
+            onError={() => setPreviewFailed(true)}
           />
         ) : (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -47,7 +54,7 @@ export function MediaTile({
             </span>
           </div>
         )}
-        {item.preview_url && item.kind === "video" && (
+        {showPreview && item.kind === "video" && (
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-accent-foreground/65">
               <Play

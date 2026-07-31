@@ -147,7 +147,7 @@ export default function MidiasPage() {
         </p>
       </div>
 
-      <FiltersCard storageKey="midias.filtros">
+      <FiltersCard storageKey="midias.filtros" minWidth={170}>
         <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor="midias-tipo">Tipo</Label>
           <Select
@@ -322,7 +322,7 @@ export default function MidiasPage() {
       {isVazio && (
         <EmptyState
           title="Nenhum anexo para este filtro"
-          description="Ajuste os criterios acima ou limpe os filtros para ver todos os anexos."
+          description="Ajuste os criterios de filtro acima para ver outros anexos."
         />
       )}
 

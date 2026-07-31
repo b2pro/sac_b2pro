@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
-import { Component, lazy, Suspense, useState, type ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { Component, lazy, Suspense, type ReactNode } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 
 import { AvgResolutionStat } from "@/components/reporting/AvgResolutionStat"
 import { EmptyState } from "@/components/reporting/EmptyState"
@@ -84,6 +84,19 @@ const KPI_LABELS: Record<(typeof KPI_ORDER)[number], string> = {
   finalizados_no_mes: "Finalizados no mes",
 }
 
+// Textos do "title" (tooltip nativo) de cada KpiCard, do mockup Dashboard.dc.html.
+// Os dois "no mes" usam "atual" em vez do mes fixo do mockup (que era so um
+// valor de demonstracao) para nao ficar errado o resto do ano.
+const KPI_TOOLTIPS: Record<(typeof KPI_ORDER)[number], string> = {
+  total: "Ver todos os tickets",
+  abertos: "Tickets com status Aberto",
+  aguardando_analise: "Tickets aguardando analise",
+  atrasados: "Tickets com SLA vencido",
+  aprovados_no_mes: "Aprovados no mes atual",
+  declinados_no_mes: "Declinados no mes atual",
+  finalizados_no_mes: "Finalizados no mes atual",
+}
+
 const RECENT_COLUMNS = ["No", "Cliente", "Produto", "Status", "SLA", "Ultima atividade"]
 
 function errorMessage(error: unknown): string {
@@ -91,7 +104,18 @@ function errorMessage(error: unknown): string {
 }
 
 export default function DashboardPage() {
-  const [brandId, setBrandId] = useState("")
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Mesmo padrao setParam de Relatorios/Midias: filtro direto na URL, para
+  // ficar compartilhavel por link e sobreviver a navegacao de volta.
+  function setParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setSearchParams(next, { replace: true })
+  }
+
+  const brandId = searchParams.get("brand_id") || ""
 
   const { data: brands } = useQuery({
     queryKey: ["marcas", { active: true }],
@@ -116,7 +140,10 @@ export default function DashboardPage() {
             Visao geral de trocas e defeitos do tenant
           </p>
         </div>
-        <Select value={brandId || ALL} onValueChange={(value) => setBrandId(value === ALL ? "" : value)}>
+        <Select
+          value={brandId || ALL}
+          onValueChange={(value) => setParam("brand_id", value === ALL ? "" : value)}
+        >
           <SelectTrigger aria-label="Filtrar por marca">
             <SelectValue placeholder="Todas as marcas" />
           </SelectTrigger>
@@ -177,8 +204,14 @@ export default function DashboardPage() {
             ))}
           </div>
           <EmptyState
-            title="Nenhum ticket registrado neste tenant"
-            description="Os indicadores aparecem quando o primeiro ticket for aberto."
+            title={
+              brandId ? "Nenhum ticket para a marca selecionada" : "Nenhum ticket registrado neste tenant"
+            }
+            description={
+              brandId
+                ? "Troque o filtro de marca ou selecione Todas as marcas para ver os demais tickets do tenant."
+                : "Os indicadores aparecem quando o primeiro ticket for aberto."
+            }
           />
         </>
       )}
@@ -200,6 +233,7 @@ export default function DashboardPage() {
                   value={kpi.count}
                   to={`/tickets?${params.toString()}`}
                   accent={key === "atrasados"}
+                  title={KPI_TOOLTIPS[key]}
                 />
               )
             })}
