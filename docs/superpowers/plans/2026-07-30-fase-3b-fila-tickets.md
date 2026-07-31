@@ -438,9 +438,14 @@ export const getTicketCounters: () => Promise<TicketCounters>
 export type QuickFilterKey = "todos" | "abertos" | "aguardando_analise" | "atrasados" | "nao_lidos" | "meus"
 export function QuickFilterChips(props: {
   counters: TicketCounters | undefined
-  active: QuickFilterKey
+  active: QuickFilterKey | null
   onSelect: (key: QuickFilterKey) => void
 }): JSX.Element
+// active e nulo quando a URL carrega estado que nenhum chip representa
+// (status=finalizado dos KPIs do dashboard, atendente de terceiro no select):
+// nesses casos nenhum chip acende e nenhum leva aria-pressed. "Todos" so fica
+// ativo com as dimensoes dos chips (status/overdue/unread/atendente_id) limpas.
+// Decisao do usuario em 2026-07-31, revisando a assinatura original.
 
 // TicketQueueCard.tsx
 export function TicketQueueCard(props: { item: TicketListItem }): JSX.Element
