@@ -171,6 +171,7 @@ async def list_tickets(
     overdue: bool = False,
     atendente_id: UUID | None = None,
     q: str | None = None,
+    unread: bool = False,
     page: int = 1,
     per_page: int = 20,
     sort: str = "last_activity_at",
@@ -189,6 +190,7 @@ async def list_tickets(
         overdue=overdue,
         attendant_user_id=atendente_id,
         search=q,
+        unread=unread,
     )
     rows, total = await ListTicketsUseCase(repos.tickets, repos.users).execute(
         _actor(identity), filters, page, per_page, sort, order

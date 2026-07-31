@@ -477,3 +477,101 @@ async def test_busca_nao_casa_o_que_nao_deve(session: AsyncSession, engine: Asyn
         assert total == 0
         assert rows == []
         await ts.commit()
+
+
+async def test_filtra_nao_lidos(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="reponaol")
+    user = await seed_user(session, email="reponaol@t.com")
+    leitor = await seed_user(session, email="leitornaol@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+
+        nunca_lido = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        lido_antes = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        lido_depois = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+
+        await repos.reads.mark_read(
+            lido_antes.id, leitor.id, lido_antes.last_activity_at - timedelta(hours=1)
+        )
+        await repos.reads.mark_read(
+            lido_depois.id, leitor.id, lido_depois.last_activity_at + timedelta(hours=1)
+        )
+        await ts.flush()
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+        )
+        ids = {row.ticket.id for row in rows}
+        assert ids == {nunca_lido.id, lido_antes.id}
+        assert lido_depois.id not in ids
+        # o total deve refletir o filtro, nao a lista inteira (que tem 3 tickets)
+        assert total == 2
+
+        rows_sem_filtro, total_sem_filtro = await repos.tickets.list(
+            TicketFilters(), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+        )
+        assert total_sem_filtro == 3
+        assert len(rows_sem_filtro) == 3
+        await ts.commit()
+
+
+async def test_nao_lidos_e_por_usuario(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="reponaou")
+    user = await seed_user(session, email="reponaou@t.com")
+    usuario_a = await seed_user(session, email="usuarioa@t.com")
+    usuario_b = await seed_user(session, email="usuariob@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+
+        ticket = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        await repos.reads.mark_read(
+            ticket.id, usuario_a.id, ticket.last_activity_at + timedelta(hours=1)
+        )
+        await ts.flush()
+
+        rows_a, total_a = await repos.tickets.list(
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=usuario_a.id
+        )
+        assert total_a == 0
+        assert rows_a == []
+
+        rows_b, total_b = await repos.tickets.list(
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=usuario_b.id
+        )
+        assert total_b == 1
+        assert rows_b[0].ticket.id == ticket.id
+        await ts.commit()
+
+
+async def test_lido_exatamente_na_ultima_atividade_conta_como_lido(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="reponaoe")
+    user = await seed_user(session, email="reponaoe@t.com")
+    leitor = await seed_user(session, email="leitornaoe@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+
+        ticket = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        # empate exato: last_read_at == last_activity_at conta como lido,
+        # coerente com a bolinha do card (unread = last_read < last_activity_at)
+        await repos.reads.mark_read(ticket.id, leitor.id, ticket.last_activity_at)
+        await ts.flush()
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+        )
+        assert total == 0
+        assert rows == []
+
+        rows_sem_filtro, _ = await repos.tickets.list(
+            TicketFilters(), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+        )
+        assert rows_sem_filtro[0].unread is False
+        await ts.commit()

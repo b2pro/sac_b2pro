@@ -36,6 +36,7 @@ class TicketFilters:
     overdue: bool = False
     attendant_user_id: UUID | None = None
     search: str | None = None
+    unread: bool = False
 
 
 @dataclass(frozen=True)

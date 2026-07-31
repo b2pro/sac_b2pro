@@ -209,7 +209,7 @@ class SqlTicketRepository:
             setattr(m, field, getattr(ticket, field))
         await flush_tickets(self._session)
 
-    def _base_stmt(self, filters: TicketFilters) -> Select[tuple[TicketModel]]:
+    def _base_stmt(self, filters: TicketFilters, unread_for: UUID) -> Select[tuple[TicketModel]]:
         stmt = select(TicketModel).where(TicketModel.deleted_at.is_(None))
         if filters.status is not None:
             stmt = stmt.where(TicketModel.status == str(filters.status))
@@ -270,6 +270,22 @@ class SqlTicketRepository:
                 if term.isdigit():
                     targets.append(cast(TicketModel.number, String).like(f"{term}%"))
                 stmt = stmt.where(or_(*targets))
+        if filters.unread:
+            # correlate(TicketModel) e necessario porque o list() tambem faz um
+            # outerjoin em TicketReadModel (para trazer o last_read_at da
+            # bolinha); sem isso a auto-correlacao do SQLAlchemy enxerga
+            # TicketReadModel nos dois lugares e remove o FROM deste EXISTS.
+            stmt = stmt.where(
+                ~exists(
+                    select(TicketReadModel.ticket_id)
+                    .where(
+                        TicketReadModel.ticket_id == TicketModel.id,
+                        TicketReadModel.user_id == unread_for,
+                        TicketReadModel.last_read_at >= TicketModel.last_activity_at,
+                    )
+                    .correlate(TicketModel)
+                )
+            )
         return stmt
 
     async def list(
@@ -281,11 +297,11 @@ class SqlTicketRepository:
         order: str,
         unread_for: UUID,
     ) -> tuple[list[TicketListRow], int]:
-        stmt = self._base_stmt(filters)
+        stmt = self._base_stmt(filters, unread_for)
         total = await self._session.scalar(select(func.count()).select_from(stmt.subquery()))
         column = _SORT_COLUMNS.get(sort, TicketModel.last_activity_at)
         rows_stmt = (
-            self._base_stmt(filters)
+            self._base_stmt(filters, unread_for)
             .add_columns(CustomerModel.name, TicketReadModel.last_read_at)
             .outerjoin(CustomerModel, TicketModel.customer_id == CustomerModel.id)
             .outerjoin(
