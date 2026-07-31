@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     PrimaryKeyConstraint,
     Sequence,
@@ -92,6 +93,15 @@ class TicketModel(TenantBase):
     __tablename__ = "tickets"
     __table_args__ = (
         UniqueConstraint("number", name="uq_tickets_number"),
+        # deleted_at (exclusao logica) e o filtro base de praticamente toda
+        # query de relatorio/dashboard (repositories_reporting.py), por isso
+        # lidera cada composto abaixo em vez de indexar cada coluna sozinha.
+        Index("ix_tickets_deleted_at_status", "deleted_at", "status"),
+        Index("ix_tickets_deleted_at_brand_id", "deleted_at", "brand_id"),
+        Index("ix_tickets_deleted_at_opened_at", "deleted_at", "opened_at"),
+        Index("ix_tickets_deleted_at_approved_at", "deleted_at", "approved_at"),
+        Index("ix_tickets_deleted_at_declined_at", "deleted_at", "declined_at"),
+        Index("ix_tickets_deleted_at_closed_at", "deleted_at", "closed_at"),
         {"schema": "tenant"},
     )
 
@@ -269,6 +279,15 @@ class TicketAttachmentModel(TenantBase):
     __tablename__ = "ticket_attachments"
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_ticket_attachments_size"),
+        # A galeria de midias (_media_stmt) sempre filtra deleted_at/status e
+        # ordena por created_at (com paginacao) - composto cobre WHERE e ORDER
+        # BY na mesma leitura de indice, sem precisar de sort separado.
+        Index(
+            "ix_ticket_attachments_deleted_at_status_created_at",
+            "deleted_at",
+            "status",
+            "created_at",
+        ),
         {"schema": "tenant"},
     )
 
