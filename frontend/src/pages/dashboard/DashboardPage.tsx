@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { lazy, Suspense, useState } from "react"
+import { Component, lazy, Suspense, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 
 import { AvgResolutionStat } from "@/components/reporting/AvgResolutionStat"
@@ -19,6 +19,7 @@ import {
 import { ApiError } from "@/lib/api"
 import { listCatalog } from "@/lib/cadastros"
 import { getDashboard } from "@/lib/reporting"
+import { cn } from "@/lib/utils"
 
 // Recharts (usado apenas pelo grafico) e pesado o suficiente para estourar o
 // aviso de chunk de 500kB, e Relatorios/Midias pagariam esse custo sem
@@ -34,6 +35,32 @@ const StatusDistributionChart = lazy(() =>
 // margem, ver StatusDistributionChart), para o fallback nao causar salto de
 // layout enquanto o chunk carrega.
 const CHART_FALLBACK_HEIGHT = "h-[276px]"
+
+// Suspense so cobre o carregamento; se o import() do chunk falhar (deploy
+// com hash antigo, rede instavel), React lanca o erro para cima e sem uma
+// boundary aqui ele derruba a pagina inteira. Este boundary local restringe
+// a falha ao card do grafico, mantendo o resto do dashboard funcionando.
+class ChartLoadBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className={cn(CHART_FALLBACK_HEIGHT, "flex items-center justify-center")}>
+          <EmptyState
+            title="Nao foi possivel carregar o grafico"
+            description="Atualize a pagina para tentar novamente."
+          />
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const ALL = "all"
 
@@ -187,9 +214,11 @@ export default function DashboardPage() {
                   </h2>
                 </div>
                 <div className="px-4 pt-3.5 pb-2.5">
-                  <Suspense fallback={<Skeleton className={CHART_FALLBACK_HEIGHT} />}>
-                    <StatusDistributionChart counts={data.status_counts} />
-                  </Suspense>
+                  <ChartLoadBoundary>
+                    <Suspense fallback={<Skeleton className={CHART_FALLBACK_HEIGHT} />}>
+                      <StatusDistributionChart counts={data.status_counts} />
+                    </Suspense>
+                  </ChartLoadBoundary>
                 </div>
               </section>
 
