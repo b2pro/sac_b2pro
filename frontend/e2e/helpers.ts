@@ -281,3 +281,11 @@ export async function selectOption(
   await page.locator(`#${triggerId}`).click()
   await page.getByRole("option", { name: optionName }).first().click()
 }
+
+/** Localiza o card de um ticket na fila repaginada (`TicketQueueCard`): o card
+ *  inteiro e um unico `<a>`, entao o numero basta para distinguir (nenhum
+ *  outro link da tela — nav, "Novo ticket", paginacao em botoes — tem "#" no
+ *  nome acessivel). */
+export function ticketCard(page: Page, number: number) {
+  return page.getByRole("link").filter({ hasText: `#${number}` })
+}

@@ -97,13 +97,14 @@ antes de rodar.
 
 ### Passeio end-to-end (Playwright)
 
-Cobre os fluxos de ticket na UI real: login, lista com filtros e ordenação, criação
-completa com cliente inline, máquina de estados até finalizado, declínio com motivo,
-ticket parcial completado pelo detalhe, comentários com resposta, ciclo de não lido, os
-escopos de atendente e visualizador, e os anexos de ticket (upload pelo dropzone com
-espera do preview assíncrono gerado pelo worker, recusa de tipo/tamanho inválido e
-remoção) incluindo a foto de produto (exclusão sempre atrás de confirmação e progresso
-de upload isolado por produto).
+Cobre os fluxos de ticket na UI real: login, fila repaginada (busca livre com debounce,
+chips de atalho com contagem e cards de duas linhas, incluindo o card inteiro como link
+navegavel), criação completa com cliente inline, máquina de estados até finalizado,
+declínio com motivo, ticket parcial completado pelo detalhe, comentários com resposta,
+ciclo de não lido, os escopos de atendente e visualizador, e os anexos de ticket (upload
+pelo dropzone com espera do preview assíncrono gerado pelo worker, recusa de tipo/tamanho
+inválido e remoção) incluindo a foto de produto (exclusão sempre atrás de confirmação e
+progresso de upload isolado por produto).
 
 ```bash
 cd frontend
@@ -137,6 +138,7 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
 - **Fase 2B — Anexos, previews e membros**: anexos de ticket com upload direto por presigned URL (imagem, PDF e vídeo até 50 MB, 10 por ticket), compressão de imagem e captura da thumb de vídeo no navegador, previews WebP (thumb 400px e média 1200px) gerados por worker assíncrono com fila em tabela (`preview_jobs`) e retry com backoff, soft delete preservando o objeto no storage para auditoria, foto de catálogo do produto (mesmo pipeline de upload e preview) e endpoint de membros do tenant com seletor de supervisor no ticket. A galeria de mídias (visualização agrupada de todos os anexos do tenant) fica para a Fase 3.
   - **Antes do primeiro deploy em produção** aplique o checklist de bucket de `docs/armazenamento-anexos.md`. O CORS sai por script — `cd backend && python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br` — porque sem a política o upload direto pelo navegador falha no Wasabi com um erro opaco. Restam o bucket privado e a decisão sobre objetos órfãos (prefixo de staging ou varredura no worker; **não** existe regra de ciclo de vida que resolva isso com o layout de chaves atual). O MinIO de desenvolvimento é permissivo justamente onde o Wasabi não é, então nenhuma verificação local cobre esses pontos.
 - **Fase 3 — Visibilidade**: dashboard como rota inicial, com KPI cards clicaveis que pre-filtram a lista, grafico de distribuicao por status (Recharts), rankings top 5 e tempo medio de resolucao, tudo com filtro por marca; relatorios com card de filtros de 9 campos, chips de filtros ativos, KPIs do recorte, rankings, tabela paginada com linhas navegaveis e export CSV com exatamente os mesmos filtros da tela (a tela exige um filtro antes de consultar); galeria de midias do tenant com filtros, scroll infinito e lightbox compartilhado com o detalhe do ticket. Layout implementado a partir dos mockups aprovados em `docs/frontendmockups/`. O importador das planilhas KODI/STALEKS saiu do escopo por decisao de produto (2026-07-30).
+- **Fase 3B — Fila de tickets repaginada**: a lista de tickets trocou a tabela e o card de filtros por um layout de fila: filtros no header (busca livre com debounce sobre numero/cliente/produto/pedido, selects compactos de Status/Marca/Atendente, ordenacao) e chips de atalho com contagem (Todos, Abertos, Aguardando analise, Atrasados, Nao lidos, Meus tickets — o chip ativo (ou nenhum) e derivado da URL) acima de cards de duas linhas (numero, cliente, status, prioridade e SLA na primeira; produto, itens, atendente e datas na segunda), mantendo a ordenacao da Fase 2A. Backend: `GET /api/tickets` ganhou os filtros `atendente_id`, `q` (busca livre por numero/cliente/produto/pedido) e `unread`; `GET /api/tickets/contadores` devolve todos os contadores da fila numa unica varredura, com escopo por papel (atendente ve so os proprios). A busca livre depende dos indices GIN de trigram criados nas migrations `public/0003_pg_trgm` (extensao `pg_trgm`) e `tenant/0008_indices_busca` (indices em `customers.name`, `products.name` e `tickets.order_code`) — decisao de usar trigram em vez de Seq Scan documentada, com a massa de teste reproduzivel, em `docs/medicao-indices-tenant.md`. Design e mockup em `docs/superpowers/specs/2026-07-30-sac-b2pro-fase-3b-fila-tickets-design.md` e `docs/frontendmockups/Tickets.dc.html`.
 
 ## Documentação
 
@@ -153,6 +155,10 @@ isso a suíte autentica cada usuário uma única vez e reaproveita a sessão.
 - `docs/superpowers/plans/2026-07-30-fase-3-visibilidade.md` — plano de implementação da Fase 3.
 - `docs/frontendmockups/Componentes.md` — inventário dos componentes de UI compartilhados usados nos mockups aprovados da Fase 3.
 - `docs/prompt-design-fase-3.md` — prompt de design usado para gerar os mockups da Fase 3.
+- `docs/superpowers/specs/2026-07-30-sac-b2pro-fase-3b-fila-tickets-design.md` — design tecnico da Fase 3B (fila de tickets repaginada: filtros no header, chips com contagem e busca livre).
+- `docs/superpowers/plans/2026-07-30-fase-3b-fila-tickets.md` — plano de implementacao da Fase 3B.
+- `docs/frontendmockups/Tickets.dc.html` — mockup aprovado da fila repaginada.
+- `docs/medicao-indices-tenant.md` — medicao em escala (massa reproduzivel) que justificou os indices trigram (GIN) da busca livre de tickets.
 - `docs/armazenamento-anexos.md` — desenho do armazenamento de anexos (Wasabi/S3, presigned URLs, previews) e o **checklist de bucket antes do primeiro deploy em produção** (CORS por script, bucket privado, objetos órfãos).
 - `docs/identidade-visual.md` — identidade visual do frontend.
 - `CLAUDE.md` — decisões de arquitetura e regras obrigatórias do projeto.

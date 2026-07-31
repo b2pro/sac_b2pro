@@ -7,7 +7,9 @@ test("criacao completa pela UI e fluxo ate finalizado", async ({ page }) => {
 
   await loginViaForm(page, "admin")
   await page.goto("/tickets")
-  await page.getByRole("button", { name: "Novo ticket" }).click()
+  // "Novo ticket" e um Button asChild em cima de um Link: o papel acessivel
+  // real e "link", nao "button"
+  await page.getByRole("link", { name: "Novo ticket" }).click()
   await expect(page).toHaveURL(/\/tickets\/novo$/)
 
   // --- Cliente novo (documento inexistente) ---

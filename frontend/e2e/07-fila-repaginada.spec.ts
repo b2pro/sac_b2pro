@@ -1,0 +1,84 @@
+import { expect, test } from "@playwright/test"
+
+import { apiFullTicket, login, ticketCard } from "./helpers"
+
+test.describe("Fila de tickets repaginada", () => {
+  test("busca por numero e chips filtram a fila", async ({ page, request }) => {
+    const ticket = await apiFullTicket(request, "admin")
+    await login(page, request, "admin")
+    await page.getByRole("link", { name: "Tickets" }).click()
+
+    const card = ticketCard(page, ticket.number)
+    await expect(card).toBeVisible()
+
+    await page
+      .getByPlaceholder("Buscar por no, cliente, produto ou pedido")
+      .fill(String(ticket.number))
+    // a busca e debounced em 400ms: espera a URL refletir o termo antes de
+    // olhar a lista, em vez de assertar o resultado na hora
+    await expect(page).toHaveURL(new RegExp(`q=${ticket.number}`))
+    await expect(card).toBeVisible()
+
+    // chip "Atrasados" e outro recorte (overdue=1); o ticket recem-criado nao
+    // e atrasado, entao so a URL e conferida aqui — a lista sob esse recorte
+    // nao inclui o card
+    await page.getByRole("button", { name: /Atrasados/ }).click()
+    await expect(page).toHaveURL(/overdue=1/)
+    await expect(card).toHaveCount(0)
+
+    await page.getByRole("button", { name: /^Todos/ }).click()
+    await expect(card).toBeVisible()
+    await card.click()
+    await expect(page).toHaveURL(new RegExp(`/tickets/${ticket.id}$`))
+  })
+
+  test("contadores aparecem no subtitulo e nos chips", async ({ page, request }) => {
+    await apiFullTicket(request, "admin")
+    await login(page, request, "admin")
+    await page.getByRole("link", { name: "Tickets" }).click()
+    await expect(page.getByText(/tickets ativos/)).toBeVisible()
+    await expect(page.getByRole("button", { name: /Nao lidos/ })).toBeVisible()
+  })
+
+  test("chip Meus tickets filtra por atendente", async ({ page, request }) => {
+    const meu = await apiFullTicket(request, "admin")
+    const doAtendente = await apiFullTicket(request, "atendente")
+
+    await login(page, request, "admin")
+    await page.getByRole("link", { name: "Tickets" }).click()
+
+    const chipMeus = page.getByRole("button", { name: /Meus tickets/ })
+    await chipMeus.click()
+    await expect(chipMeus).toHaveAttribute("aria-pressed", "true")
+    await expect(ticketCard(page, meu.number)).toBeVisible()
+    await expect(ticketCard(page, doAtendente.number)).toHaveCount(0)
+  })
+
+  // Um status sem chip equivalente (ex.: "aprovado" — os cards de KPI do
+  // dashboard linkam para esses) e um recorte que os selects do header
+  // conseguem expressar mas os chips nao representam: nenhum chip fica
+  // marcado como ativo, nem "Todos".
+  test("nenhum chip fica ativo para um status sem chip equivalente", async ({ page, request }) => {
+    await apiFullTicket(request, "admin")
+    await login(page, request, "admin")
+    await page.getByRole("link", { name: "Tickets" }).click()
+
+    await page.getByRole("combobox", { name: "Status" }).click()
+    await page.getByRole("option", { name: "Aprovado" }).click()
+    await expect(page).toHaveURL(/status=aprovado/)
+
+    for (const nome of [
+      /^Todos/,
+      /Abertos/,
+      /Aguardando analise/,
+      /Atrasados/,
+      /Nao lidos/,
+      /Meus tickets/,
+    ]) {
+      await expect(page.getByRole("button", { name: nome })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      )
+    }
+  })
+})

@@ -1,29 +1,39 @@
 import { expect, test } from "@playwright/test"
 
-import { apiFullTicket, login } from "./helpers"
+import { apiFullTicket, login, ticketCard } from "./helpers"
 
 test.describe("Lista de tickets e papeis", () => {
-  test("admin ve filtros, ordenacao e linha clicavel", async ({ page, request }) => {
+  test("admin ve filtros, ordenacao e card clicavel", async ({ page, request }) => {
     const ticket = await apiFullTicket(request, "admin")
 
     await login(page, request, "admin")
     await page.getByRole("link", { name: "Tickets" }).click()
     await expect(page).toHaveURL(/\/tickets$/)
 
-    for (const label of ["Status", "Marca", "Cliente", "Produto", "Pedido", "Prioridade", "Ordenar por"]) {
-      await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
+    // A fila repaginada trocou o card de filtros por controles no header:
+    // busca livre e os selects de Status / Marca / Atendente / Ordenar por.
+    // Os campos antigos de Cliente, Produto e Pedido nao tem mais controle
+    // proprio — a busca livre cobre os tres (ver teste abaixo) — e o filtro
+    // de Prioridade foi removido da tela sem substituto.
+    await expect(
+      page.getByPlaceholder("Buscar por no, cliente, produto ou pedido"),
+    ).toBeVisible()
+    for (const label of ["Status", "Marca", "Atendente", "Ordenar por"]) {
+      await expect(page.getByRole("combobox", { name: label })).toBeVisible()
     }
-    await expect(page.getByRole("button", { name: "Novo ticket" })).toBeVisible()
+    // "Novo ticket" e um Button asChild em cima de um Link: o papel
+    // acessivel real e "link", nao "button"
+    await expect(page.getByRole("link", { name: "Novo ticket" })).toBeVisible()
 
-    const row = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
-    await expect(row).toBeVisible()
-    await expect(row).toContainText("Cliente E2E")
+    const card = ticketCard(page, ticket.number)
+    await expect(card).toBeVisible()
+    await expect(card).toContainText("Cliente E2E")
 
-    // linha inteira e link real: um clique no meio da linha (fora da coluna do numero) navega
-    const alvo = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
-    const caixa = await alvo.boundingBox()
-    expect(caixa, "linha do ticket sem caixa").toBeTruthy()
-    await page.mouse.click(caixa!.x + caixa!.width / 2, caixa!.y + caixa!.height / 2)
+    // o card inteiro e um <a> (TicketQueueCard): um clique no canto oposto ao
+    // numero, longe de qualquer badge, ainda navega
+    const caixa = await card.boundingBox()
+    expect(caixa, "card do ticket sem caixa").toBeTruthy()
+    await page.mouse.click(caixa!.x + caixa!.width - 15, caixa!.y + caixa!.height - 8)
     await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}$/)
     await expect(page.getByText(`#${ticket.number}`).first()).toBeVisible()
 
@@ -33,25 +43,34 @@ test.describe("Lista de tickets e papeis", () => {
     await page.getByRole("button", { name: "Ordem decrescente" }).click()
     await expect(page.getByRole("button", { name: "Ordem crescente" })).toBeVisible()
 
-    // ordenar por numero crescente: a primeira linha passa a ser o menor numero
-    await page.locator("#filtro-ordenar").click()
+    // ordenar por numero crescente: o primeiro card passa a ser o menor numero
+    await page.getByRole("combobox", { name: "Ordenar por" }).click()
     await page.getByRole("option", { name: "Numero" }).click()
-    await expect(page.getByRole("row").nth(1)).toContainText("#1")
+    const cards = page.getByRole("link").filter({ hasText: /^#\d+/ })
+    await expect(cards.first()).toContainText("#1")
   })
 
-  test("filtro de produto por autocomplete restringe a lista", async ({ page, request }) => {
+  // Substitui o antigo "filtro de produto por autocomplete restringe a
+  // lista": o campo `#filtro-produto` (autocomplete que selecionava um
+  // product_id exato) nao existe mais na fila repaginada. A capacidade de
+  // restringir a fila por produto continua, agora pela busca livre do
+  // header (placeholder "Buscar por no, cliente, produto ou pedido"), que e
+  // o mecanismo que a UI nova oferece para isso.
+  test("busca livre por produto restringe a fila", async ({ page, request }) => {
     const comProduto = await apiFullTicket(request, "admin")
     const semProduto = await apiFullTicket(request, "admin", { items: [] })
 
     await login(page, request, "admin")
     await page.goto("/tickets")
-    await expect(page.getByRole("row").filter({ hasText: `#${semProduto.number}` })).toBeVisible()
+    await expect(ticketCard(page, semProduto.number)).toBeVisible()
 
-    await page.locator("#filtro-produto").fill("Alicate")
-    await page.getByRole("button", { name: /Alicate/ }).first().click()
+    await page.getByPlaceholder("Buscar por no, cliente, produto ou pedido").fill("Alicate")
+    // busca e debounced (400ms): esperar a URL refletir o termo antes de
+    // conferir a lista, em vez de checar o resultado na hora
+    await expect(page).toHaveURL(/q=Alicate/)
 
-    await expect(page.getByRole("row").filter({ hasText: `#${comProduto.number}` })).toBeVisible()
-    await expect(page.getByRole("row").filter({ hasText: `#${semProduto.number}` })).toHaveCount(0)
+    await expect(ticketCard(page, comProduto.number)).toBeVisible()
+    await expect(ticketCard(page, semProduto.number)).toHaveCount(0)
   })
 
   test("visualizador nao ve acoes nem campo de comentario", async ({ page, request }) => {
@@ -59,7 +78,7 @@ test.describe("Lista de tickets e papeis", () => {
 
     await login(page, request, "viewer")
     await page.goto("/tickets")
-    await expect(page.getByRole("button", { name: "Novo ticket" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Novo ticket" })).toHaveCount(0)
 
     await page.goto(`/tickets/${ticket.id}`)
     await expect(page.getByText(`#${ticket.number}`).first()).toBeVisible()
@@ -74,8 +93,8 @@ test.describe("Lista de tickets e papeis", () => {
 
     await login(page, request, "atendente")
     await page.goto("/tickets")
-    await expect(page.getByRole("row").filter({ hasText: `#${doAtendente.number}` })).toBeVisible()
-    await expect(page.getByRole("row").filter({ hasText: `#${doAdmin.number}` })).toHaveCount(0)
+    await expect(ticketCard(page, doAtendente.number)).toBeVisible()
+    await expect(ticketCard(page, doAdmin.number)).toHaveCount(0)
 
     await page.goto(`/tickets/${doAdmin.id}`)
     await expect(page.getByText("Ticket nao encontrado.")).toBeVisible()

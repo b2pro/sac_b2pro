@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-import { apiFullTicket, login } from "./helpers"
+import { apiFullTicket, login, ticketCard } from "./helpers"
 
 test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page, request }) => {
   const ticket = await apiFullTicket(request, "admin")
@@ -14,18 +14,22 @@ test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page
   await expect(page.getByText("Preciso da nota fiscal para seguir com a analise.")).toBeVisible()
 
   // --- admin ve o ticket como nao lido na lista ---
+  // TicketQueueCard marca "nao lido" com um ponto decorativo (role="img",
+  // aria-label "Atividade nao lida"), sem texto visivel — o equivalente da
+  // antiga celula "Nao lido" da tabela.
   await login(page, request, "admin")
   await page.goto("/tickets")
-  const row = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
-  await expect(row).toContainText("Nao lido")
+  await expect(
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+  ).toBeVisible()
 
   // --- abrir o detalhe marca como lido ---
   await page.goto(`/tickets/${ticket.id}`)
   await expect(page.getByText("Preciso da nota fiscal para seguir com a analise.")).toBeVisible()
   await page.goto("/tickets")
-  await expect(page.getByRole("row").filter({ hasText: `#${ticket.number}` })).not.toContainText(
-    "Nao lido",
-  )
+  await expect(
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+  ).toHaveCount(0)
 
   // --- responder citando o comentario do supervisor ---
   await page.goto(`/tickets/${ticket.id}`)
@@ -39,9 +43,9 @@ test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page
   await page.getByRole("button", { name: "Mais acoes do ticket" }).click()
   await page.getByRole("menuitem", { name: "Marcar como nao lido" }).click()
   await page.goto("/tickets")
-  await expect(page.getByRole("row").filter({ hasText: `#${ticket.number}` })).toContainText(
-    "Nao lido",
-  )
+  await expect(
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+  ).toBeVisible()
 })
 
 test("declinar exige motivo e encerra o ticket", async ({ page, request }) => {
