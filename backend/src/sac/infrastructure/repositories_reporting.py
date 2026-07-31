@@ -35,7 +35,11 @@ from sac.infrastructure.models_tenant import (
     TicketReadModel,
 )
 from sac.infrastructure.repositories_attachments import attachment_entity
-from sac.infrastructure.repositories_tickets import SqlTicketRepository, _ticket_entity
+from sac.infrastructure.repositories_tickets import (
+    SqlTicketRepository,
+    _ticket_entity,
+    load_item_summaries,
+)
 
 _CLOSED = [str(s) for s in CLOSED_STATUSES]
 
@@ -377,32 +381,7 @@ class SqlReportingRepository:
             (row[0], row[1], row[2]) for row in result.all()
         ]
         ticket_ids = [m.id for m, _, _ in models]
-        counts: dict[UUID, int] = {}
-        first_products: dict[UUID, str] = {}
-        if ticket_ids:
-            count_rows = await self._session.execute(
-                select(TicketItemModel.ticket_id, func.count())
-                .where(TicketItemModel.ticket_id.in_(ticket_ids))
-                .group_by(TicketItemModel.ticket_id)
-            )
-            counts = {row[0]: int(row[1]) for row in count_rows.all()}
-            item_rows = await self._session.execute(
-                select(TicketItemModel)
-                .where(TicketItemModel.ticket_id.in_(ticket_ids))
-                .order_by(TicketItemModel.created_at)
-            )
-            items = list(item_rows.scalars().all())
-            product_ids = {i.product_id for i in items}
-            product_names: dict[UUID, str] = {}
-            if product_ids:
-                product_rows = await self._session.execute(
-                    select(ProductModel.id, ProductModel.name).where(
-                        ProductModel.id.in_(product_ids)
-                    )
-                )
-                product_names = {r[0]: r[1] for r in product_rows.all()}
-            for item in items:
-                first_products.setdefault(item.ticket_id, product_names[item.product_id])
+        counts, first_products = await load_item_summaries(self._session, ticket_ids)
         tickets: list[TicketListRow] = [
             TicketListRow(
                 ticket=_ticket_entity(m),
@@ -472,36 +451,22 @@ class SqlReportingRepository:
         attendant_names = {r[0]: r[1] for r in name_rows.all()}
 
         item_rows = await self._session.execute(
-            select(TicketItemModel)
+            select(
+                TicketItemModel.ticket_id,
+                TicketItemModel.quantity,
+                ProductModel.name,
+                DefectTypeModel.name,
+            )
+            .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
+            .join(DefectTypeModel, TicketItemModel.defect_type_id == DefectTypeModel.id)
             .where(TicketItemModel.ticket_id.in_(ticket_ids))
-            .order_by(TicketItemModel.created_at)
+            .order_by(TicketItemModel.ticket_id, TicketItemModel.seq)
         )
-        items = list(item_rows.scalars().all())
-        product_ids = {i.product_id for i in items}
-        defect_ids = {i.defect_type_id for i in items}
-        product_names: dict[UUID, str] = {}
-        defect_names: dict[UUID, str] = {}
-        if product_ids:
-            product_rows = await self._session.execute(
-                select(ProductModel.id, ProductModel.name).where(ProductModel.id.in_(product_ids))
-            )
-            product_names = {r[0]: r[1] for r in product_rows.all()}
-        if defect_ids:
-            defect_rows = await self._session.execute(
-                select(DefectTypeModel.id, DefectTypeModel.name).where(
-                    DefectTypeModel.id.in_(defect_ids)
-                )
-            )
-            defect_names = {r[0]: r[1] for r in defect_rows.all()}
         products_by_ticket: dict[UUID, list[str]] = defaultdict(list)
         defects_by_ticket: dict[UUID, list[str]] = defaultdict(list)
-        for item in items:
-            products_by_ticket[item.ticket_id].append(
-                f"{product_names[item.product_id]} x{item.quantity}"
-            )
-            defects_by_ticket[item.ticket_id].append(
-                f"{defect_names[item.defect_type_id]} x{item.quantity}"
-            )
+        for item_ticket_id, quantity, product_name, defect_name in item_rows.all():
+            products_by_ticket[item_ticket_id].append(f"{product_name} x{quantity}")
+            defects_by_ticket[item_ticket_id].append(f"{defect_name} x{quantity}")
 
         export_rows: list[ReportExportRow] = []
         for (

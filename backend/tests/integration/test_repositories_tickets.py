@@ -156,6 +156,59 @@ async def test_list_filtros_unread_e_overdue(session: AsyncSession, engine: Asyn
         await ts.commit()
 
 
+async def test_itens_mantem_ordem_de_insercao_mesmo_apos_edicao(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repoord")
+    user = await seed_user(session, email="repoord@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        defect_id = (await ts.scalars(select(DefectTypeModel.id))).first()
+        assert defect_id is not None
+        p1, p2 = uuid4(), uuid4()
+        ts.add_all(
+            [
+                ProductModel(id=p1, name="Primeiro", sku="ORD-1"),
+                ProductModel(id=p2, name="Segundo", sku="ORD-2"),
+            ]
+        )
+        await ts.flush()
+        ticket = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        primeiro = TicketItem(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            product_id=p1,
+            defect_type_id=defect_id,
+            quantity=1,
+        )
+        segundo = TicketItem(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            product_id=p2,
+            defect_type_id=defect_id,
+            quantity=1,
+        )
+        await repos.items.add(primeiro)
+        await repos.items.add(segundo)
+        # created_at dos dois itens empata (server_default e transaction_timestamp)
+        # e editar o primeiro grava uma nova versao da linha no fim da pagina, o
+        # que inverte a ordem fisica. Sem uma coluna de ordem, ordenar por
+        # created_at devolve os itens invertidos.
+        primeiro.quantity = 3
+        await repos.items.update(primeiro)
+
+        itens = await repos.items.list_by_ticket(ticket.id)
+        assert [i.product_name for i in itens] == ["Primeiro", "Segundo"]
+
+        rows, _ = await repos.tickets.list(
+            TicketFilters(), 1, 20, "number", "asc", unread_for=user.id
+        )
+        assert rows[0].first_product_name == "Primeiro"
+        await ts.commit()
+
+
 async def test_busca_por_cliente_nome_ou_documento(
     session: AsyncSession, engine: AsyncEngine
 ) -> None:

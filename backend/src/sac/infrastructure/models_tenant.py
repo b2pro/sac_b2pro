@@ -162,6 +162,9 @@ class TicketModel(TenantBase):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+TICKET_ITEM_SEQ = Sequence("ticket_item_seq", schema="tenant")
+
+
 class TicketItemModel(TenantBase):
     __tablename__ = "ticket_items"
     __table_args__ = (
@@ -181,6 +184,15 @@ class TicketItemModel(TenantBase):
         nullable=False,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Ordem de insercao dos itens dentro do ticket. created_at nao serve: o
+    # server_default e transaction_timestamp(), entao todos os itens gravados na
+    # mesma transacao empatam e o "primeiro produto" fica indeterminado. O valor
+    # vem da Sequence embutida no INSERT (TICKET_ITEM_SEQ) e o server_default
+    # aqui e apenas o marcador que faz o mapper trazer a coluna no RETURNING -
+    # mesma mecanica descrita em TicketModel.number.
+    seq: Mapped[int] = mapped_column(
+        BigInteger, TICKET_ITEM_SEQ, server_default=TICKET_ITEM_SEQ.next_value(), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

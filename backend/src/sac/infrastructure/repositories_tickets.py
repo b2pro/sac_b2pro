@@ -154,6 +154,33 @@ _SORT_COLUMNS = {
 }
 
 
+async def load_item_summaries(
+    session: AsyncSession, ticket_ids: list[UUID]
+) -> tuple[dict[UUID, int], dict[UUID, str]]:
+    """Contagem de itens e nome do primeiro produto de cada ticket informado.
+
+    "Primeiro produto" e o do item de menor `seq`, isto e, o primeiro inserido
+    no ticket. A listagem de tickets e a tabela do relatorio exibem essa mesma
+    coluna e antes mantinham copias divergentes desta consulta.
+    """
+    if not ticket_ids:
+        return {}, {}
+    count_rows = await session.execute(
+        select(TicketItemModel.ticket_id, func.count())
+        .where(TicketItemModel.ticket_id.in_(ticket_ids))
+        .group_by(TicketItemModel.ticket_id)
+    )
+    counts = {row[0]: int(row[1]) for row in count_rows.all()}
+    first_rows = await session.execute(
+        select(TicketItemModel.ticket_id, ProductModel.name)
+        .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
+        .where(TicketItemModel.ticket_id.in_(ticket_ids))
+        .order_by(TicketItemModel.ticket_id, TicketItemModel.seq)
+        .distinct(TicketItemModel.ticket_id)
+    )
+    return counts, {row[0]: row[1] for row in first_rows.all()}
+
+
 class SqlTicketRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -255,23 +282,7 @@ class SqlTicketRepository:
             (row[0], row[1], row[2]) for row in result.all()
         ]
         ticket_ids = [m.id for m, _, _ in models]
-        counts: dict[UUID, int] = {}
-        first_products: dict[UUID, str] = {}
-        if ticket_ids:
-            count_rows = await self._session.execute(
-                select(TicketItemModel.ticket_id, func.count())
-                .where(TicketItemModel.ticket_id.in_(ticket_ids))
-                .group_by(TicketItemModel.ticket_id)
-            )
-            counts = {row[0]: int(row[1]) for row in count_rows.all()}
-            first_rows = await self._session.execute(
-                select(TicketItemModel.ticket_id, ProductModel.name)
-                .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
-                .where(TicketItemModel.ticket_id.in_(ticket_ids))
-                .order_by(TicketItemModel.ticket_id, TicketItemModel.created_at)
-                .distinct(TicketItemModel.ticket_id)
-            )
-            first_products = {row[0]: row[1] for row in first_rows.all()}
+        counts, first_products = await load_item_summaries(self._session, ticket_ids)
         rows = [
             TicketListRow(
                 ticket=_ticket_entity(m),
@@ -295,7 +306,7 @@ class SqlTicketItemRepository:
             .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
             .join(DefectTypeModel, TicketItemModel.defect_type_id == DefectTypeModel.id)
             .where(TicketItemModel.ticket_id == ticket_id)
-            .order_by(TicketItemModel.created_at)
+            .order_by(TicketItemModel.seq)
         )
         return [
             TicketItemView(

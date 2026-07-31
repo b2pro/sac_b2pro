@@ -295,6 +295,36 @@ async def test_export_rows_traz_cliente_produtos_e_pagina(
     assert vazia == []
 
 
+async def test_ordem_dos_itens_segue_a_insercao_mesmo_apos_edicao(
+    session: AsyncSession, tenant_session: AsyncSession
+) -> None:
+    user = await seed_user(session, email="rep-ordem@t.dev")
+    ids = await seed_catalog(tenant_session)
+    t = make_ticket(ids, user.id)
+    tenant_session.add(t)
+    await tenant_session.flush()
+    primeiro = make_item(t.id, ids["product"], ids["defect"], quantity=2)
+    segundo = make_item(t.id, ids["product2"], ids["defect2"], quantity=1)
+    tenant_session.add(primeiro)
+    await tenant_session.flush()
+    tenant_session.add(segundo)
+    await tenant_session.flush()
+    # created_at dos dois itens empata (server_default e transaction_timestamp)
+    # e editar o primeiro grava uma nova versao da linha no fim da pagina, o que
+    # inverte a ordem fisica. Sem uma coluna de ordem, o resultado passa a
+    # depender do plano: com o JOIN abaixo o empate sai embaralhado.
+    primeiro.quantity = 3
+    await tenant_session.flush()
+
+    repo = SqlReportingRepository(tenant_session)
+    data = await repo.report(ReportFilters(), page=1, per_page=20, unread_for=user.id)
+    assert data.tickets[0].first_product_name == "Alicate"
+
+    rows = await repo.export_rows(ReportFilters(), page=1, per_page=10)
+    assert rows[0].products == "Alicate x3; Esmalte x1"
+    assert rows[0].defects == "Oxidacao x3; Danificado x1"
+
+
 def make_attachment(
     ticket_id: UUID,
     author: UUID,
