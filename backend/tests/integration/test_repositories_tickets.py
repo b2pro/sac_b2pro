@@ -340,6 +340,7 @@ async def test_busca_por_prefixo_do_numero(session: AsyncSession, engine: AsyncE
         quarenta_oito = await repos.tickets.add(_novo_ticket(brand_id, user.id))
         quatrocentos_oitenta_nove = await repos.tickets.add(_novo_ticket(brand_id, user.id))
         sete = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        cento_quarenta_oito = await repos.tickets.add(_novo_ticket(brand_id, user.id))
         # os numeros reais vem de uma sequence do tenant; forcamos os valores
         # que o teste precisa direto na tabela, sem passar pelo repositorio.
         await ts.execute(
@@ -351,6 +352,11 @@ async def test_busca_por_prefixo_do_numero(session: AsyncSession, engine: AsyncE
             .values(number=489)
         )
         await ts.execute(update(TicketModel).where(TicketModel.id == sete.id).values(number=7))
+        # 148 contem "48" como substring, mas nao deve casar: a busca por
+        # numero e por prefixo, nao por trecho.
+        await ts.execute(
+            update(TicketModel).where(TicketModel.id == cento_quarenta_oito.id).values(number=148)
+        )
         await ts.flush()
 
         rows, total = await repos.tickets.list(
@@ -359,6 +365,7 @@ async def test_busca_por_prefixo_do_numero(session: AsyncSession, engine: AsyncE
         assert total == 2
         ids = {row.ticket.id for row in rows}
         assert ids == {quarenta_oito.id, quatrocentos_oitenta_nove.id}
+        assert cento_quarenta_oito.id not in ids
         await ts.commit()
 
 
