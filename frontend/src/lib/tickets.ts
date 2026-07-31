@@ -178,10 +178,23 @@ export type ListTicketsParams = {
   orderCode?: string
   priority?: TicketPriority
   overdue?: boolean
+  q?: string
+  atendenteId?: string
+  unread?: boolean
   page?: number
   perPage?: number
   sort?: string
   order?: "asc" | "desc"
+}
+
+export type TicketCounters = {
+  todos: number
+  ativos: number
+  abertos: number
+  aguardando_analise: number
+  atrasados: number
+  nao_lidos: number
+  meus: number
 }
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
@@ -204,6 +217,9 @@ export const listTickets = (params: ListTicketsParams = {}) =>
       order_code: params.orderCode,
       priority: params.priority,
       overdue: params.overdue,
+      q: params.q,
+      atendente_id: params.atendenteId,
+      unread: params.unread,
       page: params.page,
       per_page: params.perPage,
       sort: params.sort,
@@ -212,6 +228,8 @@ export const listTickets = (params: ListTicketsParams = {}) =>
   )
 
 export const getTicket = (id: string) => api<TicketDetail>(`/tickets/${id}`)
+
+export const getTicketCounters = () => api<TicketCounters>("/tickets/contadores")
 
 export const createTicket = (input: TicketCreateInput) =>
   api<Ticket>("/tickets", { method: "POST", body: input })
