@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -89,22 +90,36 @@ class CustomerModel(TenantTableMixin, TenantBase):
 TICKET_NUMBER_SEQ = Sequence("ticket_number_seq", schema="tenant")
 
 
+_ALIVE = text("deleted_at IS NULL")
+
+
 class TicketModel(TenantBase):
     __tablename__ = "tickets"
     __table_args__ = (
         UniqueConstraint("number", name="uq_tickets_number"),
-        # deleted_at (exclusao logica) e o filtro base de praticamente toda
-        # query de relatorio/dashboard (repositories_reporting.py), por isso
-        # lidera cada composto abaixo em vez de indexar cada coluna sozinha.
-        Index("ix_tickets_deleted_at_status", "deleted_at", "status"),
-        Index("ix_tickets_deleted_at_brand_id", "deleted_at", "brand_id"),
-        Index("ix_tickets_deleted_at_opened_at", "deleted_at", "opened_at"),
-        # Nao ha composto para approved_at/declined_at: essas colunas so aparecem
-        # dentro de count(*) FILTER (...) no dashboard, e FILTER de agregado e
-        # avaliado linha a linha depois da varredura — nunca como predicado de
-        # indice. closed_at fica porque tem predicado real (IS NOT NULL) no
-        # calculo do tempo medio de resolucao.
-        Index("ix_tickets_deleted_at_closed_at", "deleted_at", "closed_at"),
+        # deleted_at (exclusao logica) e o filtro base de toda query de ticket,
+        # mas 99% das linhas o satisfazem: como coluna lider de b-tree custaria
+        # 8 bytes por entrada sem seletividade nenhuma. Entra como PREDICADO
+        # PARCIAL, que alem de encolher o indice dispensa a recheck de
+        # deleted_at no heap. Racional medido em 0007_indices_parciais.
+        Index("ix_tickets_status", "status", postgresql_where=_ALIVE),
+        # brand_id nao restringe linhas (so ha duas marcas), mas cobre a
+        # contagem do dashboard por marca em Index Only Scan.
+        Index("ix_tickets_brand_id", "brand_id", postgresql_where=_ALIVE),
+        # opened_at ordena a tabela do relatorio e o export CSV (ORDER BY
+        # opened_at DESC, id) alem de filtrar o periodo.
+        Index("ix_tickets_opened_at", "opened_at", postgresql_where=_ALIVE),
+        # last_activity_at e due_at sao colunas de ordenacao da lista de tickets
+        # (_SORT_COLUMNS); customer_id e attendant_user_id sao filtros dela.
+        Index("ix_tickets_last_activity_at", "last_activity_at", postgresql_where=_ALIVE),
+        Index("ix_tickets_due_at", "due_at", postgresql_where=_ALIVE),
+        Index("ix_tickets_customer_id", "customer_id", postgresql_where=_ALIVE),
+        Index("ix_tickets_attendant_user_id", "attendant_user_id", postgresql_where=_ALIVE),
+        # Nao ha indice de closed_at (o tempo medio de resolucao entra por
+        # status, e closed_at IS NOT NULL nao filtra nada dentro de
+        # finalizado). Tampouco de approved_at/declined_at: elas so aparecem em
+        # count(*) FILTER (...) no dashboard, e FILTER de agregado e avaliado
+        # linha a linha depois da varredura — nunca como predicado de indice.
         {"schema": "tenant"},
     )
 
@@ -172,6 +187,9 @@ class TicketItemModel(TenantBase):
     __tablename__ = "ticket_items"
     __table_args__ = (
         CheckConstraint("quantity >= 1", name="ck_ticket_items_quantity"),
+        # Nao e parcial: ticket_items nao tem deleted_at (o item some junto com
+        # o ticket). Serve tanto o load_item_summaries quanto a FK.
+        Index("ix_ticket_items_ticket_id", "ticket_id"),
         {"schema": "tenant"},
     )
 
@@ -206,7 +224,10 @@ class TicketItemModel(TenantBase):
 
 class TicketCommentModel(TenantBase):
     __tablename__ = "ticket_comments"
-    __table_args__ = {"schema": "tenant"}
+    __table_args__ = (
+        Index("ix_ticket_comments_ticket_id", "ticket_id"),
+        {"schema": "tenant"},
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     ticket_id: Mapped[UUID] = mapped_column(
@@ -225,7 +246,10 @@ class TicketCommentModel(TenantBase):
 
 class TicketTimelineEventModel(TenantBase):
     __tablename__ = "ticket_timeline_events"
-    __table_args__ = {"schema": "tenant"}
+    __table_args__ = (
+        Index("ix_ticket_timeline_events_ticket_id", "ticket_id"),
+        {"schema": "tenant"},
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     ticket_id: Mapped[UUID] = mapped_column(
@@ -258,7 +282,10 @@ class TicketReadModel(TenantBase):
 
 class ReverseCodeModel(TenantBase):
     __tablename__ = "reverse_codes"
-    __table_args__ = {"schema": "tenant"}
+    __table_args__ = (
+        Index("ix_reverse_codes_ticket_id", "ticket_id"),
+        {"schema": "tenant"},
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     ticket_id: Mapped[UUID] = mapped_column(
@@ -294,15 +321,14 @@ class TicketAttachmentModel(TenantBase):
     __tablename__ = "ticket_attachments"
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_ticket_attachments_size"),
-        # A galeria de midias (_media_stmt) sempre filtra deleted_at/status e
-        # ordena por created_at (com paginacao) - composto cobre WHERE e ORDER
-        # BY na mesma leitura de indice, sem precisar de sort separado.
-        Index(
-            "ix_ticket_attachments_deleted_at_status_created_at",
-            "deleted_at",
-            "status",
-            "created_at",
-        ),
+        Index("ix_ticket_attachments_ticket_id", "ticket_id"),
+        # NAO e parcial em deleted_at, ao contrario dos indices de tickets: o
+        # varredor de anexos pendentes (list_pending_before) filtra apenas
+        # status e created_at, sem deleted_at, e nao alcancaria um indice
+        # parcial. Nesta forma o indice serve as duas consultas — a galeria usa
+        # o prefixo status mais a ordenacao por created_at, o varredor usa o
+        # prefixo status — e dispensa um segundo indice so de status.
+        Index("ix_ticket_attachments_status_created_at", "status", "created_at"),
         {"schema": "tenant"},
     )
 
