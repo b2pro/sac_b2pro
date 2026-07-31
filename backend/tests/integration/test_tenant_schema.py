@@ -22,9 +22,14 @@ EXPECTED_TICKET_INDEXES = {
     "ix_tickets_deleted_at_status",
     "ix_tickets_deleted_at_brand_id",
     "ix_tickets_deleted_at_opened_at",
+    "ix_tickets_deleted_at_closed_at",
+}
+# approved_at/declined_at nao entram: no dashboard elas so aparecem dentro de
+# count(*) FILTER (...), que e avaliado depois da varredura e nunca vira busca
+# por indice — um composto ali seria custo de escrita sem ganho de leitura.
+FORBIDDEN_TICKET_INDEXES = {
     "ix_tickets_deleted_at_approved_at",
     "ix_tickets_deleted_at_declined_at",
-    "ix_tickets_deleted_at_closed_at",
 }
 EXPECTED_TICKET_ATTACHMENT_INDEXES = {
     "ix_ticket_attachments_deleted_at_status_created_at",
@@ -57,6 +62,7 @@ async def test_migration_tenant_cria_indices_de_relatorio(engine: AsyncEngine) -
         for table, index in rows.all():
             by_table.setdefault(table, set()).add(index)
     assert EXPECTED_TICKET_INDEXES <= by_table.get("tickets", set())
+    assert not (FORBIDDEN_TICKET_INDEXES & by_table.get("tickets", set()))
     assert EXPECTED_TICKET_ATTACHMENT_INDEXES <= by_table.get("ticket_attachments", set())
 
 

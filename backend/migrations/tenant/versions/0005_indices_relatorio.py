@@ -27,18 +27,11 @@ def upgrade() -> None:
     op.create_index(
         "ix_tickets_deleted_at_opened_at", "tickets", ["deleted_at", "opened_at"], schema="tenant"
     )
-    op.create_index(
-        "ix_tickets_deleted_at_approved_at",
-        "tickets",
-        ["deleted_at", "approved_at"],
-        schema="tenant",
-    )
-    op.create_index(
-        "ix_tickets_deleted_at_declined_at",
-        "tickets",
-        ["deleted_at", "declined_at"],
-        schema="tenant",
-    )
+    # closed_at aparece como predicado real (closed_at IS NOT NULL no tempo medio
+    # de resolucao). approved_at/declined_at, ao contrario, so aparecem dentro de
+    # count(*) FILTER (...) do dashboard: FILTER e avaliado linha a linha depois
+    # da varredura, nunca vira predicado de indice — por isso nao ha indice para
+    # essas duas colunas aqui.
     op.create_index(
         "ix_tickets_deleted_at_closed_at", "tickets", ["deleted_at", "closed_at"], schema="tenant"
     )
@@ -60,8 +53,6 @@ def downgrade() -> None:
         schema="tenant",
     )
     op.drop_index("ix_tickets_deleted_at_closed_at", table_name="tickets", schema="tenant")
-    op.drop_index("ix_tickets_deleted_at_declined_at", table_name="tickets", schema="tenant")
-    op.drop_index("ix_tickets_deleted_at_approved_at", table_name="tickets", schema="tenant")
     op.drop_index("ix_tickets_deleted_at_opened_at", table_name="tickets", schema="tenant")
     op.drop_index("ix_tickets_deleted_at_brand_id", table_name="tickets", schema="tenant")
     op.drop_index("ix_tickets_deleted_at_status", table_name="tickets", schema="tenant")

@@ -99,8 +99,11 @@ class TicketModel(TenantBase):
         Index("ix_tickets_deleted_at_status", "deleted_at", "status"),
         Index("ix_tickets_deleted_at_brand_id", "deleted_at", "brand_id"),
         Index("ix_tickets_deleted_at_opened_at", "deleted_at", "opened_at"),
-        Index("ix_tickets_deleted_at_approved_at", "deleted_at", "approved_at"),
-        Index("ix_tickets_deleted_at_declined_at", "deleted_at", "declined_at"),
+        # Nao ha composto para approved_at/declined_at: essas colunas so aparecem
+        # dentro de count(*) FILTER (...) no dashboard, e FILTER de agregado e
+        # avaliado linha a linha depois da varredura — nunca como predicado de
+        # indice. closed_at fica porque tem predicado real (IS NOT NULL) no
+        # calculo do tempo medio de resolucao.
         Index("ix_tickets_deleted_at_closed_at", "deleted_at", "closed_at"),
         {"schema": "tenant"},
     )
