@@ -167,6 +167,26 @@ async def test_relatorio_filtra_e_pagina(
     assert invalido.status_code == 422
 
 
+async def test_relatorio_periodo_invertido_retorna_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    _, h_view, *_ = await _setup(client, session, engine)
+
+    invertido = await client.get("/api/relatorios?de=2026-08-01&ate=2026-07-01", headers=h_view)
+    assert invertido.status_code == 422
+    assert invertido.json()["code"] == "validation_error"
+
+    invertido_export = await client.get(
+        "/api/relatorios/export?de=2026-08-01&ate=2026-07-01", headers=h_view
+    )
+    assert invertido_export.status_code == 422
+    assert invertido_export.json()["code"] == "validation_error"
+
+    # de == ate e um periodo valido (um unico dia), nao invertido
+    mesmo_dia = await client.get("/api/relatorios?de=2026-08-01&ate=2026-08-01", headers=h_view)
+    assert mesmo_dia.status_code == 200
+
+
 async def test_midias_lista_vazia_sem_anexos(
     client: AsyncClient, session: AsyncSession, engine: AsyncEngine
 ) -> None:

@@ -16,6 +16,7 @@ from sac.application.use_cases.reporting import (
     ListMediaUseCase,
 )
 from sac.domain.attachments import AttachmentKind
+from sac.domain.errors import ValidationError
 from sac.domain.permissions import Permission
 from sac.domain.tickets import TicketStatus
 from sac.infrastructure.csv_export import CSV_HEADER, csv_line, export_row_values
@@ -68,6 +69,11 @@ def _report_filters(
     atendente_id: UUID | None = None,
     channel_id: UUID | None = None,
 ) -> ReportFilters:
+    if de is not None and ate is not None and de > ate:
+        raise ValidationError(
+            "data inicial nao pode ser maior que a data final",
+            details={"fields": ["de", "ate"]},
+        )
     return ReportFilters(
         date_from=de,
         date_to=ate,
