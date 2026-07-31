@@ -70,6 +70,23 @@ def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+def _validate_period(de: datetime | None, ate: datetime | None) -> None:
+    """Guarda de periodo compartilhada por relatorios e midias.
+
+    O limite superior das duas consultas e exclusivo (_report_stmt:
+    opened_at < date_to; _media_stmt: created_at < date_to), entao o
+    intervalo vazio e "de >= ate", nao "de > ate": com de == ate o predicado
+    vira campo >= X AND campo < X, que nunca casa. O front ja soma um dia em
+    "ate" (isoEndExclusive), logo de == ate chega aqui exatamente quando o
+    usuario inverteu as datas em um dia — o caso mais comum.
+    """
+    if de is not None and ate is not None and _as_utc(de) >= _as_utc(ate):
+        raise ValidationError(
+            "data inicial deve ser anterior a data final",
+            details={"fields": ["de", "ate"]},
+        )
+
+
 def _report_filters(
     de: datetime | None = None,
     ate: datetime | None = None,
@@ -81,16 +98,7 @@ def _report_filters(
     atendente_id: UUID | None = None,
     channel_id: UUID | None = None,
 ) -> ReportFilters:
-    # O limite superior e exclusivo (_report_stmt: opened_at < date_to), entao o
-    # intervalo vazio e "de >= ate", nao "de > ate": com de == ate o predicado
-    # vira opened_at >= X AND opened_at < X, que nunca casa. O front ja soma um
-    # dia em "ate" (isoEndExclusive), logo de == ate chega aqui exatamente
-    # quando o usuario inverteu as datas em um dia — o caso mais comum.
-    if de is not None and ate is not None and _as_utc(de) >= _as_utc(ate):
-        raise ValidationError(
-            "data inicial deve ser anterior a data final",
-            details={"fields": ["de", "ate"]},
-        )
+    _validate_period(de, ate)
     return ReportFilters(
         date_from=de,
         date_to=ate,
@@ -195,8 +203,7 @@ async def get_report(
     )
 
 
-@midias_router.get("", response_model=MediaPageOut)
-async def list_media(
+def _media_filters(
     kind: AttachmentKind | None = None,
     brand_id: UUID | None = None,
     product_id: UUID | None = None,
@@ -205,14 +212,9 @@ async def list_media(
     status: TicketStatus | None = None,
     de: datetime | None = None,
     ate: datetime | None = None,
-    page: int = 1,
-    per_page: int = 20,
-    identity: TokenPayload = Depends(_view),
-    repo: SqlReportingRepository = Depends(get_reporting_repository),
-    storage: S3Storage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
-) -> MediaPageOut:
-    filters = MediaFilters(
+) -> MediaFilters:
+    _validate_period(de, ate)
+    return MediaFilters(
         kind=kind,
         brand_id=brand_id,
         product_id=product_id,
@@ -222,6 +224,18 @@ async def list_media(
         date_from=de,
         date_to=ate,
     )
+
+
+@midias_router.get("", response_model=MediaPageOut)
+async def list_media(
+    filters: MediaFilters = Depends(_media_filters),
+    page: int = 1,
+    per_page: int = 20,
+    identity: TokenPayload = Depends(_view),
+    repo: SqlReportingRepository = Depends(get_reporting_repository),
+    storage: S3Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+) -> MediaPageOut:
     page = max(page, 1)
     per_page = min(max(per_page, 1), 100)
     use_case = ListMediaUseCase(repo, storage, settings.presigned_ttl_seconds)

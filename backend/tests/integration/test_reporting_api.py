@@ -167,40 +167,35 @@ async def test_relatorio_filtra_e_pagina(
     assert invalido.status_code == 422
 
 
-async def test_relatorio_periodo_invertido_retorna_422(
-    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+# /relatorios, /relatorios/export e /midias aceitam "de"/"ate" e compartilham
+# a mesma regra de periodo (helper _validate_period em routers/reporting.py):
+# a validacao precisa dar o mesmo resultado nas tres, nao so na dupla de
+# relatorios.
+_PERIODO_PATHS = ["/api/relatorios", "/api/relatorios/export", "/api/midias"]
+
+
+@pytest.mark.parametrize("path", _PERIODO_PATHS)
+async def test_periodo_invertido_retorna_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine, path: str
 ) -> None:
     _, h_view, *_ = await _setup(client, session, engine)
 
-    invertido = await client.get("/api/relatorios?de=2026-08-01&ate=2026-07-01", headers=h_view)
+    invertido = await client.get(f"{path}?de=2026-08-01&ate=2026-07-01", headers=h_view)
     assert invertido.status_code == 422
     assert invertido.json()["code"] == "validation_error"
 
-    invertido_export = await client.get(
-        "/api/relatorios/export?de=2026-08-01&ate=2026-07-01", headers=h_view
-    )
-    assert invertido_export.status_code == 422
-    assert invertido_export.json()["code"] == "validation_error"
-
-    # O limite superior da API e EXCLUSIVO (opened_at < ate), entao de == ate
+    # O limite superior e EXCLUSIVO (opened_at/created_at < ate), entao de == ate
     # descreve o conjunto vazio, nao "um unico dia": tambem e periodo invertido.
     # O front ja manda dia+1 em "ate" (isoEndExclusive), logo de == ate so chega
     # aqui quando o usuario inverteu as datas em um dia.
-    mesmo_instante = await client.get(
-        "/api/relatorios?de=2026-08-01&ate=2026-08-01", headers=h_view
-    )
+    mesmo_instante = await client.get(f"{path}?de=2026-08-01&ate=2026-08-01", headers=h_view)
     assert mesmo_instante.status_code == 422
     assert mesmo_instante.json()["code"] == "validation_error"
 
-    mesmo_instante_export = await client.get(
-        "/api/relatorios/export?de=2026-08-01&ate=2026-08-01", headers=h_view
-    )
-    assert mesmo_instante_export.status_code == 422
-    assert mesmo_instante_export.json()["code"] == "validation_error"
 
-
-async def test_relatorio_periodo_com_awareness_mista_nao_quebra(
-    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+@pytest.mark.parametrize("path", _PERIODO_PATHS)
+async def test_periodo_com_awareness_mista_nao_quebra(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine, path: str
 ) -> None:
     """de naive + ate aware (e vice-versa) precisa comparar sem TypeError.
 
@@ -210,28 +205,39 @@ async def test_relatorio_periodo_com_awareness_mista_nao_quebra(
     """
     _, h_view, *_ = await _setup(client, session, engine)
 
-    de_naive = await client.get(
-        "/api/relatorios?de=2026-08-01&ate=2026-08-05T00:00:00Z", headers=h_view
-    )
+    de_naive = await client.get(f"{path}?de=2026-08-01&ate=2026-08-05T00:00:00Z", headers=h_view)
     assert de_naive.status_code == 200
 
-    ate_naive = await client.get(
-        "/api/relatorios?de=2026-08-01T00:00:00Z&ate=2026-08-05", headers=h_view
-    )
+    ate_naive = await client.get(f"{path}?de=2026-08-01T00:00:00Z&ate=2026-08-05", headers=h_view)
     assert ate_naive.status_code == 200
 
     # invertido continua 422 (e nao 500) mesmo com awareness mista
     invertido_misto = await client.get(
-        "/api/relatorios?de=2026-08-05&ate=2026-08-01T00:00:00Z", headers=h_view
+        f"{path}?de=2026-08-05&ate=2026-08-01T00:00:00Z", headers=h_view
     )
     assert invertido_misto.status_code == 422
     assert invertido_misto.json()["code"] == "validation_error"
 
-    invertido_misto_export = await client.get(
-        "/api/relatorios/export?de=2026-08-05T00:00:00Z&ate=2026-08-01", headers=h_view
+    invertido_misto_invertido = await client.get(
+        f"{path}?de=2026-08-05T00:00:00Z&ate=2026-08-01", headers=h_view
     )
-    assert invertido_misto_export.status_code == 422
-    assert invertido_misto_export.json()["code"] == "validation_error"
+    assert invertido_misto_invertido.status_code == 422
+    assert invertido_misto_invertido.json()["code"] == "validation_error"
+
+
+@pytest.mark.parametrize("path", _PERIODO_PATHS)
+async def test_periodo_com_apenas_um_campo_continua_valido(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine, path: str
+) -> None:
+    """A guarda so dispara com "de" e "ate" preenchidos: informar apenas um
+    dos dois continua um filtro valido (200), sem exigir o par."""
+    _, h_view, *_ = await _setup(client, session, engine)
+
+    so_de = await client.get(f"{path}?de=2026-08-01", headers=h_view)
+    assert so_de.status_code == 200
+
+    so_ate = await client.get(f"{path}?ate=2026-08-05", headers=h_view)
+    assert so_ate.status_code == 200
 
 
 async def test_midias_lista_vazia_sem_anexos(
