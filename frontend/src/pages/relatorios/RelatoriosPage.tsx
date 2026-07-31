@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 
 import { ActiveFilterChips } from "@/components/reporting/ActiveFilterChips"
@@ -36,6 +36,7 @@ import {
 import { listMembers } from "@/lib/members"
 import { downloadReportCsv, getReport, type ReportParams } from "@/lib/reporting"
 import { STATUS_LABELS, type TicketStatus } from "@/lib/tickets"
+import { useProductLabelById } from "@/lib/useProductLabelById"
 
 const ALL = "all"
 const PER_PAGE = 25
@@ -139,6 +140,11 @@ export default function RelatoriosPage() {
   function patchDraft(patch: Partial<Draft>) {
     setDraft((current) => ({ ...current, ...patch }))
   }
+
+  const applyResolvedProductLabel = useCallback((name: string) => {
+    setAppliedProductLabel(name)
+    setDraft((current) => ({ ...current, productQuery: name }))
+  }, [])
 
   // "ate" invalido (URL editada a mao) e tratado como ausente em toda a tela:
   // nao conta para temFiltro, nao vai para a API e nao gera chip.
@@ -247,6 +253,12 @@ export default function RelatoriosPage() {
   const defectIdParam = searchParams.get("defect_type_id")
   const solutionIdParam = searchParams.get("solution_type_id")
   const channelIdParam = searchParams.get("channel_id")
+
+  // Ao abrir um link compartilhado, product_id vem na URL mas o rotulo
+  // (chip e campo do autocomplete) ainda nao existe em estado. Resolve o
+  // nome pela listagem de produtos so nessa lacuna.
+  useProductLabelById(productIdParam ?? "", !!appliedProductLabel, applyResolvedProductLabel)
+
   if (deParam) chips.push({ key: "de", label: `De: ${formatDateBR(isoToDateInput(deParam))}` })
   if (ateParam)
     chips.push({ key: "ate", label: `Ate: ${formatDateBR(isoEndExclusiveToDateInput(ateParam))}` })

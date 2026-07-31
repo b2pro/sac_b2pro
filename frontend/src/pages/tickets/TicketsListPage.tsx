@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { ArrowDown, ArrowUp, Plus } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 
 import { AutocompleteField } from "@/components/tickets/AutocompleteField"
@@ -36,6 +36,7 @@ import {
   type TicketStatus,
 } from "@/lib/tickets"
 import { useDebounce } from "@/lib/useDebounce"
+import { useProductLabelById } from "@/lib/useProductLabelById"
 import { cn } from "@/lib/utils"
 
 const PER_PAGE = 20
@@ -86,6 +87,12 @@ export default function TicketsListPage() {
   ) as "asc" | "desc"
   const [productQuery, setProductQuery] = useState("")
   const customerId = searchParams.get("customer_id") ?? undefined
+
+  // Ao abrir um link compartilhado, product_id vem na URL mas o campo do
+  // autocomplete ainda esta vazio. Resolve o nome pela listagem de produtos
+  // so nessa lacuna (sem rotulo em estado ainda).
+  const applyResolvedProductLabel = useCallback((name: string) => setProductQuery(name), [])
+  useProductLabelById(productId, !!productQuery, applyResolvedProductLabel)
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams)
