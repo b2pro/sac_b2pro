@@ -362,8 +362,23 @@ class SqlTicketRepository:
             func.count().filter(unread),
             func.count().filter(TicketModel.attendant_user_id == unread_for),
         )
-        row = (await self._session.execute(stmt)).one()
-        return TicketCounters(*(int(v or 0) for v in row))
+        todos, ativos, abertos, aguardando_analise, atrasados, nao_lidos, meus = (
+            int(v or 0) for v in (await self._session.execute(stmt)).one()
+        )
+        # construcao nomeada de proposito: a lista de colunas do with_only_columns
+        # acima e a unica fonte de ordem - construir TicketCounters por posicao
+        # deixaria os sete valores sujeitos a qualquer reordenacao futura dos
+        # campos do dataclass em ports_tickets.py, sem erro de tipo nem teste
+        # que pegasse a troca (os valores do cenario de teste se repetem).
+        return TicketCounters(
+            todos=todos,
+            ativos=ativos,
+            abertos=abertos,
+            aguardando_analise=aguardando_analise,
+            atrasados=atrasados,
+            nao_lidos=nao_lidos,
+            meus=meus,
+        )
 
 
 class SqlTicketItemRepository:

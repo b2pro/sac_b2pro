@@ -324,14 +324,13 @@ async def test_contadores_da_fila(
             "items": [{"product_id": product, "defect_type_id": defect}],
         }
 
-    # T1: aberto, no prazo, atendente = admin, marcado manualmente como nao lido
-    t1 = (
-        await client.post(
-            "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=headers
-        )
-    ).json()
-    res = await client.post(f"/api/tickets/{t1['id']}/nao-lido", headers=headers)
-    assert res.status_code == 204
+    # T1: aberto, no prazo, atendente = admin, fica LIDO (o criador ja e
+    # marcado como leitor na criacao e nada mais toca o ticket depois) -
+    # unico lido do cenario, para que nao_lidos != todos e o FILTER de
+    # nao lidos tenha algo a excluir de fato.
+    await client.post(
+        "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=headers
+    )
 
     # T2: aguardando_analise, atendente = admin
     t2 = (
@@ -407,7 +406,7 @@ async def test_contadores_da_fila(
     assert body["abertos"] == 2  # T1 e T4
     assert body["aguardando_analise"] == 1  # T2
     assert body["atrasados"] == 1  # T4
-    assert body["nao_lidos"] == 5  # admin nunca abriu nenhum (todos marcados nao lidos)
+    assert body["nao_lidos"] == 4  # T2, T3, T4, T5 (T1 continua lido pelo criador)
     assert body["meus"] == 4  # T1, T2, T3, T4 (T5 e de outro atendente)
 
 
