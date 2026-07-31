@@ -1,11 +1,14 @@
 from dataclasses import dataclass
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.domain.entities import Tenant, User
 from sac.domain.permissions import Role
+from sac.infrastructure.models_tenant import TicketModel
 from tests.integration.helpers import (
     seed_link,
     seed_provisioned_tenant,
@@ -53,6 +56,41 @@ async def _product_id(client: AsyncClient, headers: dict[str, str], sku: str) ->
     )
     assert res.status_code == 201
     return str(res.json()["id"])
+
+
+async def _solution_id(client: AsyncClient, headers: dict[str, str]) -> str:
+    res = await client.get("/api/cadastros/solucoes", headers=headers)
+    return str(res.json()[0]["id"])
+
+
+def _tenant_session_factory(engine: AsyncEngine, schema: str) -> async_sessionmaker[AsyncSession]:
+    translated = engine.execution_options(schema_translate_map={"tenant": schema})
+    return async_sessionmaker(translated, expire_on_commit=False)
+
+
+async def _force_due_at(engine: AsyncEngine, schema: str, ticket_id: str, due_at: datetime) -> None:
+    # nenhum endpoint permite escrever due_at diretamente (a data e recalculada
+    # pela SLA da prioridade); o cenario de atrasado exige escrita direta na
+    # tabela do schema do tenant.
+    factory = _tenant_session_factory(engine, schema)
+    async with factory() as ts:
+        await ts.execute(
+            update(TicketModel).where(TicketModel.id == UUID(ticket_id)).values(due_at=due_at)
+        )
+        await ts.commit()
+
+
+async def _soft_delete(engine: AsyncEngine, schema: str, ticket_id: str) -> None:
+    # idem: nao ha rota de exclusao de ticket: o cenario de excluido exige
+    # escrita direta.
+    factory = _tenant_session_factory(engine, schema)
+    async with factory() as ts:
+        await ts.execute(
+            update(TicketModel)
+            .where(TicketModel.id == UUID(ticket_id))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await ts.commit()
 
 
 async def test_criacao_parcial_e_detalhe(
@@ -261,4 +299,145 @@ async def test_visualizador_nao_cria_mas_lista(
 
 async def test_sem_token_401(client: AsyncClient) -> None:
     res = await client.get("/api/tickets")
+    assert res.status_code == 401
+
+
+async def test_contadores_da_fila(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    env = await _setup(session, engine, "tctd1")
+    headers = env.headers
+    tenant = env.tenant
+    brand = await _brand_id(client, headers)
+    defect = await _defect_id(client, headers)
+    product = await _product_id(client, headers, "SKU-CTD1")
+    solution = await _solution_id(client, headers)
+    outro_atendente = await seed_user(session, email="atendente@tctd1.com", name="Atendente")
+    await seed_link(session, user=outro_atendente, tenant=tenant, role=Role.ATENDENTE)
+
+    def _ticket_completo_payload(customer_name: str) -> dict[str, object]:
+        return {
+            "brand_id": brand,
+            "priority": "media",
+            "customer": {"name": customer_name, "document": VALID_CPF},
+            "description": "defeito relatado",
+            "items": [{"product_id": product, "defect_type_id": defect}],
+        }
+
+    # T1: aberto, no prazo, atendente = admin, marcado manualmente como nao lido
+    t1 = (
+        await client.post(
+            "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=headers
+        )
+    ).json()
+    res = await client.post(f"/api/tickets/{t1['id']}/nao-lido", headers=headers)
+    assert res.status_code == 204
+
+    # T2: aguardando_analise, atendente = admin
+    t2 = (
+        await client.post(
+            "/api/tickets", json=_ticket_completo_payload("Cliente Dois"), headers=headers
+        )
+    ).json()
+    res = await client.post(f"/api/tickets/{t2['id']}/enviar-analise", headers=headers)
+    assert res.status_code == 200
+    await client.post(f"/api/tickets/{t2['id']}/nao-lido", headers=headers)
+
+    # T3: finalizado (encerrado), atendente = admin
+    t3 = (
+        await client.post(
+            "/api/tickets", json=_ticket_completo_payload("Cliente Tres"), headers=headers
+        )
+    ).json()
+    await client.post(f"/api/tickets/{t3['id']}/enviar-analise", headers=headers)
+    await client.post(f"/api/tickets/{t3['id']}/aprovar", json={}, headers=headers)
+    res = await client.post(
+        f"/api/tickets/{t3['id']}/finalizar",
+        json={"solution_type_id": solution},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    await client.post(f"/api/tickets/{t3['id']}/nao-lido", headers=headers)
+    # devolve devidamente vencido: garante que "atrasados" exige nao encerrado
+    # alem de due_at vencido, senao um finalizado antigo tambem entraria na conta
+    await _force_due_at(
+        engine, tenant.schema_name, t3["id"], datetime.now(UTC) - timedelta(hours=1)
+    )
+
+    # T4: atrasado (due_at no passado, nao encerrado), atendente = admin
+    t4 = (
+        await client.post(
+            "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=headers
+        )
+    ).json()
+    await client.post(f"/api/tickets/{t4['id']}/nao-lido", headers=headers)
+    await _force_due_at(
+        engine, tenant.schema_name, t4["id"], datetime.now(UTC) - timedelta(hours=1)
+    )
+
+    # T5: de outro atendente, em espera do cliente (fora de aberto/aguardando_analise)
+    t5 = (
+        await client.post(
+            "/api/tickets",
+            json={
+                "brand_id": brand,
+                "priority": "media",
+                "attendant_user_id": str(outro_atendente.id),
+            },
+            headers=headers,
+        )
+    ).json()
+    await client.post(f"/api/tickets/{t5['id']}/nao-lido", headers=headers)
+    res = await client.post(f"/api/tickets/{t5['id']}/aguardar-cliente", headers=headers)
+    assert res.status_code == 200
+
+    # T6: excluido (soft delete), fora de qualquer contagem
+    t6 = (
+        await client.post(
+            "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=headers
+        )
+    ).json()
+    await _soft_delete(engine, tenant.schema_name, t6["id"])
+
+    res = await client.get("/api/tickets/contadores", headers=headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["todos"] == 5  # excluido (T6) fora
+    assert body["ativos"] == 4  # finalizado (T3) fora
+    assert body["abertos"] == 2  # T1 e T4
+    assert body["aguardando_analise"] == 1  # T2
+    assert body["atrasados"] == 1  # T4
+    assert body["nao_lidos"] == 5  # admin nunca abriu nenhum (todos marcados nao lidos)
+    assert body["meus"] == 4  # T1, T2, T3, T4 (T5 e de outro atendente)
+
+
+async def test_contadores_de_atendente_veem_so_os_proprios(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    env = await _setup(session, engine, "tctd2")
+    tenant = env.tenant
+    brand = await _brand_id(client, env.headers)
+    atendente = await seed_user(session, email="proprio@tctd2.com", name="Atendente Proprio")
+    await seed_link(session, user=atendente, tenant=tenant, role=Role.ATENDENTE)
+    atendente_headers = token_for(atendente, tenant_slug=tenant.slug, role=Role.ATENDENTE)
+
+    res = await client.post(
+        "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=atendente_headers
+    )
+    assert res.status_code == 201
+
+    res = await client.post(
+        "/api/tickets", json={"brand_id": brand, "priority": "media"}, headers=env.headers
+    )
+    assert res.status_code == 201
+
+    res = await client.get("/api/tickets/contadores", headers=atendente_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["todos"] == 1
+    assert body["meus"] == 1
+
+
+async def test_contadores_exigem_autenticacao(client: AsyncClient) -> None:
+    res = await client.get("/api/tickets/contadores")
     assert res.status_code == 401

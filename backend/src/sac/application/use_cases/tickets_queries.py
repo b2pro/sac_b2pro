@@ -7,6 +7,7 @@ from sac.application.ports_tickets import (
     ReverseCodeRepository,
     TicketActor,
     TicketCommentRepository,
+    TicketCounters,
     TicketDetail,
     TicketFilters,
     TicketItemRepository,
@@ -53,6 +54,19 @@ class ListTicketsUseCase:
             replace(row, attendant_name=names.get(row.ticket.attendant_user_id)) for row in rows
         ]
         return rows, total
+
+
+class GetTicketCountersUseCase:
+    def __init__(self, tickets: TicketRepository) -> None:
+        self._tickets = tickets
+
+    async def execute(self, actor: TicketActor, now: datetime) -> TicketCounters:
+        owner = restrict_to_own(actor)
+        # base carrega so o escopo do papel (attendant_user_id do proprio
+        # atendente, quando for o caso) - nunca status/overdue/unread da tela,
+        # senao cada FILTER passaria a contar dentro do proprio recorte ativo.
+        base = TicketFilters(attendant_user_id=owner) if owner is not None else TicketFilters()
+        return await self._tickets.counters(base, unread_for=actor.user_id, now=now)
 
 
 class GetTicketDetailUseCase:

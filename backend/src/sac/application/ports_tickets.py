@@ -40,6 +40,17 @@ class TicketFilters:
 
 
 @dataclass(frozen=True)
+class TicketCounters:
+    todos: int
+    ativos: int
+    abertos: int
+    aguardando_analise: int
+    atrasados: int
+    nao_lidos: int
+    meus: int
+
+
+@dataclass(frozen=True)
 class TicketListRow:
     ticket: Ticket
     customer_name: str | None
@@ -81,6 +92,9 @@ class TicketRepository(Protocol):
         order: str,
         unread_for: UUID,
     ) -> tuple[list[TicketListRow], int]: ...
+    async def counters(
+        self, base: TicketFilters, unread_for: UUID, now: datetime
+    ) -> TicketCounters: ...
 
 
 class TicketItemRepository(Protocol):

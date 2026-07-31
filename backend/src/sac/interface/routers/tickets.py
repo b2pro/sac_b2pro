@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from sac.application.use_cases.tickets_crud import (
     UpdateTicketUseCase,
 )
 from sac.application.use_cases.tickets_queries import (
+    GetTicketCountersUseCase,
     GetTicketDetailUseCase,
     ListTicketsUseCase,
     MarkTicketUnreadUseCase,
@@ -74,6 +76,7 @@ from sac.interface.schemas import (
     ReverseCodeOut,
     ReverseIn,
     TicketCommentOut,
+    TicketCountersOut,
     TicketDetailOut,
     TicketIn,
     TicketItemIn,
@@ -83,6 +86,7 @@ from sac.interface.schemas import (
     TicketUpdateIn,
     WarrantyIn,
     attachment_out,
+    ticket_counters_out,
     ticket_detail_out,
     ticket_item_out,
     ticket_list_item_out,
@@ -201,6 +205,18 @@ async def list_tickets(
         page=max(page, 1),
         per_page=min(max(per_page, 1), 100),
     )
+
+
+@router.get("/contadores", response_model=TicketCountersOut)
+async def get_ticket_counters(
+    identity: TokenPayload = Depends(_read),
+    repos: TicketRepos = Depends(get_ticket_repos),
+) -> TicketCountersOut:
+    # declarada antes de /{ticket_id}: senao a rota dinamica engoliria
+    # "/contadores" como se fosse um ticket_id.
+    use_case = GetTicketCountersUseCase(repos.tickets)
+    counters = await use_case.execute(_actor(identity), datetime.now(UTC))
+    return ticket_counters_out(counters)
 
 
 @router.get("/{ticket_id}", response_model=TicketDetailOut)

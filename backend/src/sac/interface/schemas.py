@@ -4,7 +4,12 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 from sac.application.ports_cadastros import CepAddress
-from sac.application.ports_tickets import TicketDetail, TicketItemView, TicketListRow
+from sac.application.ports_tickets import (
+    TicketCounters,
+    TicketDetail,
+    TicketItemView,
+    TicketListRow,
+)
 from sac.application.use_cases.attachments import AttachmentView, IntentDiscardResult
 from sac.application.use_cases.auth import AuthResult
 from sac.domain.attachments import AttachmentKind, PreviewStatus
@@ -411,6 +416,28 @@ def ticket_list_item_out(row: TicketListRow) -> TicketListItemOut:
         opened_at=t.opened_at,
         last_activity_at=t.last_activity_at,
         unread=row.unread,
+    )
+
+
+class TicketCountersOut(BaseModel):
+    todos: int
+    ativos: int
+    abertos: int
+    aguardando_analise: int
+    atrasados: int
+    nao_lidos: int
+    meus: int
+
+
+def ticket_counters_out(counters: TicketCounters) -> TicketCountersOut:
+    return TicketCountersOut(
+        todos=counters.todos,
+        ativos=counters.ativos,
+        abertos=counters.abertos,
+        aguardando_analise=counters.aguardando_analise,
+        atrasados=counters.atrasados,
+        nao_lidos=counters.nao_lidos,
+        meus=counters.meus,
     )
 
 

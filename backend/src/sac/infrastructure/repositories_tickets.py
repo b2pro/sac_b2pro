@@ -2,12 +2,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, String, cast, exists, func, or_, select
+from sqlalchemy import ColumnExpressionArgument, Select, String, cast, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from sac.application.ports_tickets import TicketFilters, TicketItemView, TicketListRow
+from sac.application.ports_tickets import (
+    TicketCounters,
+    TicketFilters,
+    TicketItemView,
+    TicketListRow,
+)
 from sac.domain.documents import normalize_digits
 from sac.domain.errors import ConflictError, NotFoundError, ValidationError
 from sac.domain.tickets import (
@@ -209,6 +215,25 @@ class SqlTicketRepository:
             setattr(m, field, getattr(ticket, field))
         await flush_tickets(self._session)
 
+    def _unread_condition(self, unread_for: UUID) -> ColumnExpressionArgument[bool]:
+        """Condicao "nao lido" para o usuario informado, pronta para reuso.
+
+        Usa um alias explicito de TicketReadModel em vez de depender do
+        shadowing de nome do FROM externo (list() tambem faz um outerjoin em
+        TicketReadModel). Com o alias nao e preciso `.correlate()`: o alias e
+        uma tabela distinta do outerjoin externo, entao o SQLAlchemy nunca
+        confunde os dois e nao ha risco de o EXISTS perder seu FROM proprio
+        caso uma condicao futura referencie outra tabela do FROM externo.
+        """
+        read = aliased(TicketReadModel)
+        return ~exists(
+            select(read.ticket_id).where(
+                read.ticket_id == TicketModel.id,
+                read.user_id == unread_for,
+                read.last_read_at >= TicketModel.last_activity_at,
+            )
+        )
+
     def _base_stmt(self, filters: TicketFilters, unread_for: UUID) -> Select[tuple[TicketModel]]:
         stmt = select(TicketModel).where(TicketModel.deleted_at.is_(None))
         if filters.status is not None:
@@ -271,21 +296,7 @@ class SqlTicketRepository:
                     targets.append(cast(TicketModel.number, String).like(f"{term}%"))
                 stmt = stmt.where(or_(*targets))
         if filters.unread:
-            # correlate(TicketModel) e necessario porque o list() tambem faz um
-            # outerjoin em TicketReadModel (para trazer o last_read_at da
-            # bolinha); sem isso a auto-correlacao do SQLAlchemy enxerga
-            # TicketReadModel nos dois lugares e remove o FROM deste EXISTS.
-            stmt = stmt.where(
-                ~exists(
-                    select(TicketReadModel.ticket_id)
-                    .where(
-                        TicketReadModel.ticket_id == TicketModel.id,
-                        TicketReadModel.user_id == unread_for,
-                        TicketReadModel.last_read_at >= TicketModel.last_activity_at,
-                    )
-                    .correlate(TicketModel)
-                )
-            )
+            stmt = stmt.where(self._unread_condition(unread_for))
         return stmt
 
     async def list(
@@ -330,6 +341,29 @@ class SqlTicketRepository:
             for m, customer_name, last_read in models
         ]
         return rows, int(total or 0)
+
+    async def counters(
+        self, base: TicketFilters, unread_for: UUID, now: datetime
+    ) -> TicketCounters:
+        closed_statuses = [str(s) for s in CLOSED_STATUSES]
+        active = TicketModel.status.not_in(closed_statuses)
+        unread = self._unread_condition(unread_for)
+        # Uma varredura so: with_only_columns preserva o FROM e o WHERE de
+        # _base_stmt (escopo do papel e deleted_at IS NULL) e troca so a lista
+        # de colunas, entao os sete recortes saem de um unico Seq Scan em vez
+        # de sete idas ao banco (fase anterior mediu ~34ms em 100 mil tickets
+        # nesse formato, contra sete consultas separadas).
+        stmt = self._base_stmt(base, unread_for).with_only_columns(
+            func.count(),
+            func.count().filter(active),
+            func.count().filter(TicketModel.status == str(TicketStatus.ABERTO)),
+            func.count().filter(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE)),
+            func.count().filter(TicketModel.due_at < now, active),
+            func.count().filter(unread),
+            func.count().filter(TicketModel.attendant_user_id == unread_for),
+        )
+        row = (await self._session.execute(stmt)).one()
+        return TicketCounters(*(int(v or 0) for v in row))
 
 
 class SqlTicketItemRepository:
