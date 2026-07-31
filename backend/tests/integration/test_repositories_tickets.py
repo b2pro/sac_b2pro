@@ -2,10 +2,11 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.application.ports_tickets import TicketFilters
+from sac.domain.cadastros import Customer
 from sac.domain.errors import ValidationError
 from sac.domain.tickets import (
     Ticket,
@@ -14,7 +15,12 @@ from sac.domain.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from sac.infrastructure.models_tenant import BrandModel, DefectTypeModel, ProductModel
+from sac.infrastructure.models_tenant import (
+    BrandModel,
+    DefectTypeModel,
+    ProductModel,
+    TicketModel,
+)
 from sac.infrastructure.repositories_tickets import build_ticket_repos
 from tests.integration.helpers import seed_provisioned_tenant, seed_user
 
@@ -218,8 +224,6 @@ async def test_busca_por_cliente_nome_ou_documento(
         repos = build_ticket_repos(ts)
         brand_id = (await ts.scalars(select(BrandModel.id))).first()
         assert brand_id is not None
-        from sac.domain.cadastros import Customer
-
         customer = Customer(id=uuid4(), name="Joana Prado", document="39053344705")
         await repos.customers.add(customer)
         com_cliente = await repos.tickets.add(
@@ -299,4 +303,170 @@ async def test_satelites_comentario_timeline_reverso_read_sla(
 
         names = await repos.users.names_by_ids({user.id})
         assert names[user.id] == user.name
+        await ts.commit()
+
+
+async def test_filtra_por_atendente(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repoaten")
+    atendente_um = await seed_user(session, email="atendente1@repoaten.com")
+    atendente_dois = await seed_user(session, email="atendente2@repoaten.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        do_um = await repos.tickets.add(_novo_ticket(brand_id, atendente_um.id))
+        await repos.tickets.add(_novo_ticket(brand_id, atendente_dois.id))
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(attendant_user_id=atendente_um.id),
+            1,
+            20,
+            "last_activity_at",
+            "desc",
+            unread_for=atendente_um.id,
+        )
+        assert total == 1
+        assert rows[0].ticket.id == do_um.id
+        await ts.commit()
+
+
+async def test_busca_por_prefixo_do_numero(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobusn")
+    user = await seed_user(session, email="repobusn@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        quarenta_oito = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        quatrocentos_oitenta_nove = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        sete = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        # os numeros reais vem de uma sequence do tenant; forcamos os valores
+        # que o teste precisa direto na tabela, sem passar pelo repositorio.
+        await ts.execute(
+            update(TicketModel).where(TicketModel.id == quarenta_oito.id).values(number=48)
+        )
+        await ts.execute(
+            update(TicketModel)
+            .where(TicketModel.id == quatrocentos_oitenta_nove.id)
+            .values(number=489)
+        )
+        await ts.execute(update(TicketModel).where(TicketModel.id == sete.id).values(number=7))
+        await ts.flush()
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="48"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 2
+        ids = {row.ticket.id for row in rows}
+        assert ids == {quarenta_oito.id, quatrocentos_oitenta_nove.id}
+        await ts.commit()
+
+
+async def test_busca_por_nome_do_cliente(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobusc")
+    user = await seed_user(session, email="repobusc@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        customer = Customer(id=uuid4(), name="Mariana Alves", document="39053344705")
+        await repos.customers.add(customer)
+        com_cliente = await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, customer_id=customer.id)
+        )
+        await repos.tickets.add(_novo_ticket(brand_id, user.id))
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="mari"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_cliente.id
+        await ts.commit()
+
+
+async def test_busca_por_nome_do_produto(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobusp")
+    user = await seed_user(session, email="repobusp@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        defect_id = (await ts.scalars(select(DefectTypeModel.id))).first()
+        assert defect_id is not None
+        ts.add(ProductModel(id=uuid4(), name="Alicate de cuticula", sku="ALC-CUT"))
+        await ts.flush()
+        product_id = (
+            await ts.scalars(select(ProductModel.id).where(ProductModel.sku == "ALC-CUT"))
+        ).first()
+        assert product_id is not None
+        com_produto = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        await repos.items.add(
+            TicketItem(
+                id=uuid4(),
+                ticket_id=com_produto.id,
+                product_id=product_id,
+                defect_type_id=defect_id,
+                quantity=1,
+            )
+        )
+        await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        await ts.flush()
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="alicate"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_produto.id
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="esmalte"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 0
+        await ts.commit()
+
+
+async def test_busca_por_codigo_do_pedido(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobuso")
+    user = await seed_user(session, email="repobuso@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        com_pedido = await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, order_code="PED-00042")
+        )
+        await repos.tickets.add(_novo_ticket(brand_id, user.id))
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="00042"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_pedido.id
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="00043"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+        )
+        assert total == 0
+        await ts.commit()
+
+
+async def test_busca_nao_casa_o_que_nao_deve(session: AsyncSession, engine: AsyncEngine) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobusz")
+    user = await seed_user(session, email="repobusz@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        await repos.tickets.add(_novo_ticket(brand_id, user.id))
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="termo-inexistente-xyz"),
+            1,
+            20,
+            "last_activity_at",
+            "desc",
+            unread_for=user.id,
+        )
+        assert total == 0
+        assert rows == []
         await ts.commit()

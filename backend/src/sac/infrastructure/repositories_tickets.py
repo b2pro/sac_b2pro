@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import Select, String, cast, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -250,6 +250,26 @@ class SqlTicketRepository:
                     )
                 )
             )
+        if filters.search:
+            termo = filters.search.strip().lstrip("#")
+            if termo:
+                alvos = [
+                    TicketModel.customer_id.in_(
+                        select(CustomerModel.id).where(CustomerModel.name.ilike(f"%{termo}%"))
+                    ),
+                    exists(
+                        select(TicketItemModel.id)
+                        .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
+                        .where(
+                            TicketItemModel.ticket_id == TicketModel.id,
+                            ProductModel.name.ilike(f"%{termo}%"),
+                        )
+                    ),
+                    TicketModel.order_code.ilike(f"%{termo}%"),
+                ]
+                if termo.isdigit():
+                    alvos.append(cast(TicketModel.number, String).like(f"{termo}%"))
+                stmt = stmt.where(or_(*alvos))
         return stmt
 
     async def list(

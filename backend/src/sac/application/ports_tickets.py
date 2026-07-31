@@ -35,6 +35,7 @@ class TicketFilters:
     priority: TicketPriority | None = None
     overdue: bool = False
     attendant_user_id: UUID | None = None
+    search: str | None = None
 
 
 @dataclass(frozen=True)

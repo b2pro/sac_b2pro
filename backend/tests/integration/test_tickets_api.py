@@ -157,6 +157,48 @@ async def test_lista_com_filtros_e_paginacao(
     assert numbers == sorted(numbers)
 
 
+async def test_lista_filtra_por_atendente_e_busca_livre(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    env = await _setup(session, engine, "tapi9")
+    headers = env.headers
+    brand = await _brand_id(client, headers)
+    outro_atendente = await seed_user(session, email="atendente@tapi9.com", name="Atendente Dois")
+    await seed_link(session, user=outro_atendente, tenant=env.tenant, role=Role.ATENDENTE)
+
+    res_admin = await client.post(
+        "/api/tickets",
+        json={"brand_id": brand, "priority": "media", "order_code": "PED-00099"},
+        headers=headers,
+    )
+    assert res_admin.status_code == 201
+    res_outro = await client.post(
+        "/api/tickets",
+        json={
+            "brand_id": brand,
+            "priority": "media",
+            "attendant_user_id": str(outro_atendente.id),
+            "order_code": "PED-00050",
+        },
+        headers=headers,
+    )
+    assert res_outro.status_code == 201
+
+    res = await client.get(
+        "/api/tickets", params={"atendente_id": str(outro_atendente.id)}, headers=headers
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == res_outro.json()["id"]
+
+    res = await client.get("/api/tickets", params={"q": "00050"}, headers=headers)
+    assert res.json()["total"] == 1
+
+    res = await client.get("/api/tickets", params={"q": "   "}, headers=headers)
+    assert res.json()["total"] == 2
+
+
 async def test_update_recalcula_sla_e_edita_itens(
     client: AsyncClient, session: AsyncSession, engine: AsyncEngine
 ) -> None:
