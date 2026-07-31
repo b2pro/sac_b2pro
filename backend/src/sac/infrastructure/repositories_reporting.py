@@ -184,64 +184,63 @@ class SqlReportingRepository:
     ) -> DashboardData:
         base = self._tickets(brand_id)
         month_start, month_end = _month_bounds(now)
-        kpis = [
-            DashboardKpi("total", await self._count(base), {}),
-            DashboardKpi(
-                "abertos",
-                await self._count(base.where(TicketModel.status == str(TicketStatus.ABERTO))),
-                {"status": "aberto"},
-            ),
-            DashboardKpi(
-                "aguardando_analise",
-                await self._count(
-                    base.where(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE))
-                ),
-                {"status": "aguardando_analise"},
-            ),
-            DashboardKpi(
-                "atrasados",
-                await self._count(
-                    base.where(TicketModel.due_at < now, TicketModel.status.not_in(_CLOSED))
-                ),
-                {"overdue": "1"},
-            ),
-            # Os 3 KPIs "no_mes" abaixo contam pelo timestamp do marco (approved_at/
-            # declined_at/closed_at), mas o filtro do card clicavel busca pelo status
-            # ATUAL do ticket. Um ticket aprovado e depois finalizado no mesmo mes
-            # entra na contagem de aprovados_no_mes mas nao aparece na lista filtrada
-            # por status=aprovado (o status atual dele e finalizado). Aproximacao
-            # intencional, mantida do comportamento do sistema legado.
-            DashboardKpi(
-                "aprovados_no_mes",
-                await self._count(
-                    base.where(
+        # As sete contagens de KPI colapsam em uma unica varredura: as condicoes
+        # comuns (soft delete, marca) ficam no WHERE e cada KPI vira um
+        # count(*) FILTER (WHERE ...) sobre a mesma linha.
+        kpi_counts = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(TicketModel.status == str(TicketStatus.ABERTO)),
+                    func.count().filter(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE)),
+                    func.count().filter(
+                        TicketModel.due_at < now, TicketModel.status.not_in(_CLOSED)
+                    ),
+                    # Os 3 FILTER "no_mes" abaixo contam pelo timestamp do marco
+                    # (approved_at/declined_at/closed_at), mas o filtro do card
+                    # clicavel busca pelo status ATUAL do ticket. Um ticket
+                    # aprovado e depois finalizado no mesmo mes entra na
+                    # contagem de aprovados_no_mes mas nao aparece na lista
+                    # filtrada por status=aprovado (o status atual dele e
+                    # finalizado). Aproximacao intencional, mantida do
+                    # comportamento do sistema legado.
+                    func.count().filter(
                         TicketModel.approved_at >= month_start,
                         TicketModel.approved_at < month_end,
-                    )
-                ),
-                {"status": "aprovado"},
-            ),
-            DashboardKpi(
-                "declinados_no_mes",
-                await self._count(
-                    base.where(
+                    ),
+                    func.count().filter(
                         TicketModel.declined_at >= month_start,
                         TicketModel.declined_at < month_end,
-                    )
-                ),
-                {"status": "declinado"},
-            ),
-            DashboardKpi(
-                "finalizados_no_mes",
-                await self._count(
-                    base.where(
+                    ),
+                    func.count().filter(
                         TicketModel.status == str(TicketStatus.FINALIZADO),
                         TicketModel.closed_at >= month_start,
                         TicketModel.closed_at < month_end,
-                    )
-                ),
-                {"status": "finalizado"},
+                    ),
+                ).where(*self._conditions(brand_id))
+            )
+        ).one()
+        (
+            total,
+            abertos,
+            aguardando_analise,
+            atrasados,
+            aprovados_no_mes,
+            declinados_no_mes,
+            finalizados_no_mes,
+        ) = (int(v) for v in kpi_counts)
+        kpis = [
+            DashboardKpi("total", total, {}),
+            DashboardKpi("abertos", abertos, {"status": "aberto"}),
+            DashboardKpi(
+                "aguardando_analise",
+                aguardando_analise,
+                {"status": "aguardando_analise"},
             ),
+            DashboardKpi("atrasados", atrasados, {"overdue": "1"}),
+            DashboardKpi("aprovados_no_mes", aprovados_no_mes, {"status": "aprovado"}),
+            DashboardKpi("declinados_no_mes", declinados_no_mes, {"status": "declinado"}),
+            DashboardKpi("finalizados_no_mes", finalizados_no_mes, {"status": "finalizado"}),
         ]
 
         status_rows = await self._session.execute(
