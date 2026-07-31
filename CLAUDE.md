@@ -4,7 +4,7 @@ Projeto novo (greenfield). Este arquivo registra as decisões de arquitetura e s
 
 Sistema de SAC para automatizar o controle de trocas e defeitos hoje feito em planilhas (KODI e STALEKS, na raiz de `work2/`). O projeto legado `../SAC-Tickets` (Laravel, vibe-codado) serve de referência funcional e de layout — a disposição de telas e menus deve se inspirar nele, sempre melhorando e profissionalizando.
 
-**Documento principal do produto: `docs/PRD.md`** — fonte de verdade de requisitos, domínio e fases. Apoio: `docs/planilhas.md` (planilhas a automatizar), `docs/legado-funcionamento.md` (regras do legado), `docs/legado-ui.md` (layout do legado), `docs/proposta-alto-nivel.md` (proposta consolidada no PRD), `docs/armazenamento-anexos.md` (anexos no Wasabi S3).
+**Documento principal do produto: `docs/PRD.md`** — fonte de verdade de requisitos, domínio e fases. Apoio: `docs/planilhas.md` (planilhas a automatizar), `docs/legado-funcionamento.md` (regras do legado), `docs/legado-ui.md` (layout do legado), `docs/proposta-alto-nivel.md` (proposta consolidada no PRD), `docs/armazenamento-anexos.md` (anexos no Wasabi S3), `docs/medicao-indices-tenant.md` (medição que definiu os índices do schema de tenant, com a massa reproduzível).
 
 ## Decisões de produto (2026-07-27)
 

@@ -11,7 +11,7 @@ anexos (1% de exclusao logica, distribuicao de status enviesada), com ANALYZE:
   o predicado. Como coluna LIDER de um b-tree isso custa 8 bytes por entrada e
   nao entrega seletividade; como PREDICADO PARCIAL custa zero e ainda dispensa
   a recheck de deleted_at no heap. Exemplo: a contagem por atendente saiu de
-  Bitmap Heap Scan (9,6 ms, ~2000 buffers) para Index Only Scan (1,0 ms, 11
+  Bitmap Heap Scan (9,6 ms, ~2000 buffers) para Index Only Scan (0,97 ms, 11
   buffers) so por trocar a forma do indice.
 - ix_tickets_deleted_at_status ERA usado (Index Only Scan no GROUP BY status do
   dashboard e nos counts do relatorio) — a medicao anterior, feita em 738
@@ -23,17 +23,20 @@ anexos (1% de exclusao logica, distribuicao de status enviesada), com ANALYZE:
   filtra nada dentro de status = 'finalizado'.
 - brand_id continua indexado, na forma parcial. A marca so tem duas categorias,
   entao nenhum plano a usa para restringir linhas; ela serve como Index Only
-  Scan da contagem do dashboard por marca (7,4 ms contra 42,9 ms de Seq Scan
+  Scan da contagem do dashboard por marca (8,0 ms contra 42,9 ms de Seq Scan
   quando o indice nao existe) e como o menor indice que cobre deleted_at.
 - ix_tickets_opened_at troca (deleted_at, opened_at) por (opened_at) parcial:
-  metade do tamanho e, principalmente, habilita Index Scan + Incremental Sort
-  no ORDER BY opened_at DESC, id da tabela do relatorio (125 ms -> 0,7 ms) e do
-  export CSV (178 ms com merge externo de 24 MB -> 33 ms).
+  3.104 KB -> 2.184 KB e, principalmente, habilita Index Scan + Incremental
+  Sort no ORDER BY opened_at DESC, id da tabela do relatorio (143,6 ms -> 0,43
+  ms) e do export CSV (178,4 ms com merge externo de 24 MB -> 29,4 ms).
 - Em anexos o parcial NAO se aplica: list_pending_before (varredura de anexos
   pendentes) filtra status/created_at sem deleted_at, entao um indice parcial
   ficaria inalcancavel para ela. O composto liderado por deleted_at cede lugar
-  a (status, created_at), que serve a galeria pela ordenacao (107 ms -> 0,5 ms)
-  E o varredor pelo prefixo status, dispensando ix_ticket_attachments_status.
+  a (status, created_at), que serve a galeria pela ordenacao (107,5 ms -> 0,58
+  ms) E o varredor pelo prefixo status, dispensando
+  ix_ticket_attachments_status.
+
+Massa, planos completos e tamanhos em docs/medicao-indices-tenant.md.
 
 """
 

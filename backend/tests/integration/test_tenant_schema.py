@@ -51,6 +51,16 @@ FORBIDDEN_TICKET_ATTACHMENT_INDEXES = {
     "ix_ticket_attachments_deleted_at_status_created_at",
     "ix_ticket_attachments_status",
 }
+# Indices de FK das tabelas filhas do ticket. Existem desde a 0003/0004 mas so
+# passaram a ser declarados em models_tenant.py na 0007 — sem esta afirmacao o
+# "__table_args__ reflete o schema real" nao teria trava de regressao. Nenhum
+# deles e parcial: essas tabelas nao tem deleted_at (o filho some com o ticket).
+EXPECTED_CHILD_INDEXES = {
+    "ticket_items": "ix_ticket_items_ticket_id",
+    "ticket_comments": "ix_ticket_comments_ticket_id",
+    "ticket_timeline_events": "ix_ticket_timeline_events_ticket_id",
+    "reverse_codes": "ix_reverse_codes_ticket_id",
+}
 _ALIVE_PREDICATE = "WHERE (deleted_at IS NULL)"
 
 
@@ -94,6 +104,24 @@ async def test_migration_tenant_cria_indices_de_relatorio(engine: AsyncEngine) -
     # (list_pending_before) filtra so por status/created_at, sem deleted_at, e
     # um indice parcial seria inalcancavel para ele.
     assert _ALIVE_PREDICATE not in definitions["ix_ticket_attachments_status_created_at"]
+
+
+async def test_migration_tenant_cria_indices_de_fk_das_tabelas_filhas(
+    engine: AsyncEngine,
+) -> None:
+    await AlembicTenantProvisioner(engine).provision("t_indices_filhas")
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT tablename, indexname, indexdef FROM pg_indexes "
+                "WHERE schemaname = :schema AND tablename = ANY(:tables)"
+            ),
+            {"schema": "t_indices_filhas", "tables": list(EXPECTED_CHILD_INDEXES)},
+        )
+        definitions = {index: definition for _, index, definition in rows.all()}
+    for table, name in EXPECTED_CHILD_INDEXES.items():
+        assert name in definitions, f"{name} ausente em {table}"
+        assert _ALIVE_PREDICATE not in definitions[name], name
 
 
 async def test_schema_translate_map_isola_tenants(engine: AsyncEngine) -> None:
