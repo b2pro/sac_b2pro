@@ -148,8 +148,15 @@ class NotificationListener:
                     await task
             conn, self._conn = self._conn, None
             if conn is not None and not conn.is_closed():
+                # terminate() sincrono, e nao `await conn.close()`: close() faz
+                # round trip (manda Terminate e espera resposta), e o suppress
+                # abaixo pega excecao, nao hang. Se o shutdown cair na janela em
+                # que o socket esta blackholed e o tique ainda nao detectou (ate
+                # ~25s), close() penduraria o processo ate o SIGKILL. Fechar
+                # abruptamente e seguro aqui: a conexao so faz LISTEN, nunca tem
+                # transacao de escrita em voo.
                 with contextlib.suppress(Exception):
-                    await conn.close()
+                    conn.terminate()
             # solta as filas: um stream sobrevivente sai no proximo heartbeat e
             # o seu unsubscribe e tolerante a chave ausente.
             self._queues.clear()
@@ -179,20 +186,34 @@ class NotificationListener:
         Nao adquire self._lock em nenhum ponto: stop() cancela esta task
         segurando o lock, e pedir o mesmo lock aqui travaria o shutdown.
 
-        O backoff so cresce em falha de reconexao (1s, 2s, ... 30s) e volta a 1s
-        quando reconecta.
+        Dois caminhos, com esperas DIFERENTES e que nunca se somam:
+
+        - conexao utilizavel: dorme o intervalo de healthcheck e prova a vida.
+        - sem conexao utilizavel: reconecta IMEDIATAMENTE. A unica espera desse
+          caminho e o backoff exponencial do except (1s, 2s, 4s ... teto 30s),
+          que volta a 1s ao reconectar.
+
+        O `continue` no fim do ramo de reconexao existe justamente para o
+        intervalo de healthcheck nao entrar na conta de uma tentativa falha: com
+        o sleep do healthcheck no topo do try, sem condicao, cada retry custaria
+        `delay + intervalo` (21s, 22s, 24s...) em vez do backoff prometido --
+        cerca de tres vezes mais tempo de recuperacao numa queda real.
         """
         delay = _BACKOFF_INITIAL_SECONDS
         while True:
             try:
-                await asyncio.sleep(self._healthcheck_seconds)
-                if await self._alive():
+                if self._conn is None or self._conn.is_closed():
+                    await self._connect()
+                    logger.info("listener reconectado ao canal %s", NOTIFY_CHANNEL)
                     delay = _BACKOFF_INITIAL_SECONDS
+                    self._resync()
                     continue
-                await self._connect()
-                logger.info("listener reconectado ao canal %s", NOTIFY_CHANNEL)
+                await asyncio.sleep(self._healthcheck_seconds)
+                if not await self._alive():
+                    # _alive() ja zerou self._conn: a volta seguinte reconecta na
+                    # hora, sem mais nenhuma espera entre detectar e tentar.
+                    continue
                 delay = _BACKOFF_INITIAL_SECONDS
-                self._resync()
             except asyncio.CancelledError:
                 raise
             except Exception:

@@ -156,16 +156,29 @@ class _ConexaoFake:
 
 
 class _ListenerComConexaoFake(NotificationListener):
-    """Substitui so o _connect: entrega conexoes fake na ordem de `provas`."""
+    """Substitui so o _connect: entrega conexoes fake na ordem de `provas`.
+
+    Cada item de `provas` descreve a n-esima tentativa de conexao: "viva",
+    "pendurada" e "erro" produzem uma conexao com aquele comportamento na prova
+    de vida; "falha" faz o proprio _connect levantar (banco fora do ar). Depois
+    do fim da lista, entrega conexoes vivas. Os eventos ficam registrados em
+    `eventos` para os testes que precisam da ORDEM, nao so do resultado.
+    """
 
     def __init__(self, *provas: str, **kwargs: float) -> None:
         super().__init__("postgresql://ignorado", **kwargs)
         self._provas = provas
+        self._tentativas = 0
         self.conexoes: list[_ConexaoFake] = []
+        self.eventos: list[str] = []
 
     async def _connect(self) -> None:
-        indice = len(self.conexoes)
-        conn = _ConexaoFake(self._provas[indice] if indice < len(self._provas) else "viva")
+        indice, self._tentativas = self._tentativas, self._tentativas + 1
+        prova = self._provas[indice] if indice < len(self._provas) else "viva"
+        self.eventos.append("connect:falha" if prova == "falha" else "connect:ok")
+        if prova == "falha":
+            raise ConnectionError("banco fora do ar")
+        conn = _ConexaoFake(prova)
         self.conexoes.append(conn)
         self._conn = conn  # type: ignore[assignment]
 
@@ -251,6 +264,61 @@ async def test_watchdog_mantem_a_conexao_viva_sem_reconectar() -> None:
         assert listener.conexoes[0].terminada is False
     finally:
         await listener.stop()
+
+
+async def test_backoff_de_reconexao_nao_soma_o_intervalo_de_healthcheck(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Espacamento entre tentativas FALHAS tem de ser so o backoff.
+
+    Nenhum outro teste pega isso: todos tem o proximo _connect sucedendo de
+    primeira, entao o ramo do except nunca roda duas vezes seguidas. Aqui o banco
+    fica fora por tres tentativas.
+
+    Em vez de medir tempo real (flaky) ou esperar de verdade, o teste troca o
+    asyncio.sleep por um que REGISTRA a duracao pedida e nao dorme: a asercao e
+    sobre a sequencia exata de esperas e tentativas. Se o sleep do healthcheck
+    voltar para o topo do try sem condicao, a sequencia viraria
+    [..., falha, sleep:1.0, sleep:7.5, falha, ...] e o teste quebra.
+    """
+    listener = _ListenerComConexaoFake(
+        "erro",  # primeira conexao: aberta, mas a prova de vida falha
+        "falha",
+        "falha",
+        "falha",  # banco fora por tres tentativas
+        "viva",  # entao volta
+        healthcheck_seconds=7.5,  # valor inconfundivel na lista de eventos
+    )
+    real_sleep = asyncio.sleep
+
+    async def _sleep_registrando(delay: float) -> None:
+        listener.eventos.append(f"sleep:{delay}")
+        await real_sleep(0)  # cede o loop sem consumir tempo real
+
+    monkeypatch.setattr(asyncio, "sleep", _sleep_registrando)
+    try:
+        await listener.start()
+        loop = asyncio.get_running_loop()
+        limite = loop.time() + 3.0
+        while len(listener.eventos) < 10 and loop.time() < limite:
+            await real_sleep(0)
+    finally:
+        monkeypatch.undo()
+        await listener.stop()
+
+    assert listener.eventos[:9] == [
+        "connect:ok",  # o start()
+        "sleep:7.5",  # caminho saudavel: espera antes de provar a vida
+        "connect:falha",  # prova falhou -> reconecta na hora, sem healthcheck
+        "sleep:1.0",  # backoff inicial
+        "connect:falha",
+        "sleep:2.0",  # dobra
+        "connect:falha",
+        "sleep:4.0",  # dobra de novo
+        "connect:ok",  # reconectou
+    ]
+    # e depois de reconectar o backoff volta ao inicio, nao segue em 8s
+    assert listener.eventos[9] == "sleep:7.5"
 
 
 async def test_reconexao_acorda_os_inscritos_para_resincronizar() -> None:
