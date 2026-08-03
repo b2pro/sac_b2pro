@@ -77,6 +77,12 @@ class InMemoryUserTenantRepository:
             raise ConflictError("vinculo ja existe")
         self.items[key] = link
 
+    async def update(self, link: UserTenant) -> None:
+        key = (link.user_id, link.tenant_id)
+        if key not in self.items:
+            raise NotFoundError("vinculo nao encontrado")
+        self.items[key] = link
+
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None:
         if (user_id, tenant_id) not in self.items:
             raise NotFoundError("vinculo nao encontrado")

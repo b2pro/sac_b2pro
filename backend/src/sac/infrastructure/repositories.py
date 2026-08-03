@@ -165,6 +165,14 @@ class SqlUserTenantRepository:
         except IntegrityError as exc:
             raise ConflictError("vinculo ja existe") from exc
 
+    async def update(self, link: UserTenant) -> None:
+        m = await self._session.get(UserTenantModel, (link.user_id, link.tenant_id))
+        if m is None:
+            raise NotFoundError("vinculo nao encontrado")
+        m.role = link.role.value
+        m.active = link.active
+        await self._session.flush()
+
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None:
         m = await self._session.get(UserTenantModel, (user_id, tenant_id))
         if m is None:

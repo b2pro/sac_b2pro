@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator, Callable, Coroutine
 from functools import lru_cache
 from typing import Any
+from uuid import UUID
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -8,6 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sac.application.ports import TokenPayload
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
+from sac.application.use_cases.members_admin import (
+    CreateMemberUseCase,
+    ListMembersAdminUseCase,
+    ResetMemberPasswordUseCase,
+    UpdateMemberLinkUseCase,
+)
 from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.platform_tenants import (
     CreateTenantUseCase,
@@ -272,6 +279,51 @@ async def get_tenant_slug(identity: TokenPayload = Depends(get_current_identity)
     if identity.tenant_slug is None:
         raise AuthError("token sem tenant")
     return identity.tenant_slug
+
+
+async def get_current_tenant_id(
+    session: AsyncSession = Depends(get_session),
+    slug: str = Depends(get_tenant_slug),
+) -> UUID:
+    # o admin de um tenant so pode gerenciar membros do PROPRIO tenant: o id
+    # vem sempre do slug do token, nunca de parametro de rota ou corpo.
+    tenant = await SqlTenantRepository(session).get_by_slug(slug)
+    if tenant is None:
+        raise AuthError("tenant nao encontrado")
+    return tenant.id
+
+
+def get_create_member_use_case(
+    session: AsyncSession = Depends(get_session),
+    hasher: Argon2PasswordHasher = Depends(get_hasher),
+) -> CreateMemberUseCase:
+    return CreateMemberUseCase(
+        SqlUserRepository(session),
+        SqlTenantRepository(session),
+        SqlUserTenantRepository(session),
+        hasher,
+    )
+
+
+def get_update_member_link_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> UpdateMemberLinkUseCase:
+    return UpdateMemberLinkUseCase(SqlUserRepository(session), SqlUserTenantRepository(session))
+
+
+def get_reset_member_password_use_case(
+    session: AsyncSession = Depends(get_session),
+    hasher: Argon2PasswordHasher = Depends(get_hasher),
+) -> ResetMemberPasswordUseCase:
+    return ResetMemberPasswordUseCase(
+        SqlUserRepository(session), SqlUserTenantRepository(session), hasher
+    )
+
+
+def get_list_members_admin_use_case(
+    session: AsyncSession = Depends(get_session),
+) -> ListMembersAdminUseCase:
+    return ListMembersAdminUseCase(SqlUserRepository(session), SqlUserTenantRepository(session))
 
 
 def get_notification_fanout(

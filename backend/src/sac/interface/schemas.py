@@ -631,6 +631,27 @@ class MemberOut(BaseModel):
     active: bool
 
 
+class MemberCreateIn(BaseModel):
+    email: EmailStr
+    role: Role
+    name: str | None = None
+    password: str | None = None
+
+
+class MemberLinkUpdateIn(BaseModel):
+    role: Role | None = None
+    active: bool | None = None
+
+
+class MemberDetailOut(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    role: Role
+    active: bool
+    user_active: bool
+
+
 class NotificationOut(BaseModel):
     id: UUID
     ticket_id: UUID
