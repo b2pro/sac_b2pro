@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from sac.domain.entities import Tenant, User, UserTenant
+from sac.domain.entities import Tenant, User, UserPreferences, UserTenant
 from sac.domain.permissions import Role
 
 
@@ -36,6 +36,11 @@ class UserTenantRepository(Protocol):
     async def add(self, link: UserTenant) -> None: ...
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None: ...
     async def list_for_tenant(self, tenant_id: UUID) -> list[UserTenant]: ...
+
+
+class UserPreferencesRepository(Protocol):
+    async def get(self, user_id: UUID) -> UserPreferences | None: ...
+    async def upsert(self, prefs: UserPreferences) -> None: ...
 
 
 class PasswordHasherPort(Protocol):

@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -15,7 +16,7 @@ from sac.application.use_cases.auth import AuthResult
 from sac.domain.attachments import AttachmentKind, PreviewStatus
 from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
-from sac.domain.entities import Tenant, TenantStatus
+from sac.domain.entities import Tenant, TenantStatus, UserPreferences
 from sac.domain.notifications import Notification, NotificationType
 from sac.domain.permissions import Role
 from sac.domain.tickets import (
@@ -663,4 +664,24 @@ def notification_out(notification: Notification) -> NotificationOut:
         snippet=notification.snippet,
         created_at=notification.created_at,
         read_at=notification.read_at,
+    )
+
+
+class PreferencesIn(BaseModel):
+    # Literal (nao str livre) para o 422 do proprio FastAPI barrar tema fora
+    # dos tres valores antes mesmo de chegar ao use case.
+    theme: Literal["claro", "escuro", "sistema"]
+    notify_toast: bool
+    notify_sound: bool
+
+
+class PreferencesOut(BaseModel):
+    theme: str
+    notify_toast: bool
+    notify_sound: bool
+
+
+def preferences_out(prefs: UserPreferences) -> PreferencesOut:
+    return PreferencesOut(
+        theme=prefs.theme, notify_toast=prefs.notify_toast, notify_sound=prefs.notify_sound
     )

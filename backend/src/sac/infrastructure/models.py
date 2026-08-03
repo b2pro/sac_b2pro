@@ -58,6 +58,18 @@ class UserTenantModel(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class UserPreferencesModel(Base):
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    theme: Mapped[str] = mapped_column(String(10), nullable=False, default="sistema")
+    notify_toast: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notify_sound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class PreviewJobModel(Base):
     __tablename__ = "preview_jobs"
     __table_args__ = (

@@ -57,3 +57,18 @@ class UserTenant:
     tenant_id: UUID
     role: Role
     active: bool = True
+
+
+@dataclass
+class UserPreferences:
+    """Preferencias globais do usuario: tema e opcoes de notificacao.
+
+    Vive no schema public (nao por tenant) porque usuarios sao globais no
+    SAC-B2PRO -- um usuario pode pertencer a varios tenants e a preferencia
+    o acompanha em qualquer um deles.
+    """
+
+    user_id: UUID
+    theme: str = "sistema"  # "claro" | "escuro" | "sistema"
+    notify_toast: bool = True
+    notify_sound: bool = False

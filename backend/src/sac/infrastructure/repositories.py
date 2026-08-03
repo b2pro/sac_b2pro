@@ -1,13 +1,19 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sac.domain.entities import Tenant, TenantStatus, User, UserTenant
+from sac.domain.entities import Tenant, TenantStatus, User, UserPreferences, UserTenant
 from sac.domain.errors import ConflictError, NotFoundError
 from sac.domain.permissions import Role
-from sac.infrastructure.models import TenantModel, UserModel, UserTenantModel
+from sac.infrastructure.models import (
+    TenantModel,
+    UserModel,
+    UserPreferencesModel,
+    UserTenantModel,
+)
 
 
 def _user_entity(m: UserModel) -> User:
@@ -171,3 +177,42 @@ class SqlUserTenantRepository:
             select(UserTenantModel).where(UserTenantModel.tenant_id == tenant_id)
         )
         return [_link_entity(m) for m in result]
+
+
+def _preferences_entity(m: UserPreferencesModel) -> UserPreferences:
+    return UserPreferences(
+        user_id=m.user_id,
+        theme=m.theme,
+        notify_toast=m.notify_toast,
+        notify_sound=m.notify_sound,
+    )
+
+
+class SqlUserPreferencesRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UUID) -> UserPreferences | None:
+        m = await self._session.get(UserPreferencesModel, user_id)
+        return _preferences_entity(m) if m else None
+
+    async def upsert(self, prefs: UserPreferences) -> None:
+        stmt = (
+            pg_insert(UserPreferencesModel)
+            .values(
+                user_id=prefs.user_id,
+                theme=prefs.theme,
+                notify_toast=prefs.notify_toast,
+                notify_sound=prefs.notify_sound,
+            )
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "theme": prefs.theme,
+                    "notify_toast": prefs.notify_toast,
+                    "notify_sound": prefs.notify_sound,
+                    "updated_at": func.now(),
+                },
+            )
+        )
+        await self._session.execute(stmt)

@@ -18,6 +18,22 @@ async def test_migration_public_cria_tabelas_globais(engine: AsyncEngine) -> Non
     assert {"users", "tenants", "user_tenants", "alembic_version"} <= set(tables)
 
 
+# user_preferences (Task 6 da Fase 4) roda na chain public, nao na de tenant:
+# usuarios sao globais e um mesmo usuario acompanha a preferencia em qualquer
+# tenant ao qual esteja vinculado. Por isso este teste confere colunas direto
+# no schema public, ao contrario dos indices GIN acima que dependem de
+# provisionar um schema de tenant (a migration de tenant roda uma vez por
+# tenant; a de public roda uma vez so, por database).
+async def test_migration_public_cria_tabela_user_preferences(engine: AsyncEngine) -> None:
+    async with engine.connect() as conn:
+        tables = await conn.run_sync(lambda c: inspect(c).get_table_names(schema="public"))
+        assert "user_preferences" in tables
+        columns = await conn.run_sync(
+            lambda c: {col["name"] for col in inspect(c).get_columns("user_preferences")}
+        )
+    assert {"user_id", "theme", "notify_toast", "notify_sound", "updated_at"} <= columns
+
+
 async def test_migration_public_cria_extensao_pg_trgm(engine: AsyncEngine) -> None:
     async with engine.connect() as conn:
         result = await conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"))

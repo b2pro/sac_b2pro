@@ -31,6 +31,7 @@ from sac.infrastructure.cep import ViaCepGateway
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
+    SqlUserPreferencesRepository,
     SqlUserRepository,
     SqlUserTenantRepository,
 )
@@ -292,6 +293,15 @@ def get_notification_repository(
 
 def get_cep_gateway() -> ViaCepGateway:
     return ViaCepGateway()
+
+
+def get_user_preferences_repository(
+    session: AsyncSession = Depends(get_session),
+) -> SqlUserPreferencesRepository:
+    # get_session (schema public), nao get_tenant_session: preferencia e
+    # global do usuario, sem tenant ativo exigido no token (super_admin
+    # tambem tem preferencias).
+    return SqlUserPreferencesRepository(session)
 
 
 async def require_super_admin(
