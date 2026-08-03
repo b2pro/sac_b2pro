@@ -48,12 +48,17 @@ class ProductHit:
 
 @dataclass(frozen=True)
 class GlobalSearchResult:
-    tickets: list[TicketHit]
-    customers: list[CustomerHit]
-    products: list[ProductHit]
+    # tuple, nao list: EMPTY_RESULT abaixo e um singleton compartilhado por
+    # toda chamada de termo curto. `frozen=True` so impede reatribuir os
+    # campos -- uma list continuaria mutavel via .append()/.extend(), e
+    # corromperia a resposta de QUALQUER termo curto futuro. tuple fecha essa
+    # brecha: a mutacao vira AttributeError na hora, em vez de bug latente.
+    tickets: tuple[TicketHit, ...]
+    customers: tuple[CustomerHit, ...]
+    products: tuple[ProductHit, ...]
 
 
-EMPTY_RESULT = GlobalSearchResult(tickets=[], customers=[], products=[])
+EMPTY_RESULT = GlobalSearchResult(tickets=(), customers=(), products=())
 
 
 class GlobalSearchRepository(Protocol):

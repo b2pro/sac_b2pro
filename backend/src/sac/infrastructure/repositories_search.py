@@ -39,7 +39,7 @@ class SqlGlobalSearchRepository:
 
     async def _search_tickets(
         self, term: str, escaped: str, owner_user_id: UUID | None, limit: int
-    ) -> list[TicketHit]:
+    ) -> tuple[TicketHit, ...]:
         # numero de ticket casa por prefixo quando o termo (sem "#", como o
         # usuario ve na UI) e so digitos -- mesma abordagem da busca livre em
         # SqlTicketRepository._base_stmt (repositories_tickets.py).
@@ -59,7 +59,7 @@ class SqlGlobalSearchRepository:
         stmt = stmt.order_by(TicketModel.opened_at.desc()).limit(limit)
 
         rows = (await self._session.execute(stmt)).all()
-        return [
+        return tuple(
             TicketHit(
                 id=ticket.id,
                 number=ticket.number,
@@ -68,9 +68,11 @@ class SqlGlobalSearchRepository:
                 brand_name=brand_name,
             )
             for ticket, customer_name, brand_name in rows
-        ]
+        )
 
-    async def _search_customers(self, escaped: str, digits: str, limit: int) -> list[CustomerHit]:
+    async def _search_customers(
+        self, escaped: str, digits: str, limit: int
+    ) -> tuple[CustomerHit, ...]:
         # nome/email usam o termo original (escapado); documento/telefone
         # casam so pelos digitos, e ficam de fora quando o termo nao tem
         # nenhum (senao "%%" combinaria com qualquer linha).
@@ -94,9 +96,9 @@ class SqlGlobalSearchRepository:
             .limit(limit)
         )
         rows = (await self._session.scalars(stmt)).all()
-        return [CustomerHit(id=c.id, name=c.name, document=c.document) for c in rows]
+        return tuple(CustomerHit(id=c.id, name=c.name, document=c.document) for c in rows)
 
-    async def _search_products(self, escaped: str, limit: int) -> list[ProductHit]:
+    async def _search_products(self, escaped: str, limit: int) -> tuple[ProductHit, ...]:
         conditions = [
             ProductModel.name.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
             ProductModel.sku.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
@@ -108,4 +110,4 @@ class SqlGlobalSearchRepository:
             .limit(limit)
         )
         rows = (await self._session.scalars(stmt)).all()
-        return [ProductHit(id=p.id, name=p.name, sku=p.sku) for p in rows]
+        return tuple(ProductHit(id=p.id, name=p.name, sku=p.sku) for p in rows)

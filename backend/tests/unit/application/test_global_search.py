@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+import pytest
+
 from sac.application.ports_tickets import TicketActor
 from sac.application.use_cases.global_search import (
     EMPTY_RESULT,
@@ -57,6 +59,54 @@ async def test_termo_vazio_retorna_vazio_sem_tocar_repositorio() -> None:
     result = await use_case.execute(actor, "")
 
     assert result == EMPTY_RESULT
+
+
+async def test_termo_de_um_caractere_nao_chega_ao_repositorio() -> None:
+    # fronteira exata de MIN_TERM_LENGTH (2), lado de baixo: sem padding de
+    # espaco (ao contrario do teste " a " acima), para isolar o off-by-one
+    # do proprio guard e nao do strip().
+    actor = TicketActor(user_id=uuid4(), role=Role.ADMIN)
+    use_case = GlobalSearchUseCase(_ExplodingRepo())
+
+    result = await use_case.execute(actor, "x")
+
+    assert result == EMPTY_RESULT
+
+
+async def test_termo_de_dois_caracteres_chega_ao_repositorio() -> None:
+    # fronteira exata de MIN_TERM_LENGTH (2), lado de cima: o menor termo
+    # valido deve ser repassado ao repositorio, nao recusado. Sem este
+    # teste, um guard `<=` em vez de `<` (ou MIN_TERM_LENGTH errado por 1)
+    # passaria despercebido -- todos os outros positivos usam termos bem
+    # maiores que 2 chars.
+    actor = TicketActor(user_id=uuid4(), role=Role.ADMIN)
+    repo = _RecordingRepo(EMPTY_RESULT)
+    use_case = GlobalSearchUseCase(repo)
+
+    await use_case.execute(actor, "ab")
+
+    assert repo.calls == [("ab", None, RESULTS_PER_GROUP)]
+
+
+async def test_resultado_vazio_de_termo_curto_e_imutavel() -> None:
+    # EMPTY_RESULT e devolvido para todo termo curto. Se os campos fossem
+    # list (mutaveis), um .append() num resultado devolvido corromperia a
+    # resposta de QUALQUER chamada futura com termo curto -- os campos tem
+    # de ser tuple para que a mutacao seja impossivel em vez de so
+    # "improvavel".
+    actor = TicketActor(user_id=uuid4(), role=Role.ADMIN)
+    use_case = GlobalSearchUseCase(_ExplodingRepo())
+
+    resultado = await use_case.execute(actor, "x")
+
+    with pytest.raises(AttributeError):
+        resultado.tickets.append(None)  # type: ignore[attr-defined]
+
+    # mesmo que a mutacao acima tivesse sucesso, uma chamada nova com termo
+    # curto ainda teria de vir vazia -- a garantia real e a impossibilidade
+    # de mutar, nao so o isolamento entre chamadas.
+    resultado_novo = await use_case.execute(actor, "x")
+    assert resultado_novo == EMPTY_RESULT
 
 
 async def test_atendente_fica_restrito_aos_proprios_tickets() -> None:
