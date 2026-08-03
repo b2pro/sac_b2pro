@@ -213,7 +213,7 @@ export default function TicketsListPage() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Buscar por no, cliente, produto ou pedido"
-              className="w-[250px] pl-8"
+              className="h-8 w-[250px] pl-8"
             />
           </div>
 
@@ -297,7 +297,7 @@ export default function TicketsListPage() {
           </div>
 
           {podeCriar && (
-            <Button asChild>
+            <Button asChild size="sm">
               <Link to="/tickets/novo">
                 <Plus size={20} strokeWidth={1.5} />
                 Novo ticket
