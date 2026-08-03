@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { ArrowDown, ArrowUp, Plus, Search } from "lucide-react"
+import { ArrowDown, ArrowUp, Plus, Search, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
@@ -57,9 +57,9 @@ export default function TicketsListPage() {
   const overdue = searchParams.get("overdue") === "1"
   const unread = searchParams.get("unread") === "1"
   const q = searchParams.get("q") ?? ""
-  // Sem controle proprio na tela: so existe para o link "Ver historico" do
-  // cliente no detalhe do ticket (`/tickets?customer_id=...`), como na pagina
-  // antiga.
+  // Sem select proprio na tela: entra so pelo link "Ver historico" do
+  // cliente no detalhe do ticket (`/tickets?customer_id=...`). A pill abaixo
+  // dos chips e o unico indicador e o unico jeito de remover o recorte.
   const customerId = searchParams.get("customer_id") ?? undefined
   const paginaBruta = Number(searchParams.get("page"))
   const page = Number.isFinite(paginaBruta) ? Math.max(Math.trunc(paginaBruta), 1) : 1
@@ -183,6 +183,12 @@ export default function TicketsListPage() {
   })
 
   const items = data?.items ?? []
+  // Nome para a pill do deep link: todo ticket do recorte pertence ao mesmo
+  // cliente, entao o primeiro nome carregado serve (sem endpoint de cliente
+  // por id no backend; com a lista vazia a pill fica sem nome, mas visivel).
+  const customerName = customerId
+    ? (items.find((item) => item.customer_name)?.customer_name ?? null)
+    : null
 
   return (
     <div>
@@ -312,6 +318,23 @@ export default function TicketsListPage() {
         active={activeQuickFilter}
         onSelect={onSelectQuickFilter}
       />
+
+      {customerId && (
+        <div className="-mt-2.5 mb-5">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card pr-1 pl-2.5 text-[13px]">
+            <span className="text-muted-foreground">Filtrando por cliente</span>
+            {customerName && <span className="font-medium">{customerName}</span>}
+            <button
+              type="button"
+              onClick={() => setParam("customer_id", "")}
+              aria-label="Remover filtro de cliente"
+              className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X size={16} strokeWidth={1.5} aria-hidden />
+            </button>
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2.5">
         {isLoading ? (

@@ -105,4 +105,29 @@ test.describe("Fila de tickets repaginada", () => {
       )
     }
   })
+
+  // O deep link "Ver historico" filtra a fila por um cliente sem controle
+  // proprio no header: a pill abaixo dos chips e o unico indicador desse
+  // recorte e o unico jeito de remove-lo.
+  test("deep link de cliente mostra a pill e o X remove o recorte", async ({ page, request }) => {
+    const doCliente = await apiFullTicket(request, "admin")
+    const deOutro = await apiFullTicket(request, "admin")
+
+    await login(page, request, "admin")
+    await page.goto(`/tickets/${doCliente.id}`)
+    await page.getByRole("link", { name: "Ver historico" }).click()
+
+    await expect(page).toHaveURL(/customer_id=/)
+    await expect(page.getByText("Filtrando por cliente")).toBeVisible()
+    await expect(page.getByText("Cliente E2E").first()).toBeVisible()
+    await expect(ticketCard(page, doCliente.number)).toBeVisible()
+    // cada apiFullTicket cria um cliente novo (CPF aleatorio): o ticket do
+    // outro cliente prova que o recorte realmente restringe a fila
+    await expect(ticketCard(page, deOutro.number)).toHaveCount(0)
+
+    await page.getByRole("button", { name: "Remover filtro de cliente" }).click()
+    await expect(page).not.toHaveURL(/customer_id=/)
+    await expect(page.getByText("Filtrando por cliente")).toHaveCount(0)
+    await expect(ticketCard(page, deOutro.number)).toBeVisible()
+  })
 })
