@@ -282,7 +282,7 @@ class SqlReportingRepository:
             per_page=10,
             sort="last_activity_at",
             order="desc",
-            unread_for=unread_for,
+            viewer_id=unread_for,
         )
 
         return DashboardData(

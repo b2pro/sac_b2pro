@@ -17,6 +17,7 @@ from sac.infrastructure.models_tenant import (
     PurchaseChannelModel,
     SolutionTypeModel,
 )
+from sac.infrastructure.sql_search import LIKE_ESCAPE_CHAR, escape_like
 
 CATALOG_MODELS: dict[CatalogKind, type[CatalogModelBase]] = {
     CatalogKind.BRAND: BrandModel,
@@ -42,7 +43,9 @@ class SqlCatalogRepository:
             select(self._model).where(self._model.deleted_at.is_(None)).order_by(self._model.name)
         )
         if search:
-            stmt = stmt.where(self._model.name.ilike(f"%{search}%"))
+            stmt = stmt.where(
+                self._model.name.ilike(f"%{escape_like(search)}%", escape=LIKE_ESCAPE_CHAR)
+            )
         if active is not None:
             stmt = stmt.where(self._model.active == active)
         return [_catalog_entity(m) for m in await self._session.scalars(stmt)]
@@ -114,15 +117,20 @@ class SqlCustomerRepository:
         stmt = select(CustomerModel).where(CustomerModel.deleted_at.is_(None))
         if search:
             digits = normalize_digits(search)
+            escaped_search = escape_like(search)
             if digits:
                 stmt = stmt.where(
                     or_(
-                        CustomerModel.name.ilike(f"%{search}%"),
-                        CustomerModel.document.like(f"%{digits}%"),
+                        CustomerModel.name.ilike(f"%{escaped_search}%", escape=LIKE_ESCAPE_CHAR),
+                        CustomerModel.document.like(
+                            f"%{escape_like(digits)}%", escape=LIKE_ESCAPE_CHAR
+                        ),
                     )
                 )
             else:
-                stmt = stmt.where(CustomerModel.name.ilike(f"%{search}%"))
+                stmt = stmt.where(
+                    CustomerModel.name.ilike(f"%{escaped_search}%", escape=LIKE_ESCAPE_CHAR)
+                )
         if active is not None:
             stmt = stmt.where(CustomerModel.active == active)
         return stmt
@@ -211,10 +219,11 @@ class SqlProductRepository:
     def _base_stmt(self, search: str | None, active: bool | None) -> Select[tuple[ProductModel]]:
         stmt = select(ProductModel).where(ProductModel.deleted_at.is_(None))
         if search:
+            escaped_search = escape_like(search)
             stmt = stmt.where(
                 or_(
-                    ProductModel.name.ilike(f"%{search}%"),
-                    ProductModel.sku.ilike(f"%{search}%"),
+                    ProductModel.name.ilike(f"%{escaped_search}%", escape=LIKE_ESCAPE_CHAR),
+                    ProductModel.sku.ilike(f"%{escaped_search}%", escape=LIKE_ESCAPE_CHAR),
                 )
             )
         if active is not None:

@@ -47,7 +47,7 @@ class ListTicketsUseCase:
         if order not in {"asc", "desc"}:
             order = "desc"
         rows, total = await self._tickets.list(
-            filters, page, per_page, sort, order, unread_for=actor.user_id
+            filters, page, per_page, sort, order, viewer_id=actor.user_id
         )
         names = await self._users.names_by_ids({row.ticket.attendant_user_id for row in rows})
         rows = [
@@ -66,7 +66,7 @@ class GetTicketCountersUseCase:
         # atendente, quando for o caso) - nunca status/overdue/unread da tela,
         # senao cada FILTER passaria a contar dentro do proprio recorte ativo.
         base = TicketFilters(attendant_user_id=owner) if owner is not None else TicketFilters()
-        return await self._tickets.counters(base, unread_for=actor.user_id, now=now)
+        return await self._tickets.counters(base, viewer_id=actor.user_id, now=now)
 
 
 class GetTicketDetailUseCase:

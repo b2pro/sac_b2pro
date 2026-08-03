@@ -90,10 +90,10 @@ class TicketRepository(Protocol):
         per_page: int,
         sort: str,
         order: str,
-        unread_for: UUID,
+        viewer_id: UUID,
     ) -> tuple[list[TicketListRow], int]: ...
     async def counters(
-        self, base: TicketFilters, unread_for: UUID, now: datetime
+        self, base: TicketFilters, viewer_id: UUID, now: datetime
     ) -> TicketCounters: ...
 
 

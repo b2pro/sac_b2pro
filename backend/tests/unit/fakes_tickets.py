@@ -38,7 +38,7 @@ class InMemoryTicketRepository:
         per_page: int,
         sort: str,
         order: str,
-        unread_for: UUID,
+        viewer_id: UUID,
     ) -> tuple[list[TicketListRow], int]:
         rows = [
             TicketListRow(

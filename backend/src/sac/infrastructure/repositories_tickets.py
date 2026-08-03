@@ -42,6 +42,7 @@ from sac.infrastructure.models_tenant import (
     TicketTimelineEventModel,
 )
 from sac.infrastructure.repositories_cadastros import SqlCustomerRepository
+from sac.infrastructure.sql_search import LIKE_ESCAPE_CHAR, escape_like
 
 _FK_FIELDS: dict[str, str] = {
     "fk_tickets_brand_id": "brand_id",
@@ -215,7 +216,7 @@ class SqlTicketRepository:
             setattr(m, field, getattr(ticket, field))
         await flush_tickets(self._session)
 
-    def _unread_condition(self, unread_for: UUID) -> ColumnExpressionArgument[bool]:
+    def _unread_condition(self, viewer_id: UUID) -> ColumnExpressionArgument[bool]:
         """Condicao "nao lido" para o usuario informado, pronta para reuso.
 
         Usa um alias explicito de TicketReadModel em vez de depender do
@@ -229,12 +230,12 @@ class SqlTicketRepository:
         return ~exists(
             select(read.ticket_id).where(
                 read.ticket_id == TicketModel.id,
-                read.user_id == unread_for,
+                read.user_id == viewer_id,
                 read.last_read_at >= TicketModel.last_activity_at,
             )
         )
 
-    def _base_stmt(self, filters: TicketFilters, unread_for: UUID) -> Select[tuple[TicketModel]]:
+    def _base_stmt(self, filters: TicketFilters, viewer_id: UUID) -> Select[tuple[TicketModel]]:
         stmt = select(TicketModel).where(TicketModel.deleted_at.is_(None))
         if filters.status is not None:
             stmt = stmt.where(TicketModel.status == str(filters.status))
@@ -278,25 +279,28 @@ class SqlTicketRepository:
         if filters.search:
             term = filters.search.strip().lstrip("#")
             if term:
+                escaped = escape_like(term)
                 targets = [
                     TicketModel.customer_id.in_(
-                        select(CustomerModel.id).where(CustomerModel.name.ilike(f"%{term}%"))
+                        select(CustomerModel.id).where(
+                            CustomerModel.name.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR)
+                        )
                     ),
                     exists(
                         select(TicketItemModel.id)
                         .join(ProductModel, TicketItemModel.product_id == ProductModel.id)
                         .where(
                             TicketItemModel.ticket_id == TicketModel.id,
-                            ProductModel.name.ilike(f"%{term}%"),
+                            ProductModel.name.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
                         )
                     ),
-                    TicketModel.order_code.ilike(f"%{term}%"),
+                    TicketModel.order_code.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
                 ]
                 if term.isdigit():
-                    targets.append(cast(TicketModel.number, String).like(f"{term}%"))
+                    targets.append(cast(TicketModel.number, String).like(f"{escaped}%"))
                 stmt = stmt.where(or_(*targets))
         if filters.unread:
-            stmt = stmt.where(self._unread_condition(unread_for))
+            stmt = stmt.where(self._unread_condition(viewer_id))
         return stmt
 
     async def list(
@@ -306,19 +310,19 @@ class SqlTicketRepository:
         per_page: int,
         sort: str,
         order: str,
-        unread_for: UUID,
+        viewer_id: UUID,
     ) -> tuple[list[TicketListRow], int]:
-        stmt = self._base_stmt(filters, unread_for)
+        stmt = self._base_stmt(filters, viewer_id)
         total = await self._session.scalar(select(func.count()).select_from(stmt.subquery()))
         column = _SORT_COLUMNS.get(sort, TicketModel.last_activity_at)
         rows_stmt = (
-            self._base_stmt(filters, unread_for)
+            self._base_stmt(filters, viewer_id)
             .add_columns(CustomerModel.name, TicketReadModel.last_read_at)
             .outerjoin(CustomerModel, TicketModel.customer_id == CustomerModel.id)
             .outerjoin(
                 TicketReadModel,
                 (TicketReadModel.ticket_id == TicketModel.id)
-                & (TicketReadModel.user_id == unread_for),
+                & (TicketReadModel.user_id == viewer_id),
             )
             .order_by(column.desc() if order == "desc" else column.asc())
             .offset((page - 1) * per_page)
@@ -342,25 +346,23 @@ class SqlTicketRepository:
         ]
         return rows, int(total or 0)
 
-    async def counters(
-        self, base: TicketFilters, unread_for: UUID, now: datetime
-    ) -> TicketCounters:
+    async def counters(self, base: TicketFilters, viewer_id: UUID, now: datetime) -> TicketCounters:
         closed_statuses = [str(s) for s in CLOSED_STATUSES]
         active = TicketModel.status.not_in(closed_statuses)
-        unread = self._unread_condition(unread_for)
+        unread = self._unread_condition(viewer_id)
         # Uma varredura so: with_only_columns preserva o FROM e o WHERE de
         # _base_stmt (escopo do papel e deleted_at IS NULL) e troca so a lista
         # de colunas, entao os sete recortes saem de um unico Seq Scan em vez
         # de sete idas ao banco (fase anterior mediu ~34ms em 100 mil tickets
         # nesse formato, contra sete consultas separadas).
-        stmt = self._base_stmt(base, unread_for).with_only_columns(
+        stmt = self._base_stmt(base, viewer_id).with_only_columns(
             func.count(),
             func.count().filter(active),
             func.count().filter(TicketModel.status == str(TicketStatus.ABERTO)),
             func.count().filter(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE)),
             func.count().filter(TicketModel.due_at < now, active),
             func.count().filter(unread),
-            func.count().filter(TicketModel.attendant_user_id == unread_for),
+            func.count().filter(TicketModel.attendant_user_id == viewer_id),
         )
         todos, ativos, abertos, aguardando_analise, atrasados, nao_lidos, meus = (
             int(v or 0) for v in (await self._session.execute(stmt)).one()

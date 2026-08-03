@@ -119,13 +119,13 @@ async def test_list_filtros_unread_e_overdue(session: AsyncSession, engine: Asyn
         await ts.flush()
 
         rows, total = await repos.tickets.list(
-            TicketFilters(), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         assert total == 2
         assert all(row.unread for row in rows)
 
         rows, total = await repos.tickets.list(
-            TicketFilters(overdue=True), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(overdue=True), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         assert total == 1 and rows[0].ticket.id == atrasado.id
         assert rows[0].items_count == 1
@@ -137,7 +137,7 @@ async def test_list_filtros_unread_e_overdue(session: AsyncSession, engine: Asyn
             20,
             "last_activity_at",
             "desc",
-            unread_for=leitor.id,
+            viewer_id=leitor.id,
         )
         assert total == 1
 
@@ -147,14 +147,14 @@ async def test_list_filtros_unread_e_overdue(session: AsyncSession, engine: Asyn
             20,
             "last_activity_at",
             "desc",
-            unread_for=leitor.id,
+            viewer_id=leitor.id,
         )
         assert total == 1
 
         await repos.reads.mark_read(no_prazo.id, leitor.id, datetime.now(UTC))
         await ts.flush()
         rows, _ = await repos.tickets.list(
-            TicketFilters(), 1, 20, "number", "asc", unread_for=leitor.id
+            TicketFilters(), 1, 20, "number", "asc", viewer_id=leitor.id
         )
         by_id = {row.ticket.id: row for row in rows}
         assert by_id[atrasado.id].unread is True
@@ -209,7 +209,7 @@ async def test_itens_mantem_ordem_de_insercao_mesmo_apos_edicao(
         assert [i.product_name for i in itens] == ["Primeiro", "Segundo"]
 
         rows, _ = await repos.tickets.list(
-            TicketFilters(), 1, 20, "number", "asc", unread_for=user.id
+            TicketFilters(), 1, 20, "number", "asc", viewer_id=user.id
         )
         assert rows[0].first_product_name == "Primeiro"
         await ts.commit()
@@ -237,7 +237,7 @@ async def test_busca_por_cliente_nome_ou_documento(
                 20,
                 "last_activity_at",
                 "desc",
-                unread_for=user.id,
+                viewer_id=user.id,
             )
             assert total == 1, termo
             assert rows[0].ticket.id == com_cliente.id
@@ -323,7 +323,7 @@ async def test_filtra_por_atendente(session: AsyncSession, engine: AsyncEngine) 
             20,
             "last_activity_at",
             "desc",
-            unread_for=atendente_um.id,
+            viewer_id=atendente_um.id,
         )
         assert total == 1
         assert rows[0].ticket.id == do_um.id
@@ -360,7 +360,7 @@ async def test_busca_por_prefixo_do_numero(session: AsyncSession, engine: AsyncE
         await ts.flush()
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="48"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="48"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 2
         ids = {row.ticket.id for row in rows}
@@ -384,7 +384,7 @@ async def test_busca_por_nome_do_cliente(session: AsyncSession, engine: AsyncEng
         await repos.tickets.add(_novo_ticket(brand_id, user.id))
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="mari"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="mari"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 1
         assert rows[0].ticket.id == com_cliente.id
@@ -420,13 +420,13 @@ async def test_busca_por_nome_do_produto(session: AsyncSession, engine: AsyncEng
         await ts.flush()
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="alicate"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="alicate"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 1
         assert rows[0].ticket.id == com_produto.id
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="esmalte"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="esmalte"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 0
         await ts.commit()
@@ -445,15 +445,55 @@ async def test_busca_por_codigo_do_pedido(session: AsyncSession, engine: AsyncEn
         await repos.tickets.add(_novo_ticket(brand_id, user.id))
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="00042"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="00042"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 1
         assert rows[0].ticket.id == com_pedido.id
 
         rows, total = await repos.tickets.list(
-            TicketFilters(search="00043"), 1, 20, "last_activity_at", "desc", unread_for=user.id
+            TicketFilters(search="00043"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
         )
         assert total == 0
+        await ts.commit()
+
+
+async def test_busca_escapa_metacaracteres_de_like(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repobusk")
+    user = await seed_user(session, email="repobusk@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        customer = Customer(id=uuid4(), name="Cliente 100% algodao", document="60064234050")
+        await repos.customers.add(customer)
+        com_cliente = await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, customer_id=customer.id)
+        )
+        # sem "%"/"_" em nenhum campo buscavel: serve de isca para o coringa
+        # nao escapado (order_code preenchido casaria "%" sozinho via ilike).
+        sem_metacaractere = await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, order_code="PED-1")
+        )
+        await ts.flush()
+
+        # "100%" e literal no nome do cliente: precisa ser encontrado.
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="100%"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_cliente.id
+
+        # "%" sozinho nao pode virar coringa: so deve casar quem tem um "%"
+        # literal em algum campo buscavel, nunca a base inteira.
+        rows, total = await repos.tickets.list(
+            TicketFilters(search="%"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
+        )
+        ids = {row.ticket.id for row in rows}
+        assert sem_metacaractere.id not in ids
+        assert total == 1
+        assert rows[0].ticket.id == com_cliente.id
         await ts.commit()
 
 
@@ -472,7 +512,7 @@ async def test_busca_nao_casa_o_que_nao_deve(session: AsyncSession, engine: Asyn
             20,
             "last_activity_at",
             "desc",
-            unread_for=user.id,
+            viewer_id=user.id,
         )
         assert total == 0
         assert rows == []
@@ -501,7 +541,7 @@ async def test_filtra_nao_lidos(session: AsyncSession, engine: AsyncEngine) -> N
         await ts.flush()
 
         rows, total = await repos.tickets.list(
-            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         ids = {row.ticket.id for row in rows}
         assert ids == {nunca_lido.id, lido_antes.id}
@@ -510,7 +550,7 @@ async def test_filtra_nao_lidos(session: AsyncSession, engine: AsyncEngine) -> N
         assert total == 2
 
         rows_sem_filtro, total_sem_filtro = await repos.tickets.list(
-            TicketFilters(), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         assert total_sem_filtro == 3
         assert len(rows_sem_filtro) == 3
@@ -534,13 +574,13 @@ async def test_nao_lidos_e_por_usuario(session: AsyncSession, engine: AsyncEngin
         await ts.flush()
 
         rows_a, total_a = await repos.tickets.list(
-            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=usuario_a.id
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", viewer_id=usuario_a.id
         )
         assert total_a == 0
         assert rows_a == []
 
         rows_b, total_b = await repos.tickets.list(
-            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=usuario_b.id
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", viewer_id=usuario_b.id
         )
         assert total_b == 1
         assert rows_b[0].ticket.id == ticket.id
@@ -565,13 +605,13 @@ async def test_lido_exatamente_na_ultima_atividade_conta_como_lido(
         await ts.flush()
 
         rows, total = await repos.tickets.list(
-            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(unread=True), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         assert total == 0
         assert rows == []
 
         rows_sem_filtro, _ = await repos.tickets.list(
-            TicketFilters(), 1, 20, "last_activity_at", "desc", unread_for=leitor.id
+            TicketFilters(), 1, 20, "last_activity_at", "desc", viewer_id=leitor.id
         )
         assert rows_sem_filtro[0].unread is False
         await ts.commit()
