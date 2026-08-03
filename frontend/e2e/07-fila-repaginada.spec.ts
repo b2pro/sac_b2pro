@@ -118,8 +118,11 @@ test.describe("Fila de tickets repaginada", () => {
     await page.getByRole("link", { name: "Ver historico" }).click()
 
     await expect(page).toHaveURL(/customer_id=/)
-    await expect(page.getByText("Filtrando por cliente")).toBeVisible()
-    await expect(page.getByText("Cliente E2E").first()).toBeVisible()
+    // ancora no container da pill: os cards tambem renderizam "Cliente E2E",
+    // entao um getByText solto casaria a lista mesmo sem nome na pill
+    const pill = page.getByText("Filtrando por cliente").locator("..")
+    await expect(pill).toBeVisible()
+    await expect(pill).toContainText("Cliente E2E")
     await expect(ticketCard(page, doCliente.number)).toBeVisible()
     // cada apiFullTicket cria um cliente novo (CPF aleatorio): o ticket do
     // outro cliente prova que o recorte realmente restringe a fila
