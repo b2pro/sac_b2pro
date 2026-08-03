@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -215,7 +214,7 @@ async def get_ticket_counters(
     # declarada antes de /{ticket_id}: senao a rota dinamica engoliria
     # "/contadores" como se fosse um ticket_id.
     use_case = GetTicketCountersUseCase(repos.tickets)
-    counters = await use_case.execute(_actor(identity), datetime.now(UTC))
+    counters = await use_case.execute(_actor(identity))
     return ticket_counters_out(counters)
 
 

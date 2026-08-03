@@ -60,13 +60,13 @@ class GetTicketCountersUseCase:
     def __init__(self, tickets: TicketRepository) -> None:
         self._tickets = tickets
 
-    async def execute(self, actor: TicketActor, now: datetime) -> TicketCounters:
+    async def execute(self, actor: TicketActor) -> TicketCounters:
         owner = restrict_to_own(actor)
         # base carrega so o escopo do papel (attendant_user_id do proprio
         # atendente, quando for o caso) - nunca status/overdue/unread da tela,
         # senao cada FILTER passaria a contar dentro do proprio recorte ativo.
         base = TicketFilters(attendant_user_id=owner) if owner is not None else TicketFilters()
-        return await self._tickets.counters(base, viewer_id=actor.user_id, now=now)
+        return await self._tickets.counters(base, viewer_id=actor.user_id)
 
 
 class GetTicketDetailUseCase:

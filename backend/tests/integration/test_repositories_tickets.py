@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.application.ports_tickets import TicketFilters
@@ -279,6 +279,39 @@ async def test_filtros_customer_e_order_code_escapam_metacaracteres(
         )
         assert total == 1
         assert rows[0].ticket.id == com_literal.id
+        await ts.commit()
+
+
+async def test_contadores_atrasados_usam_relogio_do_banco(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    """O corte de atrasados dos contadores sai de func.now() (relogio do
+    banco), o mesmo do filtro overdue da lista - sem parametro `now` vindo
+    da aplicacao, que introduzia skew entre o chip e a lista que ele abre."""
+    tenant = await seed_provisioned_tenant(session, engine, slug="repoctd")
+    user = await seed_user(session, email="repoctd@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        atrasado = await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        await repos.tickets.add(_novo_ticket(brand_id, user.id))
+        # vencimento 1s no passado segundo o relogio do BANCO, nao o do teste
+        await ts.execute(
+            update(TicketModel)
+            .where(TicketModel.id == atrasado.id)
+            .values(due_at=func.now() - timedelta(seconds=1))
+        )
+        await ts.flush()
+
+        counters = await repos.tickets.counters(TicketFilters(), viewer_id=user.id)
+        assert counters.atrasados == 1
+        assert counters.todos == 2
+
+        _, total_lista = await repos.tickets.list(
+            TicketFilters(overdue=True), 1, 20, "last_activity_at", "desc", viewer_id=user.id
+        )
+        assert total_lista == counters.atrasados
         await ts.commit()
 
 

@@ -350,7 +350,7 @@ class SqlTicketRepository:
         ]
         return rows, int(total or 0)
 
-    async def counters(self, base: TicketFilters, viewer_id: UUID, now: datetime) -> TicketCounters:
+    async def counters(self, base: TicketFilters, viewer_id: UUID) -> TicketCounters:
         closed_statuses = [str(s) for s in CLOSED_STATUSES]
         active = TicketModel.status.not_in(closed_statuses)
         unread = self._unread_condition(viewer_id)
@@ -364,7 +364,9 @@ class SqlTicketRepository:
             func.count().filter(active),
             func.count().filter(TicketModel.status == str(TicketStatus.ABERTO)),
             func.count().filter(TicketModel.status == str(TicketStatus.AGUARDANDO_ANALISE)),
-            func.count().filter(TicketModel.due_at < now, active),
+            # func.now(), como no filtro overdue de _base_stmt: chip e lista
+            # que ele abre leem o mesmo relogio (o do banco), sem skew.
+            func.count().filter(TicketModel.due_at < func.now(), active),
             func.count().filter(unread),
             func.count().filter(TicketModel.attendant_user_id == viewer_id),
         )

@@ -92,9 +92,7 @@ class TicketRepository(Protocol):
         order: str,
         viewer_id: UUID,
     ) -> tuple[list[TicketListRow], int]: ...
-    async def counters(
-        self, base: TicketFilters, viewer_id: UUID, now: datetime
-    ) -> TicketCounters: ...
+    async def counters(self, base: TicketFilters, viewer_id: UUID) -> TicketCounters: ...
 
 
 class TicketItemRepository(Protocol):
