@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from sac.infrastructure.db import build_engine, build_session_factory
+from sac.infrastructure.notify_listener import NotificationListener, asyncpg_dsn
 from sac.infrastructure.settings import Settings
 from sac.infrastructure.storage import build_storage
 from sac.interface.errors import register_error_handlers
@@ -28,6 +29,10 @@ from sac.interface.routers import (
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
+    # o listener para ANTES do engine.dispose(): ele tem conexao asyncpg propria
+    # e uma task de reconexao que, se sobrevivesse ao dispose, tentaria abrir
+    # conexao nova em um processo que ja esta descendo.
+    await app.state.notify_listener.stop()
     await app.state.engine.dispose()
 
 
@@ -39,6 +44,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = build_session_factory(app.state.engine)
     app.state.storage = build_storage(settings)
     app.state.login_limiter = SlidingWindowRateLimiter()
+    # criado sem conectar: create_app tem de funcionar com Postgres fora do ar
+    # (o /health responde). O LISTEN abre no primeiro subscribe do endpoint SSE.
+    app.state.notify_listener = NotificationListener(asyncpg_dsn(settings.database_url))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

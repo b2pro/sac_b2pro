@@ -78,6 +78,11 @@ async def app(
         )
     )
     yield application
+    # ASGITransport nao roda o lifespan, entao o stop() do listener nao sairia
+    # de graca: sem isso, a conexao asyncpg em LISTEN e a task de reconexao
+    # sobreviveriam ao teste e vazariam para os seguintes. Mesma ordem do
+    # lifespan (listener antes do engine).
+    await application.state.notify_listener.stop()
     await application.state.engine.dispose()
 
 

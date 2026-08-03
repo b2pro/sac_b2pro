@@ -57,6 +57,10 @@ module = "alembic.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "asyncpg.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "boto3.*"
 ignore_missing_imports = true
 
