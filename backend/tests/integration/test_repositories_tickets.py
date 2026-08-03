@@ -245,6 +245,43 @@ async def test_busca_por_cliente_nome_ou_documento(
         await ts.commit()
 
 
+async def test_filtros_customer_e_order_code_escapam_metacaracteres(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    tenant = await seed_provisioned_tenant(session, engine, slug="repofesc")
+    user = await seed_user(session, email="repofesc@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        literal = Customer(id=uuid4(), name="Malha 100% algodao", document="39053344705")
+        isca = Customer(id=uuid4(), name="Malha 1000 fios", document="60064234050")
+        await repos.customers.add(literal)
+        await repos.customers.add(isca)
+        com_literal = await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, customer_id=literal.id, order_code="PED-100%")
+        )
+        # isca: sem "%" literal, mas casaria "100%" com o coringa nao escapado
+        # ("100" seguido de qualquer coisa) tanto no nome quanto no pedido.
+        await repos.tickets.add(
+            _novo_ticket(brand_id, user.id, customer_id=isca.id, order_code="PED-1000")
+        )
+        await ts.flush()
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(customer="100%"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_literal.id
+
+        rows, total = await repos.tickets.list(
+            TicketFilters(order_code="100%"), 1, 20, "last_activity_at", "desc", viewer_id=user.id
+        )
+        assert total == 1
+        assert rows[0].ticket.id == com_literal.id
+        await ts.commit()
+
+
 async def test_satelites_comentario_timeline_reverso_read_sla(
     session: AsyncSession, engine: AsyncEngine
 ) -> None:

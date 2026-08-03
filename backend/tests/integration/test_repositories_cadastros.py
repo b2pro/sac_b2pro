@@ -92,3 +92,27 @@ async def test_produto_roundtrip_busca_e_conflito(tenant_session) -> None:
 
     with pytest.raises(ConflictError):
         await repo.add(_product("PLN-10-7", "Outro nome"))
+
+
+async def test_busca_de_cadastros_escapa_metacaracteres(tenant_session) -> None:
+    """Regressao: remover o escape_like das buscas volta a tratar %/_ como
+    coringa e cada par literal/isca abaixo passa a devolver dois resultados."""
+    catalogo = SqlCatalogRepository(tenant_session, CatalogKind.BRAND)
+    await catalogo.add(_item("MARCA 100%"))
+    await catalogo.add(_item("MARCA 1000"))
+    clientes = SqlCustomerRepository(tenant_session)
+    await clientes.add(_customer("52998224725", "Malha 100% algodao"))
+    await clientes.add(_customer("15350946056", "Malha 1000 fios"))
+    produtos = SqlProductRepository(tenant_session)
+    await produtos.add(_product("ALG-1", "Meia 100% algodao"))
+    await produtos.add(_product("ALG-2", "Meia 1000 fios"))
+    await tenant_session.commit()
+
+    itens = await catalogo.list(search="100%", active=None)
+    assert [i.name for i in itens] == ["MARCA 100%"]
+
+    por_nome, total = await clientes.list(search="100%", active=None, page=1, per_page=20)
+    assert total == 1 and por_nome[0].name == "Malha 100% algodao"
+
+    por_nome_produto, total = await produtos.list(search="100%", active=None, page=1, per_page=20)
+    assert total == 1 and por_nome_produto[0].name == "Meia 100% algodao"

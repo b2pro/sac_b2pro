@@ -248,7 +248,11 @@ class SqlTicketRepository:
         if filters.attendant_user_id is not None:
             stmt = stmt.where(TicketModel.attendant_user_id == filters.attendant_user_id)
         if filters.order_code:
-            stmt = stmt.where(TicketModel.order_code.ilike(f"%{filters.order_code}%"))
+            stmt = stmt.where(
+                TicketModel.order_code.ilike(
+                    f"%{escape_like(filters.order_code)}%", escape=LIKE_ESCAPE_CHAR
+                )
+            )
         if filters.overdue:
             stmt = stmt.where(
                 TicketModel.due_at < func.now(),
@@ -256,13 +260,13 @@ class SqlTicketRepository:
             )
         if filters.customer:
             digits = normalize_digits(filters.customer)
+            name_match = CustomerModel.name.ilike(
+                f"%{escape_like(filters.customer)}%", escape=LIKE_ESCAPE_CHAR
+            )
             customer_match = (
-                or_(
-                    CustomerModel.name.ilike(f"%{filters.customer}%"),
-                    CustomerModel.document.like(f"%{digits}%"),
-                )
+                or_(name_match, CustomerModel.document.like(f"%{digits}%"))
                 if digits
-                else CustomerModel.name.ilike(f"%{filters.customer}%")
+                else name_match
             )
             stmt = stmt.where(
                 TicketModel.customer_id.in_(select(CustomerModel.id).where(customer_match))
