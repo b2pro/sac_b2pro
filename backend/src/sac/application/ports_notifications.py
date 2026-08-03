@@ -1,0 +1,19 @@
+from datetime import datetime
+from typing import Protocol
+from uuid import UUID
+
+from sac.domain.notifications import Notification
+
+
+class NotificationRepository(Protocol):
+    async def add_many(self, notifications: list[Notification]) -> None: ...
+    async def list_for_user(
+        self, user_id: UUID, only_unread: bool, page: int, per_page: int
+    ) -> tuple[list[Notification], int]: ...
+    async def unread_count(self, user_id: UUID) -> int: ...
+    async def mark_read(self, user_id: UUID, ids: list[UUID], at: datetime) -> None: ...
+    async def mark_all_read(self, user_id: UUID, at: datetime) -> None: ...
+
+
+class NotificationPublisher(Protocol):
+    async def publish(self, tenant_slug: str, user_ids: list[UUID]) -> None: ...

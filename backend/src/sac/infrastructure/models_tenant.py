@@ -317,6 +317,44 @@ class SlaPolicyModel(TenantBase):
     )
 
 
+class NotificationModel(TenantBase):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        # Cobre o dropdown: contagem/lista de nao lidas de um usuario. Parcial
+        # porque read_at IS NULL e a minoria depois de algum uso — a maioria
+        # das notificacoes acaba lida — entao o indice fica pequeno e ainda
+        # dispensa recheck de read_at no heap (mesmo racional de _ALIVE em
+        # TicketModel).
+        Index(
+            "ix_notifications_user_unread",
+            "user_id",
+            postgresql_where=text("read_at IS NULL"),
+        ),
+        # Cobre a lista paginada (lidas + nao lidas) ordenada por created_at
+        # desc: sem read_at IS NULL no filtro, entao nao pode reusar o parcial
+        # acima.
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+        {"schema": "tenant"},
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(nullable=False)
+    ticket_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenant.tickets.id", name="fk_notifications_ticket_id"), nullable=False
+    )
+    # desnormalizado do ticket (ver domain/notifications.py): dispensa join no
+    # dropdown e nunca diverge, pois number e imutavel apos a criacao do ticket.
+    ticket_number: Mapped[int] = mapped_column(nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    snippet: Mapped[str | None] = mapped_column(String(200))
+    actor_user_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class TicketAttachmentModel(TenantBase):
     __tablename__ = "ticket_attachments"
     __table_args__ = (

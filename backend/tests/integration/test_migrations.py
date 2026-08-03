@@ -36,3 +36,30 @@ async def test_migration_tenant_cria_indices_gin_trgm(engine: AsyncEngine) -> No
         )
         found = {row[0] for row in rows.all()}
     assert EXPECTED_TRGM_INDEXES <= found
+
+
+# Indices da tabela de notificacoes (Task 1 da Fase 4): o parcial cobre o
+# dropdown (nao lidas de um usuario), o composto cobre a lista paginada
+# ordenada por created_at desc.
+EXPECTED_NOTIFICATIONS_INDEXES = {
+    "ix_notifications_user_unread",
+    "ix_notifications_user_created",
+}
+
+
+async def test_migration_tenant_cria_tabela_e_indices_notifications(
+    engine: AsyncEngine,
+) -> None:
+    await AlembicTenantProvisioner(engine).provision("t_notif_migra")
+    async with engine.connect() as conn:
+        tables = await conn.run_sync(lambda c: inspect(c).get_table_names(schema="t_notif_migra"))
+        assert "notifications" in tables
+        rows = await conn.execute(
+            text(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = :schema AND indexname = ANY(:names)"
+            ),
+            {"schema": "t_notif_migra", "names": list(EXPECTED_NOTIFICATIONS_INDEXES)},
+        )
+        found = {row[0] for row in rows.all()}
+    assert EXPECTED_NOTIFICATIONS_INDEXES <= found
