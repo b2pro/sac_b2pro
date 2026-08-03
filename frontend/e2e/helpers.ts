@@ -285,7 +285,9 @@ export async function selectOption(
 /** Localiza o card de um ticket na fila repaginada (`TicketQueueCard`): o card
  *  inteiro e um unico `<a>`, entao o numero basta para distinguir (nenhum
  *  outro link da tela — nav, "Novo ticket", paginacao em botoes — tem "#" no
- *  nome acessivel). */
+ *  nome acessivel). O match e por fronteira (nao substring): `hasText: "#12"`
+ *  tambem casaria "#120", entao a regex exige que o numero termine em fim de
+ *  string ou em um caractere nao-digito logo depois. */
 export function ticketCard(page: Page, number: number) {
-  return page.getByRole("link").filter({ hasText: `#${number}` })
+  return page.getByRole("link").filter({ hasText: new RegExp(`#${number}(\\D|$)`) })
 }

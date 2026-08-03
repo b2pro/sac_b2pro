@@ -65,6 +65,16 @@ export function formatShortDateTime(iso: string): string {
   return `${dd}/${mm} ${hh}:${min}`
 }
 
+/** dd/mm, sem hora. Usado onde so a data importa (ex.: "aberto" no card da
+ *  fila) — nao e um fatiamento de formatShortDateTime porque a hora nem
+ *  chega a ser calculada. */
+export function formatShortDate(iso: string): string {
+  const date = new Date(iso)
+  const dd = String(date.getDate()).padStart(2, "0")
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  return `${dd}/${mm}`
+}
+
 // a API filtra por "< ate" (exclusivo), entao o dia final escolhido no input
 // de data precisa entrar inteiro: guardamos o dia seguinte a meia-noite UTC.
 // Usado por Relatorios e Midias, cujos filtros de periodo seguem a mesma

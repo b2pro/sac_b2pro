@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 
 import { PriorityBadge, SlaBadge, StatusBadge, STATUS_ACCENTS } from "@/components/tickets/badges"
-import { formatShortDateTime } from "@/lib/format"
+import { formatShortDate, formatShortDateTime } from "@/lib/format"
 import type { TicketListItem, TicketStatus } from "@/lib/tickets"
 import { cn } from "@/lib/utils"
 
@@ -26,7 +26,7 @@ const STATUS_ACCENTS_HOVER: Record<TicketStatus, string> = {
 }
 
 export function TicketQueueCard({ item }: { item: TicketListItem }) {
-  const openedDate = formatShortDateTime(item.opened_at).split(" ")[0]
+  const openedDate = formatShortDate(item.opened_at)
   const lastActivity = formatShortDateTime(item.last_activity_at)
 
   return (
