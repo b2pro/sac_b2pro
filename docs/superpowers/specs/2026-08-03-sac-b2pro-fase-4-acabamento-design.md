@@ -16,7 +16,8 @@ Fora de escopo: notificacao ao cliente final (e-mail/WhatsApp), Redis ou qualque
 4. **Busca global: entidades e identificadores.** Tickets (numero, codigo do pedido), clientes (nome, documento, email, telefone), produtos (nome, SKU). Sem descricao de ticket nem corpo de comentario.
 5. **Preferencias: tema + notificacoes.** Tema claro/escuro/sistema (montando o next-themes de verdade) e toggles de toast/som. Persistencia no servidor por usuario (global, schema public).
 6. **Orfaos no Wasabi: delecao direta + varredura.** Expirar/descartar/deletar apagam o objeto no storage na hora (best-effort); job periodico de reconciliacao no worker apaga objetos com mais de 24h sem anexo ativo. Staging descartado (mudaria o fluxo de upload testado); regra de bucket ja havia sido descartada na Fase 2B.
-7. **Membros por tenant: admin gerencia.** Endpoints protegidos por `GERENCIAR_USUARIOS` (que passa a ser consumida; so o papel admin a tem). Supervisor nao ganha a permissao — a definicao do papel (tudo menos gerenciar usuarios) e deliberada e permanece.
+7. **Reatribuicao de atendente entra no escopo** (decisao de 2026-08-03, durante o plano): hoje o atendente so e definido na criacao — nao existe troca. A Fase 4 adiciona o campo de atendente na edicao do ticket, restrito a quem tem `EDITAR_QUALQUER_TICKET`, com evento proprio na timeline (`atribuicao`) e notificacao ao novo atendente. Sem isso, o evento "atribuicao" do PRD so dispararia na criacao.
+8. **Membros por tenant: admin gerencia.** Endpoints protegidos por `GERENCIAR_USUARIOS` (que passa a ser consumida; so o papel admin a tem). Supervisor nao ganha a permissao — a definicao do papel (tudo menos gerenciar usuarios) e deliberada e permanece.
 
 ## 1. Notificacoes in-app
 
@@ -33,7 +34,7 @@ Tabela nova por schema de tenant, `notifications`:
 Servico de aplicacao `NotificationFanout`, chamado pelos use cases que ja emitem timeline:
 
 - transicoes de status — ponto unico na base de `tickets_workflow.py`;
-- troca de atendente — em `tickets_crud.py` (a timeline nao registra atribuicao hoje; o fan-out e disparado no proprio use case de edicao/atribuicao);
+- atribuicao — na criacao (quando o atendente e diferente do criador) e na reatribuicao via edicao (feature nova desta fase, ver decisao 7): evento de timeline `atribuicao` + notificacao ao novo atendente;
 - comentario novo — no `add_comment`.
 
 Regra de destinatarios (decisao 3), resolvida com uma query: atendente atribuido + `DISTINCT author_user_id` dos comentarios do ticket, menos o ator. Zero destinatarios = nenhuma linha, nenhum NOTIFY.
