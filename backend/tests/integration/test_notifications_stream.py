@@ -48,6 +48,21 @@ class StreamSSE:
         await asyncio.wait_for(self._respondeu.wait(), timeout=10)
         return self
 
+    async def desconectar(self, timeout: float = 5.0) -> None:
+        """Manda http.disconnect e ESPERA a app terminar sozinha, sem cancelar.
+
+        Existe separado do __aexit__ para o teste poder afirmar o efeito do
+        caminho real de desconexao: um cancel() incondicional tambem roda o
+        finally do gerador, entao ele mascararia uma regressao em que o
+        StreamingResponse deixasse de honrar http.disconnect -- o teste ficaria
+        verde sem cobrir mais o requisito. Se o disconnect nao for honrado, o
+        wait_for aqui estoura e o teste falha, que e o comportamento desejado.
+        """
+        self._desconectar.set()
+        task = self._task
+        if task is not None:
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+
     async def __aexit__(
         self,
         exc_type: type[BaseException] | None,
@@ -58,8 +73,8 @@ class StreamSSE:
         task = self._task
         self._task = None
         if task is not None:
-            # o disconnect encerra o gerador; o cancel e a rede de seguranca
-            # para o teste nunca deixar task pendurada.
+            # rede de seguranca: o teste nunca pode deixar task pendurada, nem
+            # quando o corpo do with falhou antes de chegar em desconectar().
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(asyncio.shield(task), timeout=5)
             task.cancel()
@@ -212,11 +227,11 @@ async def test_stream_libera_a_fila_quando_o_cliente_desconecta(
         assert stream.status == 200
         assert len(listener._queues) == 1
 
-    for _ in range(50):
-        if not listener._queues:
-            break
-        await asyncio.sleep(0.05)
-    assert listener._queues == {}
+        # desconectar() so retorna quando a app terminou por conta do
+        # http.disconnect (sem cancel de fallback), entao o registry ja tem de
+        # estar limpo aqui: e o finally do gerador que limpou, nao o cancel.
+        await stream.desconectar()
+        assert listener._queues == {}
 
 
 async def test_stream_exige_autenticacao(app: FastAPI, database: str) -> None:

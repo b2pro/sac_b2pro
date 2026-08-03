@@ -19,9 +19,16 @@ EVENT_NEW = "nova"
 # Cada fila guarda no maximo um sinal pendente (ver _dispatch: coalescencia).
 _QUEUE_MAXSIZE = 1
 
-# Intervalo entre checagens de saude da conexao no watchdog. Nao e um retry:
-# com a conexao viva, e so um sleep barato -- nunca um busy loop.
-_HEALTHCHECK_SECONDS = 5.0
+# Intervalo do tique do watchdog. Cada tique faz um round trip de verdade
+# (SELECT 1), entao nao pode ser agressivo: 20s detecta conexao orfanada em
+# menos de meio minuto ao custo de tres queries por minuto por instancia.
+_HEALTHCHECK_SECONDS = 20.0
+
+# Timeout da prova de vida. Folgado frente a um SELECT 1 (que responde em
+# microssegundos numa conexao sadia) para nao descartar conexao boa em pico de
+# carga, e bem menor que o intervalo do tique para nunca empilhar provas.
+_PROBE_TIMEOUT_SECONDS = 5.0
+
 _BACKOFF_INITIAL_SECONDS = 1.0
 _BACKOFF_MAX_SECONDS = 30.0
 
@@ -62,8 +69,18 @@ class NotificationListener:
     conexao so e aberta no primeiro subscribe.
     """
 
-    def __init__(self, dsn: str) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        healthcheck_seconds: float = _HEALTHCHECK_SECONDS,
+        probe_timeout_seconds: float = _PROBE_TIMEOUT_SECONDS,
+    ) -> None:
+        # os dois intervalos sao injetaveis apenas para o teste do watchdog nao
+        # precisar esperar tempo real; a app usa sempre os defaults.
         self._dsn = dsn
+        self._healthcheck_seconds = healthcheck_seconds
+        self._probe_timeout_seconds = probe_timeout_seconds
         self._queues: dict[tuple[str, UUID], set[asyncio.Queue[str]]] = {}
         self._conn: asyncpg.Connection[Any] | None = None
         self._task: asyncio.Task[None] | None = None
@@ -139,13 +156,22 @@ class NotificationListener:
 
     async def _connect(self) -> None:
         conn: asyncpg.Connection[Any] = await asyncpg.connect(dsn=self._dsn)
+        guardada = False
         try:
             await conn.add_listener(NOTIFY_CHANNEL, self._on_notify)
-        except Exception:
-            # sem o LISTEN a conexao nao serve para nada: nao deixar pendurada
-            await conn.close()
-            raise
-        self._conn = conn
+            self._conn = conn
+            guardada = True
+        finally:
+            # finally (e nao except Exception) porque CancelledError e
+            # BaseException: um cancelamento caindo entre o connect retornar e a
+            # atribuicao de self._conn deixaria uma conexao viva que stop() nao
+            # tem como fechar -- socket LISTEN orfao no servidor. Vale tambem
+            # para o caso de add_listener falhar: sem o LISTEN a conexao nao
+            # serve para nada. terminate() e sincrono de proposito: um await
+            # aqui poderia ser interrompido por um segundo cancelamento e nao
+            # fechar nada, alem de travar se o socket estiver blackholed.
+            if not guardada:
+                conn.terminate()
 
     async def _watchdog(self) -> None:
         """Task unica (garantida pelo lock em start) que mantem o LISTEN vivo.
@@ -153,20 +179,20 @@ class NotificationListener:
         Nao adquire self._lock em nenhum ponto: stop() cancela esta task
         segurando o lock, e pedir o mesmo lock aqui travaria o shutdown.
 
-        Checa is_closed periodicamente em vez de so reagir a
-        add_termination_listener porque queda de rede/proxy pode fechar a
-        conexao sem que o callback de terminacao seja util para reagendar o
-        LISTEN. O backoff so cresce em falha de reconexao (1s, 2s, ... 30s) e
-        volta a 1s quando reconecta.
+        O backoff so cresce em falha de reconexao (1s, 2s, ... 30s) e volta a 1s
+        quando reconecta.
         """
         delay = _BACKOFF_INITIAL_SECONDS
         while True:
             try:
-                if self._conn is None or self._conn.is_closed():
-                    await self._connect()
-                    logger.info("listener reconectado ao canal %s", NOTIFY_CHANNEL)
+                await asyncio.sleep(self._healthcheck_seconds)
+                if await self._alive():
                     delay = _BACKOFF_INITIAL_SECONDS
-                await asyncio.sleep(_HEALTHCHECK_SECONDS)
+                    continue
+                await self._connect()
+                logger.info("listener reconectado ao canal %s", NOTIFY_CHANNEL)
+                delay = _BACKOFF_INITIAL_SECONDS
+                self._resync()
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -178,6 +204,57 @@ class NotificationListener:
                 )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, _BACKOFF_MAX_SECONDS)
+
+    async def _alive(self) -> bool:
+        """Prova que a conexao de LISTEN ainda entrega dados -- nao presume.
+
+        is_closed() sozinho nao serve: ele reflete estado LOCAL do transporte.
+        Uma conexao de LISTEN ociosa nao envia nada, entao um socket blackholed
+        (idle timeout de NAT/proxy, particao de rede sem RST) continua com
+        is_closed() == False ate o keepalive de TCP do SO expirar -- mais de duas
+        horas no default do Linux. Nesse intervalo o LISTEN esta morto, nenhum
+        NOTIFY chega, e o heartbeat do endpoint (que sai pela conexao HTTP da
+        app, nao por esta) segue dizendo ao navegador que tudo esta bem: silencio
+        total, sem log e sem recuperacao. Um round trip de verdade a cada tique
+        transforma esse cenario em uma reconexao de poucos segundos.
+
+        Devolve False em vez de levantar para o watchdog tratar "morta" e
+        "nunca conectou" pelo mesmo caminho. CancelledError NAO e capturado
+        (nao e Exception), logo stop() continua encerrando na hora.
+        """
+        conn = self._conn
+        if conn is None or conn.is_closed():
+            return False
+        try:
+            await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=self._probe_timeout_seconds)
+        except Exception:
+            logger.warning(
+                "conexao do listener de %s nao respondeu a prova de vida; reconectando",
+                NOTIFY_CHANNEL,
+                exc_info=True,
+            )
+            # terminate() (e nao close()) porque a conexao pode estar blackholed:
+            # close() tentaria enviar Terminate e ficaria pendurado no mesmo
+            # socket morto. Tambem descarta a query cancelada pelo timeout, que
+            # deixaria a conexao em estado inconsistente.
+            with contextlib.suppress(Exception):
+                conn.terminate()
+            self._conn = None
+            return False
+        return True
+
+    def _resync(self) -> None:
+        """Acorda TODOS os inscritos depois de uma reconexao.
+
+        Todo NOTIFY emitido durante a janela de queda foi perdido: o Postgres nao
+        guarda nada para quem nao estava em LISTEN. Sem isso, os streams abertos
+        ficariam obsoletos ate o proximo evento (ou um reload da pagina). Como o
+        evento nao tem payload, um sinal generico basta -- o cliente refaz o GET
+        e se realinha, que e exatamente o contrato do sinal sem dado.
+        """
+        for filas in tuple(self._queues.values()):
+            for queue in tuple(filas):
+                self._offer(queue)
 
     def _on_notify(self, _conn: object, _pid: int, _channel: str, payload: object) -> None:
         """Callback do asyncpg. Roda no event loop da conexao -- que aqui e o
@@ -216,13 +293,16 @@ class NotificationListener:
         # tuple(...) porque o unsubscribe de um stream que caiu pode mutar o set
         # entre iteracoes.
         for queue in tuple(self._queues.get((tenant_slug, user_id), ())):
-            try:
-                queue.put_nowait(EVENT_NEW)
-            except asyncio.QueueFull:
-                # COALESCENCIA em vez de fila crescendo ou descarte do mais
-                # antigo: como o sinal nao carrega dado, "ja existe um aviso
-                # pendente" e exatamente equivalente a "chegaram tres avisos" --
-                # o cliente vai reler a lista completa de qualquer jeito. Com
-                # maxsize=1 o consumidor lento nao consome memoria e o callback
-                # nunca espera (put_nowait, jamais await put).
-                pass
+            self._offer(queue)
+
+    def _offer(self, queue: asyncio.Queue[str]) -> None:
+        try:
+            queue.put_nowait(EVENT_NEW)
+        except asyncio.QueueFull:
+            # COALESCENCIA em vez de fila crescendo ou descarte do mais antigo:
+            # como o sinal nao carrega dado, "ja existe um aviso pendente" e
+            # exatamente equivalente a "chegaram tres avisos" -- o cliente vai
+            # reler a lista completa de qualquer jeito. Com maxsize=1 o
+            # consumidor lento nao consome memoria e o callback nunca espera
+            # (put_nowait, jamais await put).
+            pass
