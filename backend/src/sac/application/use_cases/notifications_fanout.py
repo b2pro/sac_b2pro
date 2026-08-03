@@ -13,8 +13,9 @@ from sac.domain.tickets import Ticket
 class NotificationFanout:
     """Serviço que centraliza a lógica de destinatários de notificações.
 
-    Determina quem recebe notificação baseado em: atendente atual, comentaristas
-    e destinatarios extras. Exclui o ator de notificações para si mesmo.
+    Determina quem recebe notificação baseado em: atendente atual e
+    comentaristas (fan-out), ou um unico destinatario enderecado quando
+    `only_recipient` e informado. Exclui o ator de notificações para si mesmo.
     """
 
     def __init__(
@@ -36,15 +37,22 @@ class NotificationFanout:
         type_: NotificationType,
         title: str,
         snippet: str | None = None,
-        extra_recipient: UUID | None = None,
+        only_recipient: UUID | None = None,
     ) -> None:
-        """Cria e publica notificações para destinatarios relevantes do ticket.
+        """Cria e publica notificações para os destinatarios do evento.
 
-        O conjunto de destinatarios inclui:
+        Por padrao (fan-out, usado por transicoes e comentarios) o conjunto de
+        destinatarios inclui:
         - Atendente atual (ticket.attendant_user_id)
-        - Destinatario extra se fornecido (para futuras reatribuições)
         - Todos os autores de comentários no ticket
         - Exclui o ator (quem dispara a ação)
+
+        Quando `only_recipient` e informado (usado pela atribuicao — decisao 3
+        do spec da Fase 4: "atribuicao notifica o novo atendente", enderecada,
+        nao fan-out), o UNICO candidato a destinatario e essa pessoa; nem o
+        atendente atual do ticket nem os comentaristas sao consultados. Ainda
+        assim o ator continua excluido, entao `only_recipient == actor.user_id`
+        resulta em zero destinatarios e nenhuma escrita/publish.
 
         Se nenhum destinatario restante, nada é criado.
 
@@ -54,14 +62,15 @@ class NotificationFanout:
             type_: Tipo de notificação (ATRIBUICAO, TRANSICAO, COMENTARIO)
             title: Título da notificação
             snippet: Resumo opcional da mudança
-            extra_recipient: UUID adicional de destinatario (ex: atendente anterior)
+            only_recipient: quando informado, restringe a notificacao a essa
+                unica pessoa (atribuicao enderecada), sem consultar comentarios
         """
-        recipients: set[UUID] = {ticket.attendant_user_id}
-        if extra_recipient is not None:
-            recipients.add(extra_recipient)
-
-        for comment in await self._comments.list_by_ticket(ticket.id):
-            recipients.add(comment.author_user_id)
+        if only_recipient is not None:
+            recipients: set[UUID] = {only_recipient}
+        else:
+            recipients = {ticket.attendant_user_id}
+            for comment in await self._comments.list_by_ticket(ticket.id):
+                recipients.add(comment.author_user_id)
 
         recipients.discard(actor.user_id)
 

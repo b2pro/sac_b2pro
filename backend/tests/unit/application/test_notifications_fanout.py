@@ -223,3 +223,72 @@ async def test_snippet_e_titulo_propagados() -> None:
     notif_b = notifications[commenter_b]
     assert notif_b.title == title
     assert notif_b.snippet == snippet
+
+
+async def test_only_recipient_enderaca_ignorando_atendente_e_comentaristas() -> None:
+    # Fix round 1 da Task 3: atribuicao (decisao 3 do spec da Fase 4) e
+    # enderecada a uma pessoa so, nao fan-out -- nem o atendente atual nem
+    # comentaristas do ticket devem ser notificados junto.
+    attendant_a = uuid4()
+    commenter_b = uuid4()
+    actor_c = uuid4()
+    destinatario_d = uuid4()
+
+    ticket_id = uuid4()
+    ticket = make_ticket(attendant_user_id=attendant_a, ticket_id=ticket_id)
+
+    comments_repo = InMemoryTicketCommentRepository()
+    await comments_repo.add(make_comment(ticket_id, commenter_b))
+
+    notifications_repo = InMemoryNotificationRepository()
+    publisher = InMemoryNotificationPublisher()
+
+    fanout = NotificationFanout(
+        notifications=notifications_repo,
+        comments=comments_repo,
+        publisher=publisher,
+        tenant_slug="test-tenant",
+    )
+
+    actor = TicketActor(user_id=actor_c, role=Role.ATENDENTE)
+
+    await fanout.notify(
+        actor=actor,
+        ticket=ticket,
+        type_=NotificationType.ATRIBUICAO,
+        title="Ticket atribuido a voce",
+        only_recipient=destinatario_d,
+    )
+
+    assert len(notifications_repo.notifications) == 1
+    assert notifications_repo.notifications[0].user_id == destinatario_d
+    assert len(publisher.publish_calls) == 1
+    assert publisher.publish_calls[0][1] == [destinatario_d]
+
+
+async def test_only_recipient_igual_ao_ator_nao_notifica() -> None:
+    ticket = make_ticket()
+    comments_repo = InMemoryTicketCommentRepository()
+    notifications_repo = InMemoryNotificationRepository()
+    publisher = InMemoryNotificationPublisher()
+
+    fanout = NotificationFanout(
+        notifications=notifications_repo,
+        comments=comments_repo,
+        publisher=publisher,
+        tenant_slug="test-tenant",
+    )
+
+    actor_id = uuid4()
+    actor = TicketActor(user_id=actor_id, role=Role.ATENDENTE)
+
+    await fanout.notify(
+        actor=actor,
+        ticket=ticket,
+        type_=NotificationType.ATRIBUICAO,
+        title="Ticket atribuido a voce",
+        only_recipient=actor_id,
+    )
+
+    assert notifications_repo.add_many_call_count == 0
+    assert len(publisher.publish_calls) == 0

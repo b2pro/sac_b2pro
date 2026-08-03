@@ -223,7 +223,7 @@ class CreateTicketUseCase:
                 ticket,
                 NotificationType.ATRIBUICAO,
                 f"Ticket #{ticket.number} atribuido a voce",
-                extra_recipient=ticket.attendant_user_id,
+                only_recipient=ticket.attendant_user_id,
             )
         await self._reads.mark_read(ticket.id, actor.user_id, now)
         return ticket
@@ -249,16 +249,14 @@ class UpdateTicketUseCase:
         ensure_can_edit(actor, ticket)
         if data.customer_id is not None and await self._customers.get(data.customer_id) is None:
             raise ValidationError("cliente nao encontrado", details={"field": "customer_id"})
-        reassigned = (
-            data.attendant_user_id is not None
-            and data.attendant_user_id != ticket.attendant_user_id
-        )
-        if reassigned and not has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
-            raise PermissionDeniedError("sem permissao para reatribuir o ticket")
         old_attendant = ticket.attendant_user_id
-        if reassigned:
-            assert data.attendant_user_id is not None  # garantido por `reassigned`
-            ticket.attendant_user_id = data.attendant_user_id
+        new_attendant = data.attendant_user_id
+        reassigned = False
+        if new_attendant is not None and new_attendant != old_attendant:
+            if not has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
+                raise PermissionDeniedError("sem permissao para reatribuir o ticket")
+            ticket.attendant_user_id = new_attendant
+            reassigned = True
         old_priority = ticket.priority
         ticket.brand_id = data.brand_id
         ticket.priority = data.priority
@@ -311,6 +309,7 @@ class UpdateTicketUseCase:
                 ticket,
                 NotificationType.ATRIBUICAO,
                 f"Ticket #{ticket.number} atribuido a voce",
+                only_recipient=ticket.attendant_user_id,
             )
         return ticket
 

@@ -444,6 +444,44 @@ async def test_update_troca_atendente_com_permissao_notifica_novo_atendente() ->
     assert len(publisher.publish_calls) == 1
 
 
+async def test_update_reatribuicao_notifica_so_o_novo_atendente_nao_comentaristas() -> None:
+    # Fix round 1, achado 1: a notificacao de atribuicao e enderecada (spec da
+    # Fase 4, decisao 3) -- um comentarista antigo do ticket NAO pode receber
+    # "atribuido a voce" quando quem foi de fato atribuido e outra pessoa.
+    create, tickets, _, _, timeline, _ = make_create_use_case()
+    ticket = await create.execute(
+        ADMIN, CreateTicketInput(brand_id=uuid4(), priority=TicketPriority.MEDIA)
+    )
+    comments = InMemoryTicketCommentRepository()
+    comentarista_anterior = uuid4()
+    await comments.add(
+        TicketComment(
+            id=uuid4(),
+            ticket_id=ticket.id,
+            author_user_id=comentarista_anterior,
+            body="comentario antigo",
+        )
+    )
+    novo_atendente = uuid4()
+    fanout, notifications, publisher = make_fanout(comments)
+    update = UpdateTicketUseCase(
+        tickets, InMemoryCustomerRepository(), InMemorySlaPolicyRepository(), timeline, fanout
+    )
+
+    await update.execute(
+        ADMIN,
+        ticket.id,
+        UpdateTicketInput(
+            brand_id=ticket.brand_id, priority=ticket.priority, attendant_user_id=novo_atendente
+        ),
+    )
+
+    assert len(notifications.notifications) == 1
+    assert notifications.notifications[0].user_id == novo_atendente
+    assert len(publisher.publish_calls) == 1
+    assert publisher.publish_calls[0][1] == [novo_atendente]
+
+
 async def test_update_troca_atendente_para_o_proprio_ator_nao_notifica() -> None:
     create, tickets, _, _, _, _ = make_create_use_case()
     terceiro = uuid4()
