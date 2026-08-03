@@ -99,7 +99,7 @@ antes de rodar.
 
 Cobre os fluxos de ticket na UI real: login, fila repaginada (busca livre com debounce,
 chips de atalho com contagem e cards de duas linhas, incluindo o card inteiro como link
-navegavel), criação completa com cliente inline, máquina de estados até finalizado,
+navegável), criação completa com cliente inline, máquina de estados até finalizado,
 declínio com motivo, ticket parcial completado pelo detalhe, comentários com resposta,
 ciclo de não lido, os escopos de atendente e visualizador, e os anexos de ticket (upload
 pelo dropzone com espera do preview assíncrono gerado pelo worker, recusa de tipo/tamanho

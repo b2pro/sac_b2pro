@@ -54,6 +54,30 @@ test.describe("Fila de tickets repaginada", () => {
     await expect(ticketCard(page, doAtendente.number)).toHaveCount(0)
   })
 
+  // Chip "Nao lidos" precisa de fato restringir a fila, nao so mudar a URL:
+  // um ticket criado pelo proprio admin fica lido para ele (o backend marca
+  // o criador como leitor na hora da criacao — ver
+  // 04-comentarios-e-naolido.spec.ts), enquanto um ticket criado por outro
+  // usuario fica nao lido ate o admin abrir o detalhe. O recorte precisa
+  // excluir o primeiro e manter o segundo.
+  test("chip Nao lidos filtra a fila por atividade nao lida", async ({ page, request }) => {
+    const lido = await apiFullTicket(request, "admin")
+    const naoLido = await apiFullTicket(request, "atendente")
+
+    await login(page, request, "admin")
+    await page.getByRole("link", { name: "Tickets" }).click()
+    await expect(ticketCard(page, lido.number)).toBeVisible()
+    await expect(ticketCard(page, naoLido.number)).toBeVisible()
+
+    const chipNaoLidos = page.getByRole("button", { name: /Nao lidos/ })
+    await chipNaoLidos.click()
+    await expect(page).toHaveURL(/unread=1/)
+    await expect(chipNaoLidos).toHaveAttribute("aria-pressed", "true")
+
+    await expect(ticketCard(page, lido.number)).toHaveCount(0)
+    await expect(ticketCard(page, naoLido.number)).toBeVisible()
+  })
+
   // Um status sem chip equivalente (ex.: "aprovado" — os cards de KPI do
   // dashboard linkam para esses) e um recorte que os selects do header
   // conseguem expressar mas os chips nao representam: nenhum chip fica
