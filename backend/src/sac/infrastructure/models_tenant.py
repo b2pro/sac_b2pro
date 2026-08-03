@@ -344,7 +344,10 @@ class NotificationModel(TenantBase):
     )
     # desnormalizado do ticket (ver domain/notifications.py): dispensa join no
     # dropdown e nunca diverge, pois number e imutavel apos a criacao do ticket.
-    ticket_number: Mapped[int] = mapped_column(nullable=False)
+    # BigInteger para espelhar o tipo de TicketModel.number (linha 134-136),
+    # que usa BigInteger via Sequence: mapear so como int aqui divergiria em
+    # silencio da coluna de origem.
+    ticket_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     snippet: Mapped[str | None] = mapped_column(String(200))

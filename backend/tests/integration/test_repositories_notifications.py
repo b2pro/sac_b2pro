@@ -96,3 +96,49 @@ async def test_unread_count_list_e_mark_read_isolados_por_usuario(
         assert await repo.unread_count(user_a.id) == 0
         # de B nao foi mexido.
         assert await repo.unread_count(user_b.id) == 1
+
+
+async def test_list_for_user_pagina_de_fronteira(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    # per_page=2 sobre 3 linhas forca offset/limit a sair da primeira pagina:
+    # um limit/offset trocado ou um off-by-one em (page - 1) * per_page
+    # passaria verde se so page=1 fosse exercitado (motivo do achado do
+    # revisor no fix round 1).
+    tenant = await seed_provisioned_tenant(session, engine, slug="repnotifpag")
+    user = await seed_user(session, email="repnotifpag@t.com")
+    async with _factory(engine, tenant.schema_name)() as ts:
+        ticket_repos = build_ticket_repos(ts)
+        brand_id = (await ts.scalars(select(BrandModel.id))).first()
+        assert brand_id is not None
+        now = datetime.now(UTC)
+        ticket = await ticket_repos.tickets.add(
+            Ticket(
+                id=uuid4(),
+                number=0,
+                brand_id=brand_id,
+                status=TicketStatus.ABERTO,
+                priority=TicketPriority.MEDIA,
+                attendant_user_id=user.id,
+                opened_at=now,
+                due_at=now + timedelta(hours=72),
+                last_activity_at=now,
+            )
+        )
+        await ts.commit()
+
+        repo = SqlNotificationRepository(ts)
+        # created_at crescente: n1 e a mais antiga, n3 a mais recente.
+        n1 = _notification(user.id, ticket.id, ticket.number, created_at=now - timedelta(minutes=3))
+        n2 = _notification(user.id, ticket.id, ticket.number, created_at=now - timedelta(minutes=2))
+        n3 = _notification(user.id, ticket.id, ticket.number, created_at=now - timedelta(minutes=1))
+        await repo.add_many([n1, n2, n3])
+        await ts.commit()
+
+        page1, total1 = await repo.list_for_user(user.id, only_unread=False, page=1, per_page=2)
+        assert total1 == 3
+        assert [row.id for row in page1] == [n3.id, n2.id]
+
+        page2, total2 = await repo.list_for_user(user.id, only_unread=False, page=2, per_page=2)
+        assert total2 == 3
+        assert [row.id for row in page2] == [n1.id]

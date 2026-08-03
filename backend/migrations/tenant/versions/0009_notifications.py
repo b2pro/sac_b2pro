@@ -29,7 +29,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("ticket_id", sa.Uuid(), nullable=False),
-        sa.Column("ticket_number", sa.Integer(), nullable=False),
+        # BigInteger para espelhar tickets.number (0003_tickets), a coluna de
+        # origem que esta desnormalizada aqui.
+        sa.Column("ticket_number", sa.BigInteger(), nullable=False),
         sa.Column("type", sa.String(20), nullable=False),
         sa.Column("title", sa.String(200), nullable=False),
         sa.Column("snippet", sa.String(200), nullable=True),
