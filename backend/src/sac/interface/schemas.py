@@ -307,6 +307,9 @@ class TicketUpdateIn(BaseModel):
     brand_id: UUID
     priority: TicketPriority
     customer_id: UUID | None = None
+    # omitido/None: nao mexe no atendente. Reatribuir exige
+    # EDITAR_QUALQUER_TICKET (ver UpdateTicketUseCase).
+    attendant_user_id: UUID | None = None
     supervisor_user_id: UUID | None = None
     purchase_channel_id: UUID | None = None
     order_code: str | None = Field(default=None, max_length=60)

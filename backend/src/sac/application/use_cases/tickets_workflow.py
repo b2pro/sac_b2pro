@@ -8,6 +8,7 @@ from sac.application.ports_tickets import (
     TicketRepository,
     TimelineRepository,
 )
+from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.tickets_shared import (
     ensure_can_edit,
     ensure_can_operate,
@@ -21,6 +22,7 @@ from sac.domain.errors import (
     NotFoundError,
     ValidationError,
 )
+from sac.domain.notifications import NotificationType
 from sac.domain.tickets import (
     ReverseCode,
     Ticket,
@@ -34,9 +36,15 @@ from sac.domain.tickets import (
 
 
 class _TransitionUseCase:
-    def __init__(self, tickets: TicketRepository, timeline: TimelineRepository) -> None:
+    def __init__(
+        self,
+        tickets: TicketRepository,
+        timeline: TimelineRepository,
+        fanout: NotificationFanout,
+    ) -> None:
         self._tickets = tickets
         self._timeline = timeline
+        self._fanout = fanout
 
     async def _apply(
         self,
@@ -52,6 +60,7 @@ class _TransitionUseCase:
         await self._timeline.add(transition_event(ticket, old, title, actor))
         touch(ticket, now)
         await self._tickets.update(ticket)
+        await self._fanout.notify(actor, ticket, NotificationType.TRANSICAO, title)
 
 
 class SubmitTicketUseCase(_TransitionUseCase):
@@ -60,8 +69,9 @@ class SubmitTicketUseCase(_TransitionUseCase):
         tickets: TicketRepository,
         items: TicketItemRepository,
         timeline: TimelineRepository,
+        fanout: NotificationFanout,
     ) -> None:
-        super().__init__(tickets, timeline)
+        super().__init__(tickets, timeline, fanout)
         self._items = items
 
     async def execute(self, actor: TicketActor, ticket_id: UUID) -> Ticket:
@@ -164,8 +174,9 @@ class RegisterReverseUseCase(_TransitionUseCase):
         tickets: TicketRepository,
         reverses: ReverseCodeRepository,
         timeline: TimelineRepository,
+        fanout: NotificationFanout,
     ) -> None:
-        super().__init__(tickets, timeline)
+        super().__init__(tickets, timeline, fanout)
         self._reverses = reverses
 
     async def execute(self, actor: TicketActor, ticket_id: UUID, code: str) -> ReverseCode:
@@ -213,8 +224,9 @@ class DeleteReverseUseCase(_TransitionUseCase):
         tickets: TicketRepository,
         reverses: ReverseCodeRepository,
         timeline: TimelineRepository,
+        fanout: NotificationFanout,
     ) -> None:
-        super().__init__(tickets, timeline)
+        super().__init__(tickets, timeline, fanout)
         self._reverses = reverses
 
     async def execute(self, actor: TicketActor, ticket_id: UUID, reverse_id: UUID) -> None:

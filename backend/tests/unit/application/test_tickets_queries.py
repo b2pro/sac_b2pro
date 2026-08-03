@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from sac.application.ports_tickets import TicketActor, TicketFilters
+from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.tickets_crud import (
     AddCommentUseCase,
     CreateTicketInput,
@@ -14,6 +15,10 @@ from sac.application.use_cases.tickets_queries import (
 from sac.domain.permissions import Role
 from sac.domain.tickets import SlaState, Ticket, TicketPriority
 from tests.unit.fakes import InMemoryCustomerRepository
+from tests.unit.fakes_notifications import (
+    InMemoryNotificationPublisher,
+    InMemoryNotificationRepository,
+)
 from tests.unit.fakes_tickets import (
     InMemoryReverseCodeRepository,
     InMemorySlaPolicyRepository,
@@ -24,6 +29,19 @@ from tests.unit.fakes_tickets import (
     InMemoryTimelineRepository,
     InMemoryUserDirectory,
 )
+
+
+def _fanout(comments: InMemoryTicketCommentRepository | None = None) -> NotificationFanout:
+    # dependencia obrigatoria dos use cases de ticket (ver decisao do
+    # controller na Task 3); estes testes nao inspecionam notificacoes,
+    # entao um fanout descartavel sobre fakes basta.
+    return NotificationFanout(
+        InMemoryNotificationRepository(),
+        comments or InMemoryTicketCommentRepository(),
+        InMemoryNotificationPublisher(),
+        "test-tenant",
+    )
+
 
 ADMIN = TicketActor(user_id=uuid4(), role=Role.ADMIN)
 ATENDENTE = TicketActor(user_id=uuid4(), role=Role.ATENDENTE)
@@ -49,6 +67,7 @@ class Env:
             InMemorySlaPolicyRepository(),
             self.timeline,
             self.reads,
+            _fanout(self.comments),
         )
         return await create.execute(
             actor, CreateTicketInput(brand_id=uuid4(), priority=TicketPriority.MEDIA)
@@ -100,7 +119,7 @@ async def test_detalhe_marca_lido_e_calcula_sla() -> None:
 async def test_detalhe_com_comentarios_e_mark_unread() -> None:
     env = Env()
     ticket = await env.novo_ticket(ADMIN)
-    await AddCommentUseCase(env.tickets, env.comments, env.reads).execute(
+    await AddCommentUseCase(env.tickets, env.comments, env.reads, _fanout(env.comments)).execute(
         ADMIN, ticket.id, "olha isso"
     )
     detail_use_case = GetTicketDetailUseCase(

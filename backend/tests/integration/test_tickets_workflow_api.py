@@ -1,7 +1,9 @@
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from sac.domain.notifications import NotificationType
 from sac.domain.permissions import Role
+from sac.infrastructure.repositories_notifications import SqlNotificationRepository
 from tests.integration.helpers import (
     seed_link,
     seed_provisioned_tenant,
@@ -218,3 +220,61 @@ async def test_comentarios_e_nao_lido(
         f"/api/tickets/{ticket_id}/comentarios", json={"body": "tarde"}, headers=headers
     )
     assert res.status_code == 409
+
+
+async def test_aprovar_ticket_com_atendente_diferente_grava_notificacao(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    # ponta a ponta do fanout: admin cria o ticket ja atribuido a outro
+    # atendente (o que ja gera uma notificacao de atribuicao) e depois
+    # conduz o fluxo de decisao sozinho; cada transicao deve gravar uma
+    # notificacao de transicao para o atendente na tabela do schema do
+    # tenant (get_notification_fanout usando o publisher real do banco).
+    tenant, admin, headers = await _setup(session, engine, "twf7")
+    atendente = await seed_user(session, email="atendente@twf7.com", name="Atendente")
+    await seed_link(session, user=atendente, tenant=tenant, role=Role.ATENDENTE)
+
+    marcas = (await client.get("/api/cadastros/marcas", headers=headers)).json()
+    defeitos = (await client.get("/api/cadastros/defeitos", headers=headers)).json()
+    produto = (
+        await client.post(
+            "/api/cadastros/produtos",
+            json={"name": "Produto WF7", "sku": "SKU-WF7"},
+            headers=headers,
+        )
+    ).json()
+    res = await client.post(
+        "/api/tickets",
+        json={
+            "brand_id": marcas[0]["id"],
+            "priority": "media",
+            "customer": {"name": "Cliente WF7", "document": VALID_CPF},
+            "description": "produto com defeito",
+            "attendant_user_id": str(atendente.id),
+            "items": [{"product_id": produto["id"], "defect_type_id": defeitos[0]["id"]}],
+        },
+        headers=headers,
+    )
+    assert res.status_code == 201
+    ticket_id = res.json()["id"]
+    assert res.json()["attendant_user_id"] == str(atendente.id)
+
+    await client.post(f"/api/tickets/{ticket_id}/enviar-analise", headers=headers)
+    res = await client.post(
+        f"/api/tickets/{ticket_id}/aprovar", json={"notes": "aprovado ok"}, headers=headers
+    )
+    assert res.status_code == 200
+
+    translated = engine.execution_options(schema_translate_map={"tenant": tenant.schema_name})
+    factory = async_sessionmaker(translated, expire_on_commit=False)
+    async with factory() as ts:
+        repo = SqlNotificationRepository(ts)
+        rows, total = await repo.list_for_user(atendente.id, only_unread=False, page=1, per_page=10)
+
+    # criacao (atribuicao) + enviar-analise (transicao) + aprovar (transicao)
+    assert total == 3
+    tipos = [row.type for row in rows]
+    assert tipos.count(NotificationType.TRANSICAO) == 2
+    assert tipos.count(NotificationType.ATRIBUICAO) == 1
+    assert all(row.actor_user_id == admin.id for row in rows)
+    assert all(row.ticket_number == res.json()["number"] for row in rows)

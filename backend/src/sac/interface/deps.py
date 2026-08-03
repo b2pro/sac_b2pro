@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sac.application.ports import TokenPayload
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
+from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.platform_tenants import (
     CreateTenantUseCase,
     ListTenantsUseCase,
@@ -42,6 +43,10 @@ from sac.infrastructure.repositories_cadastros import (
     SqlCatalogRepository,
     SqlCustomerRepository,
     SqlProductRepository,
+)
+from sac.infrastructure.repositories_notifications import (
+    NullNotificationPublisher,
+    SqlNotificationRepository,
 )
 from sac.infrastructure.repositories_reporting import SqlReportingRepository
 from sac.infrastructure.repositories_tickets import TicketRepos, build_ticket_repos
@@ -259,6 +264,21 @@ async def get_tenant_slug(identity: TokenPayload = Depends(get_current_identity)
     if identity.tenant_slug is None:
         raise AuthError("token sem tenant")
     return identity.tenant_slug
+
+
+def get_notification_fanout(
+    session: AsyncSession = Depends(get_tenant_session),
+    slug: str = Depends(get_tenant_slug),
+) -> NotificationFanout:
+    # publisher real (pg_notify) e da Task 4; ate la o fanout so grava a
+    # notificacao (via SqlNotificationRepository), sem push em tempo real.
+    repos = build_ticket_repos(session)
+    return NotificationFanout(
+        SqlNotificationRepository(session),
+        repos.comments,
+        NullNotificationPublisher(),
+        slug,
+    )
 
 
 def get_cep_gateway() -> ViaCepGateway:

@@ -87,3 +87,17 @@ class SqlNotificationRepository:
             .where(NotificationModel.user_id == user_id, NotificationModel.read_at.is_(None))
             .values(read_at=at)
         )
+
+
+class NullNotificationPublisher:
+    """Publisher no-op: grava notificacoes via fanout sem publicar em tempo real.
+
+    O parametro fanout dos use cases de ticket e obrigatorio (nao aceita
+    None), entao ate a Task 4 trazer o publisher real via pg_notify/LISTEN,
+    esta classe preenche a dependencia sem quebrar a escrita das
+    notificacoes: SqlNotificationRepository.add_many ja persiste a linha,
+    so o push em tempo real (SSE) fica pendente.
+    """
+
+    async def publish(self, tenant_slug: str, user_ids: list[UUID]) -> None:
+        return None

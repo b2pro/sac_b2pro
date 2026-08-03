@@ -17,13 +17,20 @@ from sac.application.use_cases.customers import (
     CustomerInput,
     UpdateCustomerUseCase,
 )
+from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.tickets_shared import (
     ensure_can_edit,
     get_ticket_or_404,
     touch,
 )
 from sac.domain.documents import validate_document
-from sac.domain.errors import ConflictError, NotFoundError, ValidationError
+from sac.domain.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
+from sac.domain.notifications import NotificationType
 from sac.domain.permissions import Permission, has_permission
 from sac.domain.tickets import (
     DEFAULT_SLA_POLICIES,
@@ -68,6 +75,9 @@ class UpdateTicketInput:
     brand_id: UUID
     priority: TicketPriority
     customer_id: UUID | None = None
+    # None (omitido) significa "nao mexer no atendente"; so um valor
+    # diferente do atual dispara a checagem de permissao de reatribuicao.
+    attendant_user_id: UUID | None = None
     supervisor_user_id: UUID | None = None
     purchase_channel_id: UUID | None = None
     order_code: str | None = None
@@ -137,6 +147,7 @@ class CreateTicketUseCase:
         sla_policies: SlaPolicyRepository,
         timeline: TimelineRepository,
         reads: TicketReadRepository,
+        fanout: NotificationFanout,
     ) -> None:
         self._tickets = tickets
         self._items = items
@@ -144,6 +155,7 @@ class CreateTicketUseCase:
         self._sla = sla_policies
         self._timeline = timeline
         self._reads = reads
+        self._fanout = fanout
 
     async def execute(self, actor: TicketActor, data: CreateTicketInput) -> Ticket:
         for item in data.items:
@@ -195,6 +207,24 @@ class CreateTicketUseCase:
                 author_user_id=actor.user_id,
             )
         )
+        if ticket.attendant_user_id != actor.user_id:
+            await self._timeline.add(
+                TicketTimelineEvent(
+                    id=uuid4(),
+                    ticket_id=ticket.id,
+                    type=TimelineEventType.ATRIBUICAO,
+                    title="Ticket atribuido",
+                    new_value=str(ticket.attendant_user_id),
+                    author_user_id=actor.user_id,
+                )
+            )
+            await self._fanout.notify(
+                actor,
+                ticket,
+                NotificationType.ATRIBUICAO,
+                f"Ticket #{ticket.number} atribuido a voce",
+                extra_recipient=ticket.attendant_user_id,
+            )
         await self._reads.mark_read(ticket.id, actor.user_id, now)
         return ticket
 
@@ -206,17 +236,29 @@ class UpdateTicketUseCase:
         customers: CustomerRepository,
         sla_policies: SlaPolicyRepository,
         timeline: TimelineRepository,
+        fanout: NotificationFanout,
     ) -> None:
         self._tickets = tickets
         self._customers = customers
         self._sla = sla_policies
         self._timeline = timeline
+        self._fanout = fanout
 
     async def execute(self, actor: TicketActor, ticket_id: UUID, data: UpdateTicketInput) -> Ticket:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         ensure_can_edit(actor, ticket)
         if data.customer_id is not None and await self._customers.get(data.customer_id) is None:
             raise ValidationError("cliente nao encontrado", details={"field": "customer_id"})
+        reassigned = (
+            data.attendant_user_id is not None
+            and data.attendant_user_id != ticket.attendant_user_id
+        )
+        if reassigned and not has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
+            raise PermissionDeniedError("sem permissao para reatribuir o ticket")
+        old_attendant = ticket.attendant_user_id
+        if reassigned:
+            assert data.attendant_user_id is not None  # garantido por `reassigned`
+            ticket.attendant_user_id = data.attendant_user_id
         old_priority = ticket.priority
         ticket.brand_id = data.brand_id
         ticket.priority = data.priority
@@ -249,8 +291,27 @@ class UpdateTicketUseCase:
                 author_user_id=actor.user_id,
             )
         await self._timeline.add(event)
+        if reassigned:
+            await self._timeline.add(
+                TicketTimelineEvent(
+                    id=uuid4(),
+                    ticket_id=ticket.id,
+                    type=TimelineEventType.ATRIBUICAO,
+                    title="Atendente alterado",
+                    old_value=str(old_attendant),
+                    new_value=str(ticket.attendant_user_id),
+                    author_user_id=actor.user_id,
+                )
+            )
         touch(ticket, now)
         await self._tickets.update(ticket)
+        if reassigned:
+            await self._fanout.notify(
+                actor,
+                ticket,
+                NotificationType.ATRIBUICAO,
+                f"Ticket #{ticket.number} atribuido a voce",
+            )
         return ticket
 
 
@@ -359,10 +420,12 @@ class AddCommentUseCase:
         tickets: TicketRepository,
         comments: TicketCommentRepository,
         reads: TicketReadRepository,
+        fanout: NotificationFanout,
     ) -> None:
         self._tickets = tickets
         self._comments = comments
         self._reads = reads
+        self._fanout = fanout
 
     async def execute(
         self,
@@ -393,4 +456,11 @@ class AddCommentUseCase:
         touch(ticket, now)
         await self._tickets.update(ticket)
         await self._reads.mark_read(ticket.id, actor.user_id, now)
+        await self._fanout.notify(
+            actor,
+            ticket,
+            NotificationType.COMENTARIO,
+            f"Novo comentario no ticket #{ticket.number}",
+            snippet=text[:200],
+        )
         return comment

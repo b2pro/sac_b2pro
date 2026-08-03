@@ -111,6 +111,7 @@ class TimelineEventType(StrEnum):
     REVERSO_REGISTRADO = "reverso_registrado"
     REVERSO_EXCLUIDO = "reverso_excluido"
     GARANTIA_REGISTRADA = "garantia_registrada"
+    ATRIBUICAO = "atribuicao"
 
 
 @dataclass

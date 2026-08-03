@@ -15,6 +15,7 @@ from sac.application.use_cases.attachments import (
     UploadIntentInput,
 )
 from sac.application.use_cases.customers import CustomerInput
+from sac.application.use_cases.notifications_fanout import NotificationFanout
 from sac.application.use_cases.tickets_crud import (
     AddCommentUseCase,
     AddTicketItemUseCase,
@@ -54,6 +55,7 @@ from sac.infrastructure.settings import Settings
 from sac.infrastructure.storage import S3Storage
 from sac.interface.deps import (
     get_attachment_repos,
+    get_notification_fanout,
     get_settings,
     get_storage,
     get_tenant_slug,
@@ -124,6 +126,7 @@ async def create_ticket(
     body: TicketIn,
     identity: TokenPayload = Depends(_create),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
     customer_input = (
         CustomerInput(
@@ -157,7 +160,7 @@ async def create_ticket(
         items=tuple(_item_input(i) for i in body.items),
     )
     use_case = CreateTicketUseCase(
-        repos.tickets, repos.items, repos.customers, repos.sla, repos.timeline, repos.reads
+        repos.tickets, repos.items, repos.customers, repos.sla, repos.timeline, repos.reads, fanout
     )
     return ticket_out(await use_case.execute(_actor(identity), data))
 
@@ -243,11 +246,13 @@ async def update_ticket(
     body: TicketUpdateIn,
     identity: TokenPayload = Depends(_edit),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
     data = UpdateTicketInput(
         brand_id=body.brand_id,
         priority=body.priority,
         customer_id=body.customer_id,
+        attendant_user_id=body.attendant_user_id,
         supervisor_user_id=body.supervisor_user_id,
         purchase_channel_id=body.purchase_channel_id,
         order_code=body.order_code,
@@ -255,7 +260,9 @@ async def update_ticket(
         delivery_date=body.delivery_date,
         description=body.description,
     )
-    use_case = UpdateTicketUseCase(repos.tickets, repos.customers, repos.sla, repos.timeline)
+    use_case = UpdateTicketUseCase(
+        repos.tickets, repos.customers, repos.sla, repos.timeline, fanout
+    )
     return ticket_out(await use_case.execute(_actor(identity), ticket_id, data))
 
 
@@ -308,8 +315,9 @@ async def submit_ticket(
     ticket_id: UUID,
     identity: TokenPayload = Depends(_submit),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = SubmitTicketUseCase(repos.tickets, repos.items, repos.timeline)
+    use_case = SubmitTicketUseCase(repos.tickets, repos.items, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id))
 
 
@@ -319,8 +327,9 @@ async def approve_ticket(
     body: ApproveIn,
     identity: TokenPayload = Depends(_decide),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = ApproveTicketUseCase(repos.tickets, repos.timeline)
+    use_case = ApproveTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id, notes=body.notes))
 
 
@@ -330,8 +339,9 @@ async def decline_ticket(
     body: DeclineIn,
     identity: TokenPayload = Depends(_decide),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = DeclineTicketUseCase(repos.tickets, repos.timeline)
+    use_case = DeclineTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id, reason=body.reason))
 
 
@@ -341,8 +351,9 @@ async def cancel_ticket(
     body: CancelIn,
     identity: TokenPayload = Depends(_decide),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = CancelTicketUseCase(repos.tickets, repos.timeline)
+    use_case = CancelTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id, reason=body.reason))
 
 
@@ -351,8 +362,9 @@ async def reopen_ticket(
     ticket_id: UUID,
     identity: TokenPayload = Depends(_decide),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = ReopenTicketUseCase(repos.tickets, repos.timeline)
+    use_case = ReopenTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id))
 
 
@@ -361,8 +373,9 @@ async def hold_for_customer(
     ticket_id: UUID,
     identity: TokenPayload = Depends(_edit),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = HoldForCustomerUseCase(repos.tickets, repos.timeline)
+    use_case = HoldForCustomerUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id))
 
 
@@ -371,8 +384,9 @@ async def resume_ticket(
     ticket_id: UUID,
     identity: TokenPayload = Depends(_edit),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = ResumeTicketUseCase(repos.tickets, repos.timeline)
+    use_case = ResumeTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id))
 
 
@@ -381,8 +395,9 @@ async def receive_product(
     ticket_id: UUID,
     identity: TokenPayload = Depends(_operate),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = ReceiveProductUseCase(repos.tickets, repos.timeline)
+    use_case = ReceiveProductUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(await use_case.execute(_actor(identity), ticket_id))
 
 
@@ -392,8 +407,9 @@ async def finalize_ticket(
     body: FinalizeIn,
     identity: TokenPayload = Depends(_operate),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = FinalizeTicketUseCase(repos.tickets, repos.timeline)
+    use_case = FinalizeTicketUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(
         await use_case.execute(
             _actor(identity), ticket_id, solution_type_id=body.solution_type_id, notes=body.notes
@@ -407,8 +423,9 @@ async def register_reverse(
     body: ReverseIn,
     identity: TokenPayload = Depends(_operate),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> ReverseCodeOut:
-    use_case = RegisterReverseUseCase(repos.tickets, repos.reverses, repos.timeline)
+    use_case = RegisterReverseUseCase(repos.tickets, repos.reverses, repos.timeline, fanout)
     reverse = await use_case.execute(_actor(identity), ticket_id, code=body.code)
     names = await repos.users.names_by_ids(
         {reverse.author_user_id} if reverse.author_user_id else set()
@@ -428,8 +445,9 @@ async def delete_reverse(
     reverso_id: UUID,
     identity: TokenPayload = Depends(_operate),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> Response:
-    use_case = DeleteReverseUseCase(repos.tickets, repos.reverses, repos.timeline)
+    use_case = DeleteReverseUseCase(repos.tickets, repos.reverses, repos.timeline, fanout)
     await use_case.execute(_actor(identity), ticket_id, reverso_id)
     return Response(status_code=204)
 
@@ -440,8 +458,9 @@ async def set_warranty(
     body: WarrantyIn,
     identity: TokenPayload = Depends(_operate),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketOut:
-    use_case = SetWarrantyUseCase(repos.tickets, repos.timeline)
+    use_case = SetWarrantyUseCase(repos.tickets, repos.timeline, fanout)
     return ticket_out(
         await use_case.execute(
             _actor(identity),
@@ -458,8 +477,9 @@ async def add_comment(
     body: CommentIn,
     identity: TokenPayload = Depends(_comment),
     repos: TicketRepos = Depends(get_ticket_repos),
+    fanout: NotificationFanout = Depends(get_notification_fanout),
 ) -> TicketCommentOut:
-    use_case = AddCommentUseCase(repos.tickets, repos.comments, repos.reads)
+    use_case = AddCommentUseCase(repos.tickets, repos.comments, repos.reads, fanout)
     comment = await use_case.execute(
         _actor(identity), ticket_id, body=body.body, reply_to_id=body.reply_to_id
     )
