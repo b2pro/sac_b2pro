@@ -45,7 +45,7 @@ from sac.infrastructure.repositories_cadastros import (
     SqlProductRepository,
 )
 from sac.infrastructure.repositories_notifications import (
-    NullNotificationPublisher,
+    PgNotifyPublisher,
     SqlNotificationRepository,
 )
 from sac.infrastructure.repositories_reporting import SqlReportingRepository
@@ -269,16 +269,25 @@ async def get_tenant_slug(identity: TokenPayload = Depends(get_current_identity)
 def get_notification_fanout(
     session: AsyncSession = Depends(get_tenant_session),
     slug: str = Depends(get_tenant_slug),
+    repos: TicketRepos = Depends(get_ticket_repos),
 ) -> NotificationFanout:
-    # publisher real (pg_notify) e da Task 4; ate la o fanout so grava a
-    # notificacao (via SqlNotificationRepository), sem push em tempo real.
-    repos = build_ticket_repos(session)
+    # repos vem de get_ticket_repos (cacheada por request pelo FastAPI) em
+    # vez de build_ticket_repos(session) direto: rotas que ja pedem
+    # get_ticket_repos (create_ticket, comentarios etc.) reusam a mesma
+    # instancia, sem montar os outros sete repositorios de TicketRepos de novo
+    # so para pegar .comments.
     return NotificationFanout(
         SqlNotificationRepository(session),
         repos.comments,
-        NullNotificationPublisher(),
+        PgNotifyPublisher(session),
         slug,
     )
+
+
+def get_notification_repository(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> SqlNotificationRepository:
+    return SqlNotificationRepository(session)
 
 
 def get_cep_gateway() -> ViaCepGateway:

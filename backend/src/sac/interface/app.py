@@ -17,6 +17,7 @@ from sac.interface.routers import (
     cep,
     health,
     members,
+    notifications,
     platform_tenants,
     platform_users,
     reporting,
@@ -59,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cep.router, prefix="/api")
     app.include_router(tickets.router, prefix="/api")
     app.include_router(members.router, prefix="/api")
+    app.include_router(notifications.router, prefix="/api")
     app.include_router(reporting.dashboard_router, prefix="/api")
     app.include_router(reporting.relatorios_router, prefix="/api")
     app.include_router(reporting.midias_router, prefix="/api")

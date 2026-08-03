@@ -16,6 +16,7 @@ from sac.domain.attachments import AttachmentKind, PreviewStatus
 from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
 from sac.domain.entities import Tenant, TenantStatus
+from sac.domain.notifications import Notification, NotificationType
 from sac.domain.permissions import Role
 from sac.domain.tickets import (
     SlaState,
@@ -626,3 +627,40 @@ class MemberOut(BaseModel):
     name: str
     role: Role
     active: bool
+
+
+class NotificationOut(BaseModel):
+    id: UUID
+    ticket_id: UUID
+    ticket_number: int
+    type: NotificationType
+    title: str
+    snippet: str | None
+    created_at: datetime
+    read_at: datetime | None
+
+
+class NotificationsPageOut(BaseModel):
+    items: list[NotificationOut]
+    total: int
+
+
+class NotificationCounterOut(BaseModel):
+    nao_lidas: int
+
+
+class MarkNotificationsReadIn(BaseModel):
+    ids: list[UUID] | None = None
+
+
+def notification_out(notification: Notification) -> NotificationOut:
+    return NotificationOut(
+        id=notification.id,
+        ticket_id=notification.ticket_id,
+        ticket_number=notification.ticket_number,
+        type=notification.type,
+        title=notification.title,
+        snippet=notification.snippet,
+        created_at=notification.created_at,
+        read_at=notification.read_at,
+    )

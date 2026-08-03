@@ -1,7 +1,8 @@
+import json
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sac.domain.notifications import Notification, NotificationType
@@ -89,15 +90,34 @@ class SqlNotificationRepository:
         )
 
 
-class NullNotificationPublisher:
-    """Publisher no-op: grava notificacoes via fanout sem publicar em tempo real.
+_NOTIFY_CHANNEL = "sac_notifications"
 
-    O parametro fanout dos use cases de ticket e obrigatorio (nao aceita
-    None), entao ate a Task 4 trazer o publisher real via pg_notify/LISTEN,
-    esta classe preenche a dependencia sem quebrar a escrita das
-    notificacoes: SqlNotificationRepository.add_many ja persiste a linha,
-    so o push em tempo real (SSE) fica pendente.
+
+class PgNotifyPublisher:
+    """Publisher real de tempo real: emite pg_notify no canal global.
+
+    Recebe a MESMA sessao/transacao do use case que gravou as notificacoes
+    (SqlNotificationRepository.add_many), de proposito: o Postgres so entrega
+    o NOTIFY a outros backends quando essa transacao comita, e quem comita e
+    a dependency get_tenant_session ao final do request. Isso faz o aviso em
+    tempo real sair exatamente quando a escrita se torna visivel para outras
+    conexoes -- nunca antes (evitando um listener ler estado que ainda pode
+    ser desfeito por um rollback) nem depois (sem round-trip extra).
+
+    Canal unico e global, nao um por tenant: o listener (Task 5) e quem
+    filtra tenant/destinatario, entao nao ha necessidade de multiplicar
+    LISTENs no lado do consumidor. O payload carrega so o slug do tenant e os
+    ids dos destinatarios -- nunca titulo/snippet da notificacao -- porque o
+    NOTIFY do Postgres tem limite de 8000 bytes e o conteudo em si o listener
+    busca depois via SqlNotificationRepository, nao pelo payload do canal.
     """
 
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
     async def publish(self, tenant_slug: str, user_ids: list[UUID]) -> None:
-        return None
+        payload = json.dumps({"tenant": tenant_slug, "users": [str(u) for u in user_ids]})
+        await self._session.execute(
+            text("SELECT pg_notify(:canal, :payload)"),
+            {"canal": _NOTIFY_CHANNEL, "payload": payload},
+        )
