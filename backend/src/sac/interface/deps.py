@@ -50,6 +50,7 @@ from sac.infrastructure.repositories_notifications import (
     SqlNotificationRepository,
 )
 from sac.infrastructure.repositories_reporting import SqlReportingRepository
+from sac.infrastructure.repositories_search import SqlGlobalSearchRepository
 from sac.infrastructure.repositories_tickets import TicketRepos, build_ticket_repos
 from sac.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from sac.infrastructure.settings import Settings
@@ -242,6 +243,12 @@ def get_reporting_repository(
     session: AsyncSession = Depends(get_tenant_session),
 ) -> SqlReportingRepository:
     return SqlReportingRepository(session)
+
+
+def get_global_search_repository(
+    session: AsyncSession = Depends(get_tenant_session),
+) -> SqlGlobalSearchRepository:
+    return SqlGlobalSearchRepository(session)
 
 
 def get_storage(request: Request) -> S3Storage:

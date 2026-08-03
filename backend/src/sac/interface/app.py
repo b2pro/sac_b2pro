@@ -23,6 +23,7 @@ from sac.interface.routers import (
     platform_users,
     preferences,
     reporting,
+    search,
     tickets,
 )
 
@@ -74,4 +75,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reporting.dashboard_router, prefix="/api")
     app.include_router(reporting.relatorios_router, prefix="/api")
     app.include_router(reporting.midias_router, prefix="/api")
+    app.include_router(search.router, prefix="/api")
     return app

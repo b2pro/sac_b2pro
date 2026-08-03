@@ -13,6 +13,7 @@ from sac.application.ports_tickets import (
 )
 from sac.application.use_cases.attachments import AttachmentView, IntentDiscardResult
 from sac.application.use_cases.auth import AuthResult
+from sac.application.use_cases.global_search import GlobalSearchResult
 from sac.domain.attachments import AttachmentKind, PreviewStatus
 from sac.domain.cadastros import Customer, Product
 from sac.domain.catalog import CatalogItem
@@ -684,4 +685,49 @@ class PreferencesOut(BaseModel):
 def preferences_out(prefs: UserPreferences) -> PreferencesOut:
     return PreferencesOut(
         theme=prefs.theme, notify_toast=prefs.notify_toast, notify_sound=prefs.notify_sound
+    )
+
+
+class TicketHitOut(BaseModel):
+    id: UUID
+    number: int
+    status: TicketStatus
+    customer_name: str | None
+    brand_name: str | None
+
+
+class CustomerHitOut(BaseModel):
+    id: UUID
+    name: str
+    document: str | None
+
+
+class ProductHitOut(BaseModel):
+    id: UUID
+    name: str
+    sku: str | None
+
+
+class GlobalSearchOut(BaseModel):
+    tickets: list[TicketHitOut]
+    clientes: list[CustomerHitOut]
+    produtos: list[ProductHitOut]
+
+
+def global_search_out(result: GlobalSearchResult) -> GlobalSearchOut:
+    return GlobalSearchOut(
+        tickets=[
+            TicketHitOut(
+                id=t.id,
+                number=t.number,
+                status=t.status,
+                customer_name=t.customer_name,
+                brand_name=t.brand_name,
+            )
+            for t in result.tickets
+        ],
+        clientes=[
+            CustomerHitOut(id=c.id, name=c.name, document=c.document) for c in result.customers
+        ],
+        produtos=[ProductHitOut(id=p.id, name=p.name, sku=p.sku) for p in result.products],
     )

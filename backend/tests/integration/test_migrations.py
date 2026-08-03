@@ -79,3 +79,30 @@ async def test_migration_tenant_cria_tabela_e_indices_notifications(
         )
         found = {row[0] for row in rows.all()}
     assert EXPECTED_NOTIFICATIONS_INDEXES <= found
+
+
+# Indices GIN de trigrama da busca global (Task 7 da Fase 4): documento e
+# telefone de cliente, email de cliente e SKU de produto. Completam os de
+# nome/order_code de 0008_indices_busca.
+EXPECTED_SEARCH_INDEXES = {
+    "ix_customers_document_trgm",
+    "ix_customers_email_trgm",
+    "ix_customers_phone_trgm",
+    "ix_products_sku_trgm",
+}
+
+
+async def test_migration_tenant_cria_indices_gin_trgm_da_busca_global(
+    engine: AsyncEngine,
+) -> None:
+    await AlembicTenantProvisioner(engine).provision("t_busca_global")
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = :schema AND indexname = ANY(:names)"
+            ),
+            {"schema": "t_busca_global", "names": list(EXPECTED_SEARCH_INDEXES)},
+        )
+        found = {row[0] for row in rows.all()}
+    assert EXPECTED_SEARCH_INDEXES <= found
