@@ -178,12 +178,26 @@ let audioContext: AudioContext | null = null
 
 /** Beep curto de ~200ms gerado com WebAudio, sem asset binario e sem
  *  dependencia nova. Falha em silencio: o som e acessorio e o navegador pode
- *  bloquear audio antes da primeira interacao do usuario. */
+ *  bloquear audio antes da primeira interacao do usuario — nesse caso este
+ *  aviso e perdido de proposito (ver abaixo) e o proximo toca. */
 export function playNotificationBeep(): void {
   try {
     audioContext ??= new AudioContext()
     const ctx = audioContext
-    if (ctx.state === "suspended") void ctx.resume()
+    if (ctx.state === "suspended") {
+      // Contexto bloqueado: o navegador exige um gesto do usuario na aba antes
+      // de deixar tocar audio. Pede a retomada (que fica pendente ate o gesto)
+      // e DESISTE deste aviso, em vez de agendar o oscilador. Agendar seria
+      // pior que o silencio: com o contexto suspenso `currentTime` fica parado
+      // em 0, o `start(0)`/`stop(0.21)` ficariam na fila e tocariam no instante
+      // em que o usuario clicasse em qualquer coisa — um bipe atrasado, as
+      // vezes minutos depois, anunciando notificacao que ele ja leu. Do proximo
+      // aviso em diante o contexto ja esta rodando e o bipe sai na hora.
+      // O `.catch` cobre engine que rejeita `resume()`, que sem ele viraria
+      // "Uncaught (in promise)" no console.
+      ctx.resume().catch(() => {})
+      return
+    }
     const oscillator = ctx.createOscillator()
     const gain = ctx.createGain()
     const start = ctx.currentTime

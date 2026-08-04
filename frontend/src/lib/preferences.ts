@@ -62,14 +62,21 @@ const preferencesQuery = {
  *  o NotificationBell le estas preferencias dentro de um efeito, entao um
  *  objeto novo a cada render faria o efeito rodar em todo render. Por isso o
  *  objeto nao pode ser montado aqui: `{ ...data }` ou um remapeamento de nomes
- *  (`{ notifyToast: ... }`) quebraria a garantia. */
+ *  (`{ notifyToast: ... }`) quebraria a garantia.
+ *
+ *  Expoe `isLoadingError` e nao `isError` de proposito: `isError` tambem fica
+ *  verdadeiro quando uma REconsulta falha com dado bom ainda em cache, e quem
+ *  usasse isso para trocar a tela por uma mensagem de erro apagaria um
+ *  formulario que continua valido. `isLoadingError` so e verdadeiro quando a
+ *  primeira carga falhou, ou seja, quando de fato nao ha o que mostrar.
+ *  `isLoading` ja tem esse cuidado nativo (nao liga em refetch de fundo). */
 export function usePreferences(): {
   preferences: Preferences
   isLoading: boolean
-  isError: boolean
+  isLoadingError: boolean
 } {
-  const { data, isLoading, isError } = useQuery(preferencesQuery)
-  return { preferences: data ?? DEFAULT_PREFERENCES, isLoading, isError }
+  const { data, isLoading, isLoadingError } = useQuery(preferencesQuery)
+  return { preferences: data ?? DEFAULT_PREFERENCES, isLoading, isLoadingError }
 }
 
 /** Aplica no next-themes o tema que veio do servidor. Montado uma vez no

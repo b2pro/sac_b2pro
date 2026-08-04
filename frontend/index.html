@@ -12,6 +12,13 @@
       // tela clara e um pisca. Isto espelha exatamente o que o next-themes faz
       // (mesma chave "theme", mesmos valores, mesma classe e color-scheme), e
       // por isso quando o React assume nao ha nada para trocar.
+      //
+      // ACOPLADO a src/main.tsx: este script duplica em HTML cru o contrato do
+      // <ThemeProvider> de lá — storageKey (o default "theme"), attribute
+      // ("class") e enableSystem (que faz o default virar "system"). Mudar
+      // qualquer uma dessas props sem mudar este script faz o app abrir no tema
+      // errado, que e exatamente o que o script existe para evitar. Nao ha
+      // teste guardando isso; os dois lados se citam.
       try {
         var salvo = localStorage.getItem("theme") || "system"
         var tema =

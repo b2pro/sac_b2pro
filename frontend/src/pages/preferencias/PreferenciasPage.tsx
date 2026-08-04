@@ -90,7 +90,7 @@ function ToggleRow({
 export default function PreferenciasPage() {
   const queryClient = useQueryClient()
   const { setTheme } = useTheme()
-  const { preferences, isLoading, isError } = usePreferences()
+  const { preferences, isLoading, isLoadingError } = usePreferences()
 
   const mutation = useMutation({
     mutationFn: savePreferences,
@@ -98,14 +98,27 @@ export default function PreferenciasPage() {
     // rede. O corpo do PUT ja leva os tres campos e a resposta e ele de volta,
     // entao nao ha o que reconciliar no sucesso.
     onMutate: (next) => {
+      const previous = queryClient.getQueryData<Preferences>(PREFERENCES_KEY)
       queryClient.setQueryData<Preferences>(PREFERENCES_KEY, next)
+      return { previous }
     },
     onSuccess: () => toast.success("Preferencias salvas"),
-    onError: (error) => {
+    onError: (error, _next, context) => {
       toast.error(errorMessage(error))
-      // A tela mentiria se continuasse mostrando o que nao foi gravado.
-      // Recarregar do servidor desfaz o otimismo, inclusive no tema:
-      // `useApplyThemePreference` reaplica o valor que voltou.
+      // Desfaz o otimismo com o valor guardado no `onMutate`, e nao com uma
+      // reconsulta: o que derruba o PUT (servidor fora, rede caida, sessao
+      // expirada) derruba o GET seguinte tambem, e ai a tela ficaria mostrando
+      // para sempre algo que o servidor nunca aceitou. Restaurar o cache
+      // reverte de tabela: o radio volta, o NotificationBell volta a ler os
+      // valores gravados e o `useApplyThemePreference` reaplica o tema anterior
+      // — o que reescreve tambem o localStorage do next-themes, senao o proximo
+      // reload abriria num tema que o servidor nao tem.
+      if (context?.previous) {
+        queryClient.setQueryData<Preferences>(PREFERENCES_KEY, context.previous)
+      }
+      // Depois de reverter, reconsulta por garantia (a gravacao pode ter
+      // chegado e so a resposta ter se perdido). Se falhar, o cache revertido
+      // continua valendo — a reconsulta e o reforco, nao o rollback.
       void queryClient.invalidateQueries({ queryKey: PREFERENCES_KEY })
     },
   })
@@ -115,7 +128,10 @@ export default function PreferenciasPage() {
   }
 
   function onThemeChange(theme: Theme) {
-    // Aplica antes de gravar: a troca de tema E o feedback do clique.
+    // Aplica antes de gravar: a troca de tema E o feedback do clique. Se o PUT
+    // falhar, quem desfaz e o `onError` restaurando o cache — nao ha um
+    // `setTheme` de volta aqui de proposito, para o tema ter um dono so
+    // (`useApplyThemePreference`) e nao dois escritores discordando.
     setTheme(toNextTheme(theme))
     update({ theme })
   }
@@ -136,14 +152,17 @@ export default function PreferenciasPage() {
         </div>
       )}
 
-      {isError && (
+      {/* `isLoadingError`, nao `isError`: so troca a tela pela mensagem quando a
+          primeira carga falhou. Reconsulta que falha com dado bom em cache
+          mantem o formulario no ar — o toast de erro do PUT ja avisou. */}
+      {isLoadingError && (
         <EmptyState
           title="Nao foi possivel carregar as preferencias"
           description="Recarregue a pagina para tentar de novo."
         />
       )}
 
-      {!isLoading && !isError && (
+      {!isLoading && !isLoadingError && (
         <div className="space-y-6">
           <section className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-4 py-3">

@@ -89,7 +89,14 @@ createRoot(document.getElementById("root")!).render(
     {/* Mais externo que o resto porque o Toaster tambem consulta o tema. O
         valor do servidor entra depois, pelo useApplyThemePreference no
         AppShell; aqui o next-themes cuida so do cache local, que e o que evita
-        o flash no reload. */}
+        o flash no reload.
+
+        ACOPLADO a index.html: o script pre-paint de lá repete este contrato em
+        HTML cru (chave "theme" do storageKey default, attribute "class" e o
+        default "system" que vem do enableSystem) porque num SPA o script do
+        proprio next-themes so roda depois do primeiro paint. Mudar storageKey,
+        attribute ou enableSystem aqui obriga a mudar index.html no mesmo
+        commit, senao o app abre num tema e troca para outro. */}
     <ThemeProvider attribute="class" themes={["light", "dark"]} enableSystem>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
