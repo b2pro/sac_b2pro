@@ -14,7 +14,7 @@ Algo entre um painel de controle industrial e uma prancheta de oficina — serio
 | Silver | `#ccc5b9` | Bordas, divisores, estados neutros (badge "aguardando", texto secundario). E o "cinza" da paleta, puxado pro bege — evita o cinza-azulado padrao de shadcn. |
 | Charcoal Brown | `#403d39` | Corpo de texto principal. Nunca preto puro; ar de documento impresso. |
 | Carbon Black | `#252422` | Titulos, texto de alta enfase e fundo do sidebar/nav (navegacao escura contra conteudo claro: separa "onde eu navego" de "onde eu trabalho"). |
-| Spicy Paprika | `#eb5e28` | So tres usos: acao primaria (ex.: "Aprovar", "Enviar a analise"), indicador de urgencia/SLA vencendo e numero do ticket em destaque. Se aparecer em mais de 3 lugares na mesma tela, esta errado. |
+| Spicy Paprika | `#eb5e28` | So tres usos: acao primaria (ex.: "Aprovar", "Enviar a analise"), indicador de urgencia/SLA vencendo e numero do ticket em destaque. Se aparecer em mais de 3 lugares na mesma tela, esta errado. Como PREENCHIMENTO, borda e sinalizacao e este valor exato; como TEXTO ele reprova AA nos dois temas (3,32:1 no claro, 4,09:1 no escuro), entao texto em Paprika usa `--primary-text` — mesmo matiz e saturacao, luminosidade ajustada por tema. Rotulo EM CIMA do Paprika (botao primario, contador) e Carbon Black, nao Floral White: 4,55:1 contra 3,32:1. |
 
 ## Tipografia
 
@@ -23,9 +23,9 @@ Algo entre um painel de controle industrial e uma prancheta de oficina — serio
 
 ## Bordas, profundidade e espacamento
 
-- Raio pequeno e consistente (4-6px). Nunca zero (jornal), nunca grande (app de consumo). O raio e utilitario, nao estetico.
+- Raio pequeno e consistente: a escala do sistema esta travada em 4px / 5px / 6px (`rounded-sm` / `rounded-md` / `rounded-lg`), e nenhum componente usa valor fora dela. Nunca grande (app de consumo). Duas excecoes, porque nao sao raio de card/controle: circulo e pilula (`rounded-full`), que sao a forma do elemento; e linha full-bleed dentro de um container que ja tem o raio, que fica em zero por nao ter canto visivel. O raio e utilitario, nao estetico.
 - Bordas de 1px em Silver em repouso; no focus/hover a borda vira Charcoal Brown. Nunca sombra colorida ou glow.
-- Zero drop-shadow decorativo. Se precisar de profundidade: borda + degrade de no maximo 2% de opacidade (quase invisivel). Nunca gradiente visivel.
+- Zero drop-shadow em elemento no fluxo. Se precisar de profundidade ali: borda + degrade de no maximo 2% de opacidade (quase invisivel). Camada flutuante que cobre conteudo (popover, menu, select, dropdown de autocomplete) pode ter uma sombra discreta — ela e o unico sinal de sobreposicao, ja que popover e card sao a mesma superficie. E nunca vem sozinha: sempre acompanhada de borda, porque no tema escuro a sombra quase nao aparece. Dialog dispensa a sombra: o escurecedor atras dele ja faz a separacao. Nunca gradiente visivel.
 - Espacamento em escala de 4px: respiro generoso vertical entre secoes (24-32px), compacto horizontal dentro de linhas de tabela (8-12px). Densidade de linha importa mais que espaco em branco bonito.
 - Cards de ticket: borda esquerda de 3px solida na cor do status (nao badge colorido solto). Detalhe estrutural e funcional — da pra escanear a fila pela lateral sem ler texto.
 
