@@ -287,6 +287,7 @@ async def test_expiracao_de_pendentes_varre_os_tenants(
 
     tenant = await seed_provisioned_tenant(session, engine, slug="workerexp")
     user = await seed_user(session, email="workerexp@t.com")
+    chave = f"{tenant.slug}/{uuid4()}/{uuid4()}.png"
     async with _factory(engine, tenant.schema_name)() as ts:
         repos = build_attachment_repos(ts)
         ticket_id = await _ticket_id(ts, user.id)
@@ -296,7 +297,7 @@ async def test_expiracao_de_pendentes_varre_os_tenants(
             filename="pendente.png",
             content_type="image/png",
             size_bytes=10,
-            object_key=f"{tenant.slug}/{ticket_id}/{uuid4()}.png",
+            object_key=chave,
             kind=AttachmentKind.IMAGEM,
             status=AttachmentStatus.PENDENTE,
             preview_status=PreviewStatus.PENDENTE,
@@ -310,14 +311,17 @@ async def test_expiracao_de_pendentes_varre_os_tenants(
             )
         )
         await ts.commit()
+    storage.put_bytes(chave, b"pendente", "image/png")
 
-    await expire_pending_all(engine, minutes=30)
+    await expire_pending_all(engine, storage, minutes=30)
 
     async with _factory(engine, tenant.schema_name)() as ts:
         repos = build_attachment_repos(ts)
         relido = await repos.attachments.get(anexo.id)
         assert relido is not None
         assert relido.status is AttachmentStatus.EXPIRADO
+    # a expiracao apaga o objeto correspondente no storage (Task 10)
+    assert storage.head(chave) is None
 
 
 async def test_expiracao_continua_quando_um_tenant_falha(
@@ -362,7 +366,7 @@ async def test_expiracao_continua_quando_um_tenant_falha(
         )
         await ts.commit()
 
-    await expire_pending_all(engine, minutes=30)
+    await expire_pending_all(engine, storage, minutes=30)
 
     async with _factory(engine, tenant.schema_name)() as ts:
         repos = build_attachment_repos(ts)

@@ -137,12 +137,14 @@ async def run_once(engine: AsyncEngine, storage: StoragePort, settings: Settings
     return processou
 
 
-async def _expire_pending(engine: AsyncEngine, slug: str, minutes: int) -> int:
+async def _expire_pending(
+    engine: AsyncEngine, storage: StoragePort, slug: str, minutes: int
+) -> int:
     translated = engine.execution_options(schema_translate_map={"tenant": f"t_{slug}"})
     factory = async_sessionmaker(translated, expire_on_commit=False)
     async with factory() as session:
         repos = build_attachment_repos(session)
-        total = await ExpirePendingUseCase(repos.attachments, minutes=minutes).execute()
+        total = await ExpirePendingUseCase(repos.attachments, storage, minutes=minutes).execute()
         await session.commit()
         return total
 
@@ -156,7 +158,7 @@ async def _active_tenant_slugs(engine: AsyncEngine) -> list[str]:
         return list(rows)
 
 
-async def expire_pending_all(engine: AsyncEngine, minutes: int) -> None:
+async def expire_pending_all(engine: AsyncEngine, storage: StoragePort, minutes: int) -> None:
     """Varre todos os tenants ativos. A falha de UM tenant (ex.: tenant ativo
     cujo schema nao foi provisionado) e logada e a varredura segue: esta funcao
     roda dentro de run_forever, entao deixar a excecao subir mataria o processo,
@@ -167,7 +169,7 @@ async def expire_pending_all(engine: AsyncEngine, minutes: int) -> None:
     falhas = 0
     for slug in tenants:
         try:
-            total += await _expire_pending(engine, slug, minutes)
+            total += await _expire_pending(engine, storage, slug, minutes)
         except Exception:  # noqa: BLE001 - um tenant ruim nao derruba a varredura
             falhas += 1
             logger.exception("falha ao expirar pendentes do tenant %s", slug)
@@ -222,7 +224,7 @@ async def run_forever(
     while not _shutdown.requested:
         agora = asyncio.get_running_loop().time()
         if agora >= proxima_expiracao:
-            await expire_pending_all(engine, settings.pending_expiration_minutes)
+            await expire_pending_all(engine, storage, settings.pending_expiration_minutes)
             proxima_expiracao = agora + expire_every_seconds
         processou = await run_once(engine, storage, settings)
         if not processou and not _shutdown.requested:

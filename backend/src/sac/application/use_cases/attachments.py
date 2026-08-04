@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -28,10 +29,30 @@ from sac.domain.errors import (
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
+    StorageUnavailableError,
     ValidationError,
 )
 from sac.domain.permissions import Permission, has_permission
 from sac.domain.tickets import is_closed
+
+logger = logging.getLogger(__name__)
+
+
+def _delete_object_keys(storage: StoragePort, anexo: TicketAttachment) -> None:
+    """Apaga os objetos do anexo no storage: best-effort, chamado sempre
+    DEPOIS de persistir a mudanca de estado. Uma falha aqui nunca pode
+    propagar - o estado do dominio ja e a fonte da verdade e a varredura de
+    reconciliacao (Task 11) e a rede de seguranca para o que sobrar orfao.
+    Cada chave e tentada de forma independente: a falha em uma nao pode
+    impedir a tentativa nas outras.
+    """
+    for key in (anexo.object_key, anexo.preview_key, anexo.preview_medium_key):
+        if key is None:
+            continue
+        try:
+            storage.delete(key)
+        except StorageUnavailableError:
+            logger.warning("falha ao apagar objeto do storage key=%s", key)
 
 
 @dataclass(frozen=True)
@@ -280,9 +301,12 @@ class GetAttachmentUrlUseCase:
 
 
 class DeleteAttachmentUseCase:
-    def __init__(self, tickets: TicketRepository, attachments: AttachmentRepository) -> None:
+    def __init__(
+        self, tickets: TicketRepository, attachments: AttachmentRepository, storage: StoragePort
+    ) -> None:
         self._tickets = tickets
         self._attachments = attachments
+        self._storage = storage
 
     async def execute(self, actor: TicketActor, ticket_id: UUID, attachment_id: UUID) -> None:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
@@ -295,6 +319,7 @@ class DeleteAttachmentUseCase:
             raise PermissionDeniedError("sem permissao para excluir anexo de outro autor")
         anexo.deleted_at = datetime.now(UTC)
         await self._attachments.update(anexo)
+        _delete_object_keys(self._storage, anexo)
 
 
 class IntentDiscardResult(StrEnum):
@@ -317,9 +342,12 @@ class DiscardIntentUseCase:
     quem decide e o servidor, olhando o status da propria linha.
     """
 
-    def __init__(self, tickets: TicketRepository, attachments: AttachmentRepository) -> None:
+    def __init__(
+        self, tickets: TicketRepository, attachments: AttachmentRepository, storage: StoragePort
+    ) -> None:
         self._tickets = tickets
         self._attachments = attachments
+        self._storage = storage
 
     async def execute(
         self, actor: TicketActor, ticket_id: UUID, attachment_id: UUID
@@ -338,13 +366,17 @@ class DiscardIntentUseCase:
         if anexo.status is AttachmentStatus.PENDENTE:
             anexo.deleted_at = datetime.now(UTC)
             await self._attachments.update(anexo)
+            _delete_object_keys(self._storage, anexo)
         # EXPIRADO ja saiu da cota pela varredura: nada a escrever.
         return IntentDiscardResult.DESCARTADO
 
 
 class ExpirePendingUseCase:
-    def __init__(self, attachments: AttachmentRepository, minutes: int = 30) -> None:
+    def __init__(
+        self, attachments: AttachmentRepository, storage: StoragePort, minutes: int = 30
+    ) -> None:
         self._attachments = attachments
+        self._storage = storage
         self._minutes = minutes
 
     async def execute(self) -> int:
@@ -359,5 +391,6 @@ class ExpirePendingUseCase:
                 continue
             anexo.status = AttachmentStatus.EXPIRADO
             await self._attachments.update(anexo)
+            _delete_object_keys(self._storage, anexo)
             total += 1
         return total

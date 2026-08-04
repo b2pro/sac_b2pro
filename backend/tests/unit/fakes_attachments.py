@@ -7,12 +7,15 @@ from sac.domain.attachments import (
     PreviewJobStatus,
     TicketAttachment,
 )
+from sac.domain.errors import StorageUnavailableError
 
 
 class FakeStorage:
     def __init__(self) -> None:
         self.objects: dict[str, tuple[bytes, str]] = {}
         self.assinaturas: list[tuple[str, str]] = []
+        self.deleted: list[str] = []
+        self.fail_delete_for: set[str] = set()
 
     def simulate_upload(self, key: str, data: bytes, content_type: str) -> None:
         """Faz o papel do navegador: grava no bucket sem passar pelo backend."""
@@ -38,6 +41,12 @@ class FakeStorage:
 
     def get_bytes(self, key: str) -> bytes:
         return self.objects[key][0]
+
+    def delete(self, key: str) -> None:
+        if key in self.fail_delete_for:
+            raise StorageUnavailableError("storage indisponivel (fake)")
+        self.deleted.append(key)
+        self.objects.pop(key, None)
 
 
 class InMemoryAttachmentRepository:

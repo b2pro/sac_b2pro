@@ -612,8 +612,9 @@ async def discard_attachment_intent(
     identity: TokenPayload = Depends(_attach),
     repos: TicketRepos = Depends(get_ticket_repos),
     anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
 ) -> AttachmentIntentDiscardOut:
-    resultado = await DiscardIntentUseCase(repos.tickets, anexos.attachments).execute(
+    resultado = await DiscardIntentUseCase(repos.tickets, anexos.attachments, storage).execute(
         _actor(identity), ticket_id, anexo_id
     )
     return AttachmentIntentDiscardOut(status=resultado)
@@ -626,8 +627,9 @@ async def delete_attachment(
     identity: TokenPayload = Depends(_attach),
     repos: TicketRepos = Depends(get_ticket_repos),
     anexos: AttachmentRepos = Depends(get_attachment_repos),
+    storage: S3Storage = Depends(get_storage),
 ) -> Response:
-    await DeleteAttachmentUseCase(repos.tickets, anexos.attachments).execute(
+    await DeleteAttachmentUseCase(repos.tickets, anexos.attachments, storage).execute(
         _actor(identity), ticket_id, anexo_id
     )
     return Response(status_code=204)

@@ -119,6 +119,21 @@ class S3Storage:
         except (BotoCoreError, ClientError) as exc:
             raise StorageUnavailableError("storage indisponivel") from exc
 
+    def delete(self, key: str) -> None:
+        # Idempotente por design: apagar uma chave que nao existe nao e erro.
+        # delete_object do S3 ja nao levanta ClientError de not-found na
+        # pratica, mas o codigo trata esse caso mesmo assim para nao depender
+        # dessa leniencia de comportamento do servidor.
+        try:
+            self._internal.delete_object(Bucket=self._bucket, Key=key)
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            if code in _NOT_FOUND_CODES:
+                return
+            raise StorageUnavailableError("storage indisponivel") from exc
+        except BotoCoreError as exc:
+            raise StorageUnavailableError("storage indisponivel") from exc
+
 
 def build_storage(settings: Settings) -> S3Storage:
     return S3Storage.from_values(

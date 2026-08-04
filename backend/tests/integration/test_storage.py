@@ -45,6 +45,21 @@ async def test_put_bytes_get_bytes_e_presigned_get(storage: S3Storage) -> None:
     assert res.content == b"bytes-do-servidor"
 
 
+async def test_delete_remove_objeto_e_e_idempotente(storage: S3Storage) -> None:
+    chave = "acme/teste/apagar.png"
+    storage.put_bytes(chave, b"para apagar", "image/png")
+    assert storage.head(chave) is not None
+
+    storage.delete(chave)
+    assert storage.head(chave) is None
+
+    # idempotente: apagar de novo o mesmo objeto, ja ausente, nao e erro
+    storage.delete(chave)
+
+    # idempotente tambem para uma chave que nunca existiu no bucket
+    storage.delete("acme/teste/nunca-existiu.png")
+
+
 def test_url_publica_usa_o_endpoint_publico(storage_public: S3Storage) -> None:
     url = storage_public.presigned_get("acme/teste/qualquer.png", ttl_seconds=60)
     assert url.startswith("http://127.0.0.1:9000/")

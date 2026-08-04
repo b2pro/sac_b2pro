@@ -316,13 +316,77 @@ async def test_exclusao_por_autor_e_por_papel() -> None:
     view = await env.confirm_uc().execute(ATENDENTE, ticket.id, intent.attachment_id)
     anexo = view.attachment
 
-    uc = DeleteAttachmentUseCase(env.tickets, env.attachments)
+    uc = DeleteAttachmentUseCase(env.tickets, env.attachments, env.storage)
     # admin pode excluir anexo de outro autor
     await uc.execute(ADMIN, ticket.id, anexo.id)
     apagado = await env.attachments.get(anexo.id)
     assert apagado is not None and apagado.deleted_at is not None
-    # o objeto permanece no bucket
+    # o objeto e apagado do bucket junto com o soft delete
+    assert anexo.object_key not in env.storage.objects
+
+
+async def test_exclusao_apaga_as_tres_chaves_do_storage() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    anexo = view.attachment
+    # simula previews ja geradas pelo worker, para exercitar as tres chaves
+    anexo.preview_key = "acme/t/previews/x.webp"
+    anexo.preview_medium_key = "acme/t/previews/x_medium.webp"
+    env.storage.put_bytes(anexo.preview_key, b"thumb", "image/webp")
+    env.storage.put_bytes(anexo.preview_medium_key, b"medio", "image/webp")
+    await env.attachments.update(anexo)
+
+    await DeleteAttachmentUseCase(env.tickets, env.attachments, env.storage).execute(
+        ADMIN, ticket.id, anexo.id
+    )
+
+    assert anexo.object_key not in env.storage.objects
+    assert anexo.preview_key not in env.storage.objects
+    assert anexo.preview_medium_key not in env.storage.objects
+    assert set(env.storage.deleted) == {
+        anexo.object_key,
+        anexo.preview_key,
+        anexo.preview_medium_key,
+    }
+
+
+async def test_exclusao_com_falha_no_storage_ainda_persiste_o_soft_delete() -> None:
+    """Delecao no storage e best-effort: o estado do dominio e a fonte da
+    verdade, entao uma falha ao apagar uma chave nunca pode impedir o soft
+    delete de ter sido persistido, nem impedir a tentativa nas outras chaves.
+    """
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN,
+        ticket.id,
+        UploadIntentInput("clipe.mp4", "video/mp4", 9, with_preview=True),
+    )
+    env.storage.simulate_upload(intent.object_key, b"123456789", "video/mp4")
+    assert intent.preview_upload_url is not None
+    preview_key = intent.preview_upload_url.removeprefix("https://fake/put/")
+    env.storage.simulate_upload(preview_key, b"webp", "image/webp")
+    view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+    anexo = view.attachment
+    assert anexo.preview_key == preview_key
+
+    env.storage.fail_delete_for.add(anexo.object_key)
+
+    await DeleteAttachmentUseCase(env.tickets, env.attachments, env.storage).execute(
+        ADMIN, ticket.id, anexo.id
+    )
+
+    apagado = await env.attachments.get(anexo.id)
+    assert apagado is not None and apagado.deleted_at is not None
+    # a chave que falhou continua no bucket...
     assert anexo.object_key in env.storage.objects
+    # ...mas a falha em uma chave nao impediu a tentativa nas demais
+    assert preview_key not in env.storage.objects
 
 
 async def test_atendente_nao_exclui_anexo_de_outro_autor() -> None:
@@ -335,7 +399,7 @@ async def test_atendente_nao_exclui_anexo_de_outro_autor() -> None:
     view = await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
 
     with pytest.raises(PermissionDeniedError):
-        await DeleteAttachmentUseCase(env.tickets, env.attachments).execute(
+        await DeleteAttachmentUseCase(env.tickets, env.attachments, env.storage).execute(
             ATENDENTE, ticket.id, view.attachment.id
         )
 
@@ -349,7 +413,7 @@ async def test_descartar_intencao_pendente_devolve_a_vaga() -> None:
     # a intencao ja ocupa vaga na cota antes do upload existir
     assert await env.attachments.count_active(ticket.id) == 1
 
-    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
         ADMIN, ticket.id, intent.attachment_id
     )
 
@@ -357,6 +421,22 @@ async def test_descartar_intencao_pendente_devolve_a_vaga() -> None:
     descartado = await env.attachments.get(intent.attachment_id)
     assert descartado is not None and descartado.deleted_at is not None
     assert await env.attachments.count_active(ticket.id) == 0
+
+
+async def test_descartar_intencao_pendente_apaga_o_objeto_no_storage() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
+
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
+        ADMIN, ticket.id, intent.attachment_id
+    )
+
+    assert resultado is IntentDiscardResult.DESCARTADO
+    assert intent.object_key not in env.storage.objects
 
 
 async def test_descartar_intencao_nao_apaga_anexo_ja_confirmado() -> None:
@@ -373,7 +453,7 @@ async def test_descartar_intencao_nao_apaga_anexo_ja_confirmado() -> None:
     env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
     await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
 
-    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
         ADMIN, ticket.id, intent.attachment_id
     )
 
@@ -397,7 +477,7 @@ async def test_descartar_intencao_de_outro_autor_e_recusado_ate_para_admin() -> 
     )
 
     with pytest.raises(PermissionDeniedError):
-        await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+        await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
             ADMIN, ticket.id, intent.attachment_id
         )
 
@@ -418,7 +498,7 @@ async def test_descartar_intencao_funciona_com_ticket_encerrado() -> None:
     ticket.status = TicketStatus.FINALIZADO
     await env.tickets.update(ticket)
 
-    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
         ADMIN, ticket.id, intent.attachment_id
     )
 
@@ -437,7 +517,7 @@ async def test_descartar_intencao_expirada_nao_reescreve_a_linha() -> None:
     anexo.status = AttachmentStatus.EXPIRADO
     await env.attachments.update(anexo)
 
-    resultado = await DiscardIntentUseCase(env.tickets, env.attachments).execute(
+    resultado = await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
         ADMIN, ticket.id, intent.attachment_id
     )
 
@@ -447,6 +527,8 @@ async def test_descartar_intencao_expirada_nao_reescreve_a_linha() -> None:
     assert await env.attachments.count_active(ticket.id) == 0
     ainda_expirado = await env.attachments.get(intent.attachment_id)
     assert ainda_expirado is not None and ainda_expirado.deleted_at is None
+    # nao passou pelo caminho PENDENTE: nao tenta apagar o objeto no storage
+    assert intent.object_key not in env.storage.deleted
 
 
 async def test_descartar_intencao_inexistente_da_404() -> None:
@@ -454,7 +536,9 @@ async def test_descartar_intencao_inexistente_da_404() -> None:
     ticket = await env.ticket()
 
     with pytest.raises(NotFoundError):
-        await DiscardIntentUseCase(env.tickets, env.attachments).execute(ADMIN, ticket.id, uuid4())
+        await DiscardIntentUseCase(env.tickets, env.attachments, env.storage).execute(
+            ADMIN, ticket.id, uuid4()
+        )
 
 
 async def test_pendentes_antigos_expiram() -> None:
@@ -468,10 +552,28 @@ async def test_pendentes_antigos_expiram() -> None:
     anexo.created_at = datetime.now(UTC) - timedelta(hours=2)
     await env.attachments.update(anexo)
 
-    total = await ExpirePendingUseCase(env.attachments, minutes=30).execute()
+    total = await ExpirePendingUseCase(env.attachments, env.storage, minutes=30).execute()
     assert total == 1
     expirado = await env.attachments.get(anexo.id)
     assert expirado is not None and expirado.status is AttachmentStatus.EXPIRADO
+
+
+async def test_expirar_apaga_o_objeto_dos_expirados_no_storage() -> None:
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
+    anexo = await env.attachments.get(intent.attachment_id)
+    assert anexo is not None
+    anexo.created_at = datetime.now(UTC) - timedelta(hours=2)
+    await env.attachments.update(anexo)
+
+    total = await ExpirePendingUseCase(env.attachments, env.storage, minutes=30).execute()
+
+    assert total == 1
+    assert intent.object_key not in env.storage.objects
 
 
 async def test_pendente_ja_excluido_nao_e_recontado_como_expirado() -> None:
@@ -491,7 +593,7 @@ async def test_pendente_ja_excluido_nao_e_recontado_como_expirado() -> None:
     pendentes_crus = await env.attachments.list_pending_before(datetime.now(UTC))
     assert any(a.id == anexo.id for a in pendentes_crus)
 
-    total = await ExpirePendingUseCase(env.attachments, minutes=30).execute()
+    total = await ExpirePendingUseCase(env.attachments, env.storage, minutes=30).execute()
     assert total == 0
     ainda_pendente = await env.attachments.get(anexo.id)
     assert ainda_pendente is not None
