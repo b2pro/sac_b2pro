@@ -89,10 +89,17 @@ async function tryRefresh(): Promise<Session | null> {
 /** Faz a chamada com o access token atual e, se a API responder 401, tenta
  *  renovar a sessao uma vez e repete — a mesma logica de refresh-and-retry
  *  usada por toda chamada autenticada, aqui compartilhada entre `api` (json)
- *  e `apiRaw` (Response crua, para respostas binarias como o CSV). */
-async function apiRaw(
+ *  e `apiRaw` (Response crua, para respostas binarias como o CSV e para o
+ *  stream SSE de notificacoes, que precisa do Authorization que o EventSource
+ *  nativo nao sabe enviar). */
+export async function apiRaw(
   path: string,
-  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  init: {
+    method?: string
+    body?: unknown
+    headers?: Record<string, string>
+    signal?: AbortSignal
+  } = {},
 ): Promise<Response> {
   const doFetch = (token: string | null) =>
     fetch(`/api${path}`, {
@@ -102,6 +109,7 @@ async function apiRaw(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: init.signal,
     })
 
   let session = loadSession()
