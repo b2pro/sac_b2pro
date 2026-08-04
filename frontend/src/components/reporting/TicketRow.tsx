@@ -1,10 +1,9 @@
 import type { KeyboardEvent, MouseEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
-import { PriorityBadge, SlaBadge, StatusBadge, STATUS_ACCENTS } from "@/components/tickets/badges"
+import { PriorityBadge, SlaBadge, StatusBadge } from "@/components/tickets/badges"
 import { formatShortDateTime } from "@/lib/format"
-import type { TicketListItem } from "@/lib/tickets"
-import { cn } from "@/lib/utils"
+import { STATUS_ACCENT_VARS, type TicketListItem } from "@/lib/tickets"
 
 export function TicketRow({
   item,
@@ -39,10 +38,8 @@ export function TicketRow({
     <tr
       title="Abrir detalhe do ticket"
       onClick={onRowClick}
-      className={cn(
-        "cursor-pointer border-b border-border/60 border-l-[3px] hover:bg-muted has-[:focus-visible]:border-ring has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
-        STATUS_ACCENTS[item.status],
-      )}
+      style={{ borderLeftColor: STATUS_ACCENT_VARS[item.status] }}
+      className="cursor-pointer border-b border-border/60 border-l-[3px] hover:bg-muted has-[:focus-visible]:border-ring has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50"
     >
       <td>
         <Link

@@ -10,9 +10,8 @@ import {
   YAxis,
 } from "recharts"
 
-import { STATUS_CHART_FILL } from "@/components/reporting/constants"
 import { cn } from "@/lib/utils"
-import { STATUS_LABELS, type TicketStatus } from "@/lib/tickets"
+import { STATUS_ACCENT_VARS, STATUS_LABELS, type TicketStatus } from "@/lib/tickets"
 
 const STATUS_ORDER = Object.keys(STATUS_LABELS) as TicketStatus[]
 
@@ -123,7 +122,7 @@ export function StatusDistributionChart({ counts }: { counts: Record<TicketStatu
           {data.map((row) => (
             <Cell
               key={row.status}
-              fill={row.count === 0 ? "var(--muted)" : STATUS_CHART_FILL[row.status]}
+              fill={row.count === 0 ? "var(--muted)" : STATUS_ACCENT_VARS[row.status]}
             />
           ))}
           <LabelList

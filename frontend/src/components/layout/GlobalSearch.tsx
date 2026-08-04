@@ -3,7 +3,6 @@ import { ListFilter, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { STATUS_ACCENTS } from "@/components/tickets/badges"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,7 @@ import {
   type SearchHits,
   type TicketHit,
 } from "@/lib/search"
-import { STATUS_LABELS } from "@/lib/tickets"
+import { STATUS_ACCENT_VARS, STATUS_LABELS } from "@/lib/tickets"
 import { useDebounce } from "@/lib/useDebounce"
 import { cn } from "@/lib/utils"
 
@@ -268,7 +267,11 @@ export function GlobalSearch() {
 
   function renderEntry(entry: Entry, index: number, extraClass?: string) {
     const isActive = index === active
-    const railAtRest = entry.kind === "ticket" ? STATUS_ACCENTS[entry.item.status] : ""
+    // A trilha em repouso vem do token do status, em estilo inline; no realce
+    // ela cede a vez para o Paprika, e ai o inline sai de cena para a classe
+    // `border-l-primary` poder valer (estilo inline venceria a classe).
+    const railAtRest =
+      !isActive && entry.kind === "ticket" ? STATUS_ACCENT_VARS[entry.item.status] : undefined
     return (
       <div
         key={entry.kind === "fila" ? "fila" : `${entry.kind}-${entry.item.id}`}
@@ -285,12 +288,13 @@ export function GlobalSearch() {
         onMouseMove={() => {
           if (index !== active) setHighlight({ list: entries, index })
         }}
+        style={railAtRest ? { borderLeftColor: railAtRest } : undefined}
         className={cn(
           // borda esquerda de 3px como nos cards da fila — no ticket ela ja
           // carrega a cor do status, e o realce toma essa mesma trilha em
           // Paprika: um elemento so diz "que tipo de linha" e "onde estou".
           "flex cursor-pointer items-center gap-3 border-l-[3px] px-3 py-2 text-sm",
-          isActive ? "border-l-primary bg-secondary" : railAtRest || "border-l-transparent",
+          isActive ? "border-l-primary bg-secondary" : "border-l-transparent",
           extraClass,
         )}
       >

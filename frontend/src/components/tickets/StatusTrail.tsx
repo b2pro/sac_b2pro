@@ -33,7 +33,7 @@ export function StatusTrail({ status, sla }: { status: TicketStatus; sla: SlaSta
       <div className="mt-1.5 flex items-center justify-between text-xs text-foreground/70">
         <span>{STATUS_LABELS[status]}</span>
         {lateral && status !== "aguardando_cliente" ? (
-          <span className="font-medium text-rose-700">{STATUS_LABELS[status]}</span>
+          <span className="font-medium text-destructive">{STATUS_LABELS[status]}</span>
         ) : null}
       </div>
     </div>

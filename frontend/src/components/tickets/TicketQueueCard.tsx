@@ -1,29 +1,9 @@
 import { Link } from "react-router-dom"
 
-import { PriorityBadge, SlaBadge, StatusBadge, STATUS_ACCENTS } from "@/components/tickets/badges"
+import { PriorityBadge, SlaBadge, StatusBadge } from "@/components/tickets/badges"
 import { formatShortDate, formatShortDateTime } from "@/lib/format"
-import type { TicketListItem, TicketStatus } from "@/lib/tickets"
+import { STATUS_ACCENT_VARS, type TicketListItem } from "@/lib/tickets"
 import { cn } from "@/lib/utils"
-
-// Mesma cor de STATUS_ACCENTS, so que reafirmada no hover: sem isso,
-// hover:border-foreground (que precisa mudar as outras tres bordas para
-// Charcoal Brown) tambem achata a lateral colorida, porque a variante :hover
-// tem mais especificidade CSS que a classe base sempre ativa. As classes
-// ficam escritas por extenso (nao geradas por template string) porque o
-// scanner do Tailwind so enxerga literais de classe no codigo-fonte. Fica
-// local ao componente (nao exportada) para nao criar mais um export de
-// nao-componente em badges.tsx.
-const STATUS_ACCENTS_HOVER: Record<TicketStatus, string> = {
-  aberto: "hover:border-l-sky-600",
-  aguardando_cliente: "hover:border-l-amber-500",
-  aguardando_analise: "hover:border-l-violet-500",
-  aprovado: "hover:border-l-emerald-600",
-  aguardando_envio_reverso: "hover:border-l-indigo-500",
-  produto_recebido: "hover:border-l-teal-600",
-  finalizado: "hover:border-l-emerald-700",
-  declinado: "hover:border-l-rose-600",
-  cancelado: "hover:border-l-zinc-400",
-}
 
 export function TicketQueueCard({ item }: { item: TicketListItem }) {
   const openedDate = formatShortDate(item.opened_at)
@@ -32,11 +12,12 @@ export function TicketQueueCard({ item }: { item: TicketListItem }) {
   return (
     <Link
       to={`/tickets/${item.id}`}
-      className={cn(
-        "block rounded-md border border-border border-l-[3px] bg-card px-4 py-3 hover:border-foreground",
-        STATUS_ACCENTS[item.status],
-        STATUS_ACCENTS_HOVER[item.status],
-      )}
+      // A cor da trilha vai em estilo inline (e nao em classe) porque assim ela
+      // sobrevive ao hover: `hover:border-foreground` precisa mudar as outras
+      // tres bordas e, como classe, venceria a lateral colorida por
+      // especificidade. Estilo inline vence os dois.
+      style={{ borderLeftColor: STATUS_ACCENT_VARS[item.status] }}
+      className="block rounded-md border border-border border-l-[3px] bg-card px-4 py-3 hover:border-foreground"
     >
       <div className="flex flex-wrap items-center gap-2.5">
         <span

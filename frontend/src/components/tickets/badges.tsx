@@ -9,28 +9,29 @@ import {
   type TicketStatus,
 } from "@/lib/tickets"
 
-export const STATUS_ACCENTS: Record<TicketStatus, string> = {
-  aberto: "border-l-sky-600",
-  aguardando_cliente: "border-l-amber-500",
-  aguardando_analise: "border-l-violet-500",
-  aprovado: "border-l-emerald-600",
-  aguardando_envio_reverso: "border-l-indigo-500",
-  produto_recebido: "border-l-teal-600",
-  finalizado: "border-l-emerald-700",
-  declinado: "border-l-rose-600",
-  cancelado: "border-l-zinc-400",
-}
-
+// Mesma familia de cor do token --status-* de cada estado (ver lib/tickets), so
+// que como tinta de badge: fundo quase da cor da superficie, texto no extremo
+// oposto e anel um passo adiante do fundo. O tema escuro inverte a escala em vez
+// de reaproveitar as tintas claras — sem isso, nove manchas claras (bg-*-50)
+// acendiam sobre o card escuro da fila. "Cancelado" e o unico neutro e sai nos
+// tokens do tema, que ja tem valor para os dois temas.
 const STATUS_BADGE: Record<TicketStatus, string> = {
-  aberto: "bg-sky-50 text-sky-800 ring-sky-200",
-  aguardando_cliente: "bg-amber-50 text-amber-800 ring-amber-200",
-  aguardando_analise: "bg-violet-50 text-violet-800 ring-violet-200",
-  aprovado: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  aguardando_envio_reverso: "bg-indigo-50 text-indigo-800 ring-indigo-200",
-  produto_recebido: "bg-teal-50 text-teal-800 ring-teal-200",
-  finalizado: "bg-emerald-50 text-emerald-900 ring-emerald-200",
-  declinado: "bg-rose-50 text-rose-800 ring-rose-200",
-  cancelado: "bg-zinc-100 text-zinc-600 ring-zinc-200",
+  aberto: "bg-sky-50 text-sky-800 ring-sky-200 dark:bg-sky-950 dark:text-sky-200 dark:ring-sky-800",
+  aguardando_cliente:
+    "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-800",
+  aguardando_analise:
+    "bg-violet-50 text-violet-800 ring-violet-200 dark:bg-violet-950 dark:text-violet-200 dark:ring-violet-800",
+  aprovado:
+    "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-emerald-800",
+  aguardando_envio_reverso:
+    "bg-indigo-50 text-indigo-800 ring-indigo-200 dark:bg-indigo-950 dark:text-indigo-200 dark:ring-indigo-800",
+  produto_recebido:
+    "bg-teal-50 text-teal-800 ring-teal-200 dark:bg-teal-950 dark:text-teal-200 dark:ring-teal-800",
+  finalizado:
+    "bg-emerald-50 text-emerald-900 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800",
+  declinado:
+    "bg-rose-50 text-rose-800 ring-rose-200 dark:bg-rose-950 dark:text-rose-200 dark:ring-rose-800",
+  cancelado: "bg-muted text-muted-foreground ring-border",
 }
 
 export function StatusBadge({ status }: { status: TicketStatus }) {
@@ -47,7 +48,9 @@ export function StatusBadge({ status }: { status: TicketStatus }) {
 }
 
 const PRIORITY_DOTS: Record<TicketPriority, string> = {
-  baixa: "bg-zinc-400",
+  // token, e nao zinc-400: o cinza neutro da paleta e quente (identidade
+  // visual), e assim o ponto acompanha os dois temas sem variante
+  baixa: "bg-muted-foreground",
   media: "bg-sky-500",
   alta: "bg-amber-500",
   urgente: "bg-primary",
@@ -77,7 +80,9 @@ function slaTitle(sla: SlaState, dueAt: string): string {
 
 const SLA_STYLES: Record<Exclude<SlaState, "encerrado">, string> = {
   no_prazo: "text-muted-foreground",
-  vence_em_breve: "text-amber-700 motion-safe:animate-pulse",
+  // amber-700 tem 4,90:1 sobre o card claro e so 2,77:1 sobre o escuro; no
+  // escuro o aviso sobe para amber-500 (6,52:1)
+  vence_em_breve: "text-amber-700 dark:text-amber-500 motion-safe:animate-pulse",
   atrasado: "text-primary font-semibold motion-safe:animate-pulse",
 }
 

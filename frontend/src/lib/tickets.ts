@@ -27,6 +27,30 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   cancelado: "Cancelado",
 }
 
+/**
+ * Cor de cada status, como referencia a um token do tema (definido em
+ * `index.css`, com valor proprio no claro e no escuro). Fica aqui, junto de
+ * STATUS_LABELS, porque e metadado de status como o rotulo: a fila, a linha da
+ * tabela de relatorios, a busca global e o grafico do dashboard leem esta mesma
+ * lista — antes eram tres copias da mesma sequencia de classes do Tailwind, e
+ * uma delas nao tinha como ganhar variante escura sem as outras.
+ *
+ * Entra em `style` (nao em className) porque o valor e escolhido em runtime pelo
+ * status; como efeito colateral desejado, o estilo inline vence `hover:border-*`
+ * e mantem a trilha lateral colorida no hover sem uma segunda copia da lista.
+ */
+export const STATUS_ACCENT_VARS: Record<TicketStatus, string> = {
+  aberto: "var(--status-aberto)",
+  aguardando_cliente: "var(--status-aguardando-cliente)",
+  aguardando_analise: "var(--status-aguardando-analise)",
+  aprovado: "var(--status-aprovado)",
+  aguardando_envio_reverso: "var(--status-aguardando-envio-reverso)",
+  produto_recebido: "var(--status-produto-recebido)",
+  finalizado: "var(--status-finalizado)",
+  declinado: "var(--status-declinado)",
+  cancelado: "var(--status-cancelado)",
+}
+
 export const PRIORITY_LABELS: Record<TicketPriority, string> = {
   baixa: "Baixa",
   media: "Media",
