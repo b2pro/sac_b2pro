@@ -12,6 +12,7 @@ from sac.application.use_cases.platform_users import (
     CreateUserUseCase,
     LinkUserToTenantUseCase,
     ResetPasswordUseCase,
+    validate_password,
 )
 from sac.domain.entities import User, UserTenant
 from sac.domain.errors import ConflictError, NotFoundError, ValidationError
@@ -68,20 +69,32 @@ class CreateMemberUseCase:
         self._hasher = hasher
 
     async def execute(self, tenant_id: UUID, data: CreateMemberInput) -> MemberDetail:
+        # nome e senha sao exigidos e VALIDADOS SEMPRE, antes de qualquer
+        # consulta ao banco -- inclusive quando o email ja existe e os dois
+        # vao ser descartados (o usuario existente mantem a propria
+        # identidade e senha). Se essa checagem so rodasse no ramo "email
+        # novo", mandar so {email, role} viraria um oraculo gratuito: 422
+        # para email inexistente, 201/404 para email existente, revelando
+        # quais emails sao contas de verdade sem gastar uma tentativa sequer.
+        # Validar sempre torna a diferenca de status uma consequencia do
+        # corpo enviado, nao do estado do banco.
+        if not data.name or not data.password:
+            raise ValidationError("nome e senha sao obrigatorios")
+        validate_password(data.password)
+
         email = data.email.strip().lower()
         user = await self._users.get_by_email(email)
         if user is None:
-            # email novo: sem nome e senha nao ha como criar o usuario global
-            # nem ele conseguir logar depois -- exigir os dois aqui em vez de
-            # deixar o banco reclamar mais adiante.
-            if not data.name or not data.password:
-                raise ValidationError("nome e senha sao obrigatorios para um usuario novo")
             user = await CreateUserUseCase(self._users, self._hasher).execute(
                 CreateUserInput(name=data.name, email=email, password=data.password)
             )
-        elif user.is_super_admin:
-            # nao revela que o email pertence a um super_admin: do ponto de
-            # vista do admin do tenant, o email simplesmente nao existe.
+        elif user.is_super_admin or await _linked_a_outro_tenant(self._links, user.id, tenant_id):
+            # as duas recusas (e super_admin, ou ja pertence a outro tenant)
+            # usam a MESMA mensagem/tipo: vincular usuario de outro tenant e
+            # privilegio de super_admin (unico papel que hoje cria vinculos
+            # pelo painel de plataforma), e o admin deste tenant nao pode
+            # distinguir "e da plataforma" de "e de outro tenant" testando
+            # emails -- as duas leem como "usuario nao encontrado".
             raise NotFoundError(_ALVO_NAO_ENCONTRADO)
 
         if await self._links.get(user.id, tenant_id) is not None:
@@ -91,6 +104,18 @@ class CreateMemberUseCase:
             user.id, tenant_id, data.role
         )
         return _member_detail(user, link)
+
+
+async def _linked_a_outro_tenant(
+    links: UserTenantRepository, user_id: UUID, tenant_id: UUID
+) -> bool:
+    """True se o usuario tiver QUALQUER vinculo (ativo ou nao) com um tenant
+    diferente do informado. Vincular ou operar sobre alguem de outro tenant e
+    privilegio de super_admin -- o admin de um tenant nao alcanca gente de
+    fora dele, nem para criar vinculo novo nem (ver ResetMemberPasswordUseCase)
+    para mexer na senha global de quem ja e compartilhado entre tenants.
+    """
+    return any(link.tenant_id != tenant_id for link in await links.list_for_user(user_id))
 
 
 async def _resolve_target(
@@ -149,6 +174,20 @@ class ResetMemberPasswordUseCase:
         self, tenant_id: UUID, acting_user_id: UUID, user_id: UUID, new_password: str
     ) -> None:
         await _resolve_target(self._users, self._links, tenant_id, acting_user_id, user_id)
+        # defesa em profundidade: o reset escreve na linha GLOBAL do usuario
+        # (password_hash), valida para qualquer tenant onde ele tenha
+        # vinculo. CreateMemberUseCase ja impede que o admin deste tenant
+        # CRIE um vinculo cruzado (item acima), mas um super_admin pode
+        # vincular o mesmo usuario a dois tenants deliberadamente pelo painel
+        # de plataforma -- e nesse caso o admin de um dos tenants nao pode
+        # trocar a senha que tambem da acesso ao outro. Diferente da recusa
+        # de CreateMemberUseCase, esta pode ser explicita: o admin ja sabe
+        # que o alvo e membro do proprio tenant (veio da propria listagem),
+        # entao nao ha nada novo para esconder aqui.
+        if await _linked_a_outro_tenant(self._links, user_id, tenant_id):
+            raise ConflictError(
+                "nao e possivel alterar a senha de um usuario vinculado a outro tenant"
+            )
         # reusa a validacao de tamanho minimo e o hash de platform_users: nao
         # duplicar essa regra aqui.
         await ResetPasswordUseCase(self._users, self._hasher).execute(user_id, new_password)

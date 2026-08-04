@@ -1,3 +1,4 @@
+from dataclasses import replace
 from uuid import UUID
 
 from sac.domain.cadastros import Customer, Product
@@ -7,32 +8,40 @@ from sac.domain.errors import ConflictError, NotFoundError
 
 
 class InMemoryUserRepository:
+    """Fake com semantica de COPIA em toda fronteira (add/get/list/update), como
+    o repositorio SQL, que remonta a entidade a cada leitura. Sem isso, guardar
+    e devolver a mesma instancia deixava o teste cego: um use case que mutasse a
+    entidade e "esquecesse" o update() ainda passaria, porque a mutacao ja teria
+    atingido o objeto guardado (e o do proprio teste).
+    """
+
     def __init__(self) -> None:
         self.items: dict[UUID, User] = {}
 
     async def get_by_email(self, email: str) -> User | None:
         return next(
-            (u for u in self.items.values() if u.email == email and u.deleted_at is None), None
+            (replace(u) for u in self.items.values() if u.email == email and u.deleted_at is None),
+            None,
         )
 
     async def get_by_id(self, user_id: UUID) -> User | None:
         user = self.items.get(user_id)
-        return user if user and user.deleted_at is None else None
+        return replace(user) if user and user.deleted_at is None else None
 
     async def add(self, user: User) -> None:
         if await self.get_by_email(user.email):
             raise ConflictError("email ja cadastrado")
-        self.items[user.id] = user
+        self.items[user.id] = replace(user)
 
     async def list_all(self) -> list[User]:
         return sorted(
-            (u for u in self.items.values() if u.deleted_at is None), key=lambda u: u.name
+            (replace(u) for u in self.items.values() if u.deleted_at is None), key=lambda u: u.name
         )
 
     async def update(self, user: User) -> None:
         if user.id not in self.items:
             raise NotFoundError("usuario nao encontrado")
-        self.items[user.id] = user
+        self.items[user.id] = replace(user)
 
 
 class InMemoryTenantRepository:
@@ -69,19 +78,25 @@ class InMemoryUserTenantRepository:
         self.items: dict[tuple[UUID, UUID], UserTenant] = {}
 
     async def get(self, user_id: UUID, tenant_id: UUID) -> UserTenant | None:
-        return self.items.get((user_id, tenant_id))
+        # devolve uma COPIA: o repositorio SQL sempre constroi uma entidade
+        # nova por chamada (_link_entity), entao mutar o objeto devolvido
+        # aqui nunca deveria alterar o estado guardado sem passar por
+        # update() -- sem a copia, um teste que mutasse o link em memoria
+        # passaria mesmo com update() removido do use case.
+        link = self.items.get((user_id, tenant_id))
+        return replace(link) if link is not None else None
 
     async def add(self, link: UserTenant) -> None:
         key = (link.user_id, link.tenant_id)
         if key in self.items:
             raise ConflictError("vinculo ja existe")
-        self.items[key] = link
+        self.items[key] = replace(link)
 
     async def update(self, link: UserTenant) -> None:
         key = (link.user_id, link.tenant_id)
         if key not in self.items:
             raise NotFoundError("vinculo nao encontrado")
-        self.items[key] = link
+        self.items[key] = replace(link)
 
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None:
         if (user_id, tenant_id) not in self.items:
@@ -89,7 +104,10 @@ class InMemoryUserTenantRepository:
         del self.items[(user_id, tenant_id)]
 
     async def list_for_tenant(self, tenant_id: UUID) -> list[UserTenant]:
-        return [link for link in self.items.values() if link.tenant_id == tenant_id]
+        return [replace(link) for link in self.items.values() if link.tenant_id == tenant_id]
+
+    async def list_for_user(self, user_id: UUID) -> list[UserTenant]:
+        return [replace(link) for link in self.items.values() if link.user_id == user_id]
 
 
 class FakeHasher:

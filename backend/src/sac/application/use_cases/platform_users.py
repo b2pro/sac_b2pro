@@ -14,7 +14,7 @@ from sac.domain.permissions import Role
 MIN_PASSWORD_LENGTH = 8
 
 
-def _validate_password(password: str) -> None:
+def validate_password(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValidationError(f"senha deve ter ao menos {MIN_PASSWORD_LENGTH} caracteres")
 
@@ -33,7 +33,7 @@ class CreateUserUseCase:
         self._hasher = hasher
 
     async def execute(self, data: CreateUserInput) -> User:
-        _validate_password(data.password)
+        validate_password(data.password)
         email = data.email.strip().lower()
         if await self._users.get_by_email(email) is not None:
             raise ConflictError("email ja cadastrado")
@@ -75,7 +75,7 @@ class ResetPasswordUseCase:
         self._hasher = hasher
 
     async def execute(self, user_id: UUID, new_password: str) -> None:
-        _validate_password(new_password)
+        validate_password(new_password)
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise NotFoundError("usuario nao encontrado")

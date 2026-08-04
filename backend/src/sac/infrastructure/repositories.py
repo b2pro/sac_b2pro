@@ -186,6 +186,12 @@ class SqlUserTenantRepository:
         )
         return [_link_entity(m) for m in result]
 
+    async def list_for_user(self, user_id: UUID) -> list[UserTenant]:
+        result = await self._session.scalars(
+            select(UserTenantModel).where(UserTenantModel.user_id == user_id)
+        )
+        return [_link_entity(m) for m in result]
+
 
 def _preferences_entity(m: UserPreferencesModel) -> UserPreferences:
     return UserPreferences(

@@ -96,7 +96,12 @@ async def test_criar_membro_com_email_ja_vinculado_gera_conflito(
 
     response = await client.post(
         "/api/membros",
-        json={"email": "outro@conflito.com", "role": "supervisor"},
+        json={
+            "email": "outro@conflito.com",
+            "role": "supervisor",
+            "name": "Nome Ignorado",
+            "password": "senha-de-preenchimento-123",
+        },
         headers=headers,
     )
     assert response.status_code == 409
@@ -228,6 +233,176 @@ async def test_reset_de_senha_pelo_admin_permite_login_com_nova_senha(
         },
     )
     assert login.status_code == 200
+
+
+async def test_admin_nao_consegue_vincular_e_assumir_usuario_de_outro_tenant(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Caminho completo do ataque apontado na revisao: o brief so previa
+    'email existente: cria vinculo', mas combinado com o reset de senha
+    (escreve na linha GLOBAL do usuario) isso deixaria o admin do tenant A
+    vincular a vitima do tenant B a si mesmo e depois assumir a conta dela lá.
+    Aqui o teste exercita o fluxo INTEIRO pela API (nao so um PATCH direto
+    num user_id estrangeiro, que so testava a metade do problema).
+    """
+    tenant_a = await seed_tenant(session, slug="ataquea")
+    tenant_b = await seed_tenant(session, slug="ataqueb")
+    admin_a = await seed_user(session, email="admin@ataquea.com")
+    vitima = await seed_user(session, email="vitima@ataqueb.com", name="Vitima")
+    await seed_link(session, user=admin_a, tenant=tenant_a, role=Role.ADMIN)
+    await seed_link(session, user=vitima, tenant=tenant_b, role=Role.ATENDENTE)
+    headers = token_for(admin_a, tenant_slug=tenant_a.slug, role=Role.ADMIN)
+
+    tentativa_de_vinculo = await client.post(
+        "/api/membros",
+        json={
+            "email": "vitima@ataqueb.com",
+            "role": "atendente",
+            "name": "Nome Do Atacante",
+            "password": "senha-do-atacante-123",
+        },
+        headers=headers,
+    )
+    assert tentativa_de_vinculo.status_code == 404
+
+    # nao apareceu na listagem do tenant A (nenhum vinculo foi criado)
+    listagem = await client.get("/api/membros/gerencia", headers=headers)
+    assert "Vitima" not in [m["name"] for m in listagem.json()]
+
+    # a senha e o login da vitima no PROPRIO tenant continuam intocados
+    login_vitima = await client.post(
+        "/api/auth/login",
+        json={
+            "email": "vitima@ataqueb.com",
+            "password": DEFAULT_PASSWORD,
+            "tenant_slug": "ataqueb",
+        },
+    )
+    assert login_vitima.status_code == 200
+    assert login_vitima.json()["role"] == "atendente"
+
+
+async def test_reset_de_senha_recusado_para_vinculo_cruzado_com_outro_tenant(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Defesa em profundidade (item 2): mesmo que o teste anterior prove que
+    esta API nao cria mais esse estado, um super_admin pode vincular o mesmo
+    usuario a dois tenants deliberadamente pelo painel de plataforma. Esse
+    vinculo cruzado e simulado aqui via seed_link direto (nao pela API, que
+    ja bloqueia). O admin de qualquer um dos dois tenants nao pode resetar a
+    senha GLOBAL desse usuario.
+    """
+    tenant_a = await seed_tenant(session, slug="cruzadoa")
+    tenant_b = await seed_tenant(session, slug="cruzadob")
+    admin_a = await seed_user(session, email="admin@cruzadoa.com")
+    compartilhado = await seed_user(session, email="compartilhado@cruzado.com")
+    await seed_link(session, user=admin_a, tenant=tenant_a, role=Role.ADMIN)
+    await seed_link(session, user=compartilhado, tenant=tenant_a, role=Role.ATENDENTE)
+    await seed_link(session, user=compartilhado, tenant=tenant_b, role=Role.ATENDENTE)
+    headers = token_for(admin_a, tenant_slug=tenant_a.slug, role=Role.ADMIN)
+
+    reset = await client.post(
+        f"/api/membros/{compartilhado.id}/senha",
+        json={"password": "senha-do-admin-a-123"},
+        headers=headers,
+    )
+    assert reset.status_code == 409
+
+    # login com a senha ORIGINAL continua funcionando nos dois tenants
+    for slug in ("cruzadoa", "cruzadob"):
+        login = await client.post(
+            "/api/auth/login",
+            json={
+                "email": "compartilhado@cruzado.com",
+                "password": DEFAULT_PASSWORD,
+                "tenant_slug": slug,
+            },
+        )
+        assert login.status_code == 200
+
+
+async def test_vincular_email_existente_sem_outro_tenant_continua_funcionando(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Nao quebrar o caso legitimo do brief original: usuario global sem
+    nenhum vinculo (ex.: criado pelo super_admin e ainda nao alocado) continua
+    vinculavel por um admin de tenant. name/password no corpo (agora
+    obrigatorios sempre) sao ignorados -- a conta mantem identidade e senha
+    proprias.
+    """
+    tenant = await seed_tenant(session, slug="livre")
+    admin = await seed_user(session, email="admin@livre.com")
+    livre = await seed_user(session, email="livre@livre.com", name="Nome Real")
+    await seed_link(session, user=admin, tenant=tenant, role=Role.ADMIN)
+    headers = token_for(admin, tenant_slug=tenant.slug, role=Role.ADMIN)
+
+    vinculado = await client.post(
+        "/api/membros",
+        json={
+            "email": "livre@livre.com",
+            "role": "atendente",
+            "name": "Nome Que Nao Deveria Colar",
+            "password": "senha-que-nao-deveria-colar-123",
+        },
+        headers=headers,
+    )
+    assert vinculado.status_code == 201
+    body = vinculado.json()
+    assert body["id"] == str(livre.id)
+    assert body["name"] == "Nome Real"
+
+    # a senha original (nao a enviada no corpo do POST) continua valendo
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "livre@livre.com", "password": DEFAULT_PASSWORD, "tenant_slug": "livre"},
+    )
+    assert login.status_code == 200
+
+
+async def test_recusas_de_super_admin_e_de_outro_tenant_sao_indistinguiveis_na_api(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Item 3 da revisao: as duas recusas (email de super_admin, email
+    vinculado a outro tenant) tem que devolver a MESMA resposta -- mesmo
+    status e mesmo corpo -- para que o admin nao consiga diferencia-las
+    testando emails a esmo.
+    """
+    tenant_a = await seed_tenant(session, slug="indistinguivela")
+    tenant_b = await seed_tenant(session, slug="indistinguivelb")
+    admin_a = await seed_user(session, email="admin@indistinguivela.com")
+    await seed_user(session, email="sa@indistinguivel.com", is_super_admin=True)
+    de_outro_tenant = await seed_user(session, email="outro@indistinguivel.com")
+    await seed_link(session, user=admin_a, tenant=tenant_a, role=Role.ADMIN)
+    await seed_link(session, user=de_outro_tenant, tenant=tenant_b, role=Role.ATENDENTE)
+    headers = token_for(admin_a, tenant_slug=tenant_a.slug, role=Role.ADMIN)
+
+    corpo_base = {"role": "atendente", "name": "Preenchimento", "password": "senha-forte-123"}
+
+    resposta_sa = await client.post(
+        "/api/membros", json={**corpo_base, "email": "sa@indistinguivel.com"}, headers=headers
+    )
+    resposta_outro = await client.post(
+        "/api/membros", json={**corpo_base, "email": "outro@indistinguivel.com"}, headers=headers
+    )
+
+    assert resposta_sa.status_code == 404
+    assert resposta_outro.status_code == 404
+    assert resposta_sa.json() == resposta_outro.json()
+
+    # o mesmo corpo minimo (sem name/password) tambem da 422 para os dois --
+    # nao vira oraculo de "email existe" so por omitir campos.
+    minimo_sa = await client.post(
+        "/api/membros",
+        json={"email": "sa@indistinguivel.com", "role": "atendente"},
+        headers=headers,
+    )
+    minimo_inexistente = await client.post(
+        "/api/membros",
+        json={"email": "jamais-existiu@indistinguivel.com", "role": "atendente"},
+        headers=headers,
+    )
+    assert minimo_sa.status_code == 422
+    assert minimo_inexistente.status_code == 422
 
 
 async def test_admin_de_um_tenant_nao_alcanca_membro_de_outro(
