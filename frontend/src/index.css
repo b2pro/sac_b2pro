@@ -16,8 +16,25 @@
   --card-foreground: #403d39;
   --popover: #fffcf2;
   --popover-foreground: #403d39;
+  /* Paprika tem tres papeis e um valor so nao serve aos tres. Como
+     PREENCHIMENTO/BORDA/sinalizacao ele continua sendo o #eb5e28 da identidade
+     (--primary). Como TEXTO ele reprova AA nos dois temas (3,32:1 sobre o card
+     claro, 4,09:1 sobre o escuro), entao existe --primary-text: o MESMO H e S do
+     Paprika com a luminosidade movida o minimo necessario para passar 4,5:1
+     sobre a pior superficie de cada tema (L 38% no claro, L 66% no escuro).
+     E o rotulo EM CIMA do Paprika (--primary-foreground) e Carbon Black e nao
+     Floral White: 4,55:1 contra 3,32:1. Decisao de produto de 2026-08-04. */
   --primary: #eb5e28;
-  --primary-foreground: #fffcf2;
+  --primary-foreground: #252422;
+  --primary-text: #b13d11;
+  /* Hover do preenchimento primario. Era `bg-primary/90`, que compoe com a
+     superficie ATRAS do botao: no claro isso clareia o Paprika (e o rotulo
+     escuro ganha contraste) mas no escuro escurece (e o rotulo cai para
+     3,97:1). Este token congela exatamente o que o /90 rendia no tema claro
+     (Paprika a 90% sobre Floral White), entao o claro nao muda de aparencia e o
+     escuro passa a clarear tambem: 5,09:1 com o rotulo em Carbon Black nos dois
+     temas. Um valor unico, sem override no .dark. */
+  --primary-hover: #ed6e3c;
   --secondary: #ece7da;
   --secondary-foreground: #403d39;
   --muted: #ece7da;
@@ -89,7 +106,8 @@
   --popover: #2e2c29;
   --popover-foreground: #ccc5b9;
   --primary: #eb5e28;
-  --primary-foreground: #fffcf2;
+  --primary-foreground: #252422;
+  --primary-text: #f18a5f;
   --secondary: #3c3935;
   --secondary-foreground: #ccc5b9;
   --muted: #383531;
@@ -125,6 +143,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

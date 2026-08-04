@@ -9,7 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // --primary-hover (opaco) e nao `bg-primary/90`: com o rotulo em Carbon
+        // Black o /90 derrubava o hover escuro para 3,97:1, porque a
+        // transparencia compoe com a superficie atras do botao. Ver index.css.
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         // --destructive-solid (e nao --destructive) porque aqui o vermelho e
         // preenchimento: no tema escuro ele precisa ser escuro o suficiente para
         // o rotulo em --destructive-foreground passar em AA, enquanto
@@ -23,7 +26,7 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-primary-text underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

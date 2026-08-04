@@ -26,7 +26,7 @@ export function TicketQueueCard({ item }: { item: TicketListItem }) {
           title={item.unread ? "Atividade nao lida" : undefined}
           aria-label={item.unread ? "Atividade nao lida" : undefined}
         />
-        <span className="font-mono text-[13.5px] font-semibold whitespace-nowrap text-primary">
+        <span className="font-mono text-[13.5px] font-semibold whitespace-nowrap text-primary-text">
           #{item.number}
         </span>
         <span

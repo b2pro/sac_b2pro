@@ -710,7 +710,7 @@ export function ActionPanel({
               {customerNotFound ? (
                 <p className="text-xs text-muted-foreground">
                   Cliente nao encontrado —{" "}
-                  <Link to="/cadastros/clientes" className="text-primary hover:underline">
+                  <Link to="/cadastros/clientes" className="text-primary-text hover:underline">
                     cadastre em Cadastros &gt; Clientes
                   </Link>
                   . O vinculo atual foi mantido.

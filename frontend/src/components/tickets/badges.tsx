@@ -83,7 +83,9 @@ const SLA_STYLES: Record<Exclude<SlaState, "encerrado">, string> = {
   // amber-700 tem 4,90:1 sobre o card claro e so 2,77:1 sobre o escuro; no
   // escuro o aviso sobe para amber-500 (6,52:1)
   vence_em_breve: "text-amber-700 dark:text-amber-500 motion-safe:animate-pulse",
-  atrasado: "text-primary font-semibold motion-safe:animate-pulse",
+  // --primary-text e nao --primary: como TEXTO o Paprika da 3,32:1 no claro e
+  // 4,09:1 no escuro, os dois abaixo de AA (ver index.css)
+  atrasado: "text-primary-text font-semibold motion-safe:animate-pulse",
 }
 
 export function SlaBadge({ sla, dueAt }: { sla: SlaState; dueAt: string }) {

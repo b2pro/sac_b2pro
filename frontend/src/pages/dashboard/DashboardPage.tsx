@@ -261,7 +261,7 @@ export default function DashboardPage() {
                   <h2 className="text-[13.5px] font-semibold text-accent-foreground">
                     Tickets recentes
                   </h2>
-                  <Link to="/tickets" className="text-[12.5px] text-primary hover:text-primary/80">
+                  <Link to="/tickets" className="text-[12.5px] text-primary-text hover:underline">
                     Ver todos
                   </Link>
                 </div>

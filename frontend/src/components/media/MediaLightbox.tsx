@@ -43,7 +43,7 @@ function MediaPane({ item }: { item: LightboxItem }) {
         href={item.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[13px] font-semibold text-primary hover:text-primary/80"
+        className="text-[13px] font-semibold text-primary-text hover:underline"
       >
         Abrir PDF em nova aba
       </a>
@@ -114,7 +114,7 @@ export function MediaLightbox({
                 {showTicketLink && item.ticketId && item.ticketNumber !== undefined && (
                   <Link
                     to={`/tickets/${item.ticketId}`}
-                    className="mt-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:text-primary/80"
+                    className="mt-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary-text hover:underline"
                   >
                     Ver ticket <span className="font-mono">#{item.ticketNumber}</span>
                     <ArrowUpRight size={14} strokeWidth={1.5} />

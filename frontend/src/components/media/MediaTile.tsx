@@ -72,7 +72,7 @@ export function MediaTile({
         )}
       </div>
       <div className="mt-1.5 flex justify-between gap-2 text-[11.5px]">
-        <span className="truncate font-mono font-semibold text-primary">
+        <span className="truncate font-mono font-semibold text-primary-text">
           #{item.ticket_number}
         </span>
         <span className="shrink-0 font-mono text-muted-foreground">

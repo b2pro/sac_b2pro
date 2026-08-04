@@ -159,7 +159,7 @@ export default function TicketDetailPage() {
           Voltar para tickets
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-mono text-2xl font-semibold text-primary">#{ticket.number}</h1>
+          <h1 className="font-mono text-2xl font-semibold text-primary-text">#{ticket.number}</h1>
           <StatusBadge status={ticket.status} />
           <PriorityBadge priority={ticket.priority} />
           <SlaBadge sla={ticket.sla} dueAt={ticket.due_at} />
@@ -269,7 +269,7 @@ export default function TicketDetailPage() {
                   <div className="col-span-2">
                     <Link
                       to={`/tickets?customer_id=${customer.id}`}
-                      className="text-sm text-primary hover:underline"
+                      className="text-sm text-primary-text hover:underline"
                     >
                       Ver historico
                     </Link>

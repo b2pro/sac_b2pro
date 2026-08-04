@@ -44,7 +44,7 @@ export function QuickFilterChips({
               isActive
                 ? "border-accent-foreground bg-accent-foreground font-semibold text-background"
                 : isAlert
-                  ? "border-border bg-card font-semibold text-primary"
+                  ? "border-border bg-card font-semibold text-primary-text"
                   : "border-border bg-card text-foreground",
             )}
           >
@@ -53,7 +53,11 @@ export function QuickFilterChips({
               <span
                 className={cn(
                   "font-mono text-[11px]",
-                  isActive ? "text-border" : isAlert ? "text-primary" : "text-muted-foreground",
+                  isActive
+                    ? "text-border"
+                    : isAlert
+                      ? "text-primary-text"
+                      : "text-muted-foreground",
                 )}
               >
                 {count}

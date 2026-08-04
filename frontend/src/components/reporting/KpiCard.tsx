@@ -34,7 +34,7 @@ export function KpiCard({
       <div
         className={cn(
           "mt-1.5 font-mono text-[26px] font-semibold",
-          accent ? "text-primary" : "text-accent-foreground",
+          accent ? "text-primary-text" : "text-accent-foreground",
         )}
       >
         {value}
