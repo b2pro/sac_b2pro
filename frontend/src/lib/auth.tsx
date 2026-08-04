@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react"
 
 import {
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(loadSession)
+  const queryClient = useQueryClient()
 
   const login = useCallback(async (input: LoginInput) => {
     const data = await api<LoginResponse>("/auth/login", {
@@ -49,8 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession()
+    // As query keys nao levam o usuario, entao o cache sobreviveria ao logout e o
+    // proximo login na mesma aba renderizaria dado do usuario anterior (contador
+    // e titulos de notificacao, por exemplo) no intervalo entre o primeiro render
+    // e o refetch. Limpar aqui e o que garante que nao ha vazamento entre contas.
+    queryClient.clear()
     setSession(null)
-  }, [])
+  }, [queryClient])
 
   return <AuthContext.Provider value={{ session, login, logout }}>{children}</AuthContext.Provider>
 }

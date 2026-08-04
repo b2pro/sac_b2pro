@@ -42,24 +42,32 @@ export function markRead(ids: string[] | null): Promise<void> {
 
 const RECONNECT_MIN_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
-// O servidor manda "`: ping`" a cada 25s, entao silencio de mais de dois
-// heartbeats significa conexao morta. Nem toda morte chega como erro: proxy,
-// NAT ou maquina que dormiu deixam o socket aberto sem nunca mais entregar byte
+// O servidor manda "`: ping`" a cada 25s, entao passar de dois heartbeats sem
+// frame algum significa conexao morta. Nem toda morte chega como erro: proxy,
+// NAT ou maquina que dormiu deixam o socket aberto sem nunca mais entregar nada
 // e a leitura fica pendurada para sempre — sem este limite o sino ficaria mudo
 // ate o proximo reload.
 const IDLE_TIMEOUT_MS = 60_000
+// Teto da linha em montagem. Frame deste stream tem dezenas de caracteres, entao
+// 64k sem um "\n" nao e linha grande: e resposta malformada. Sem o teto o buffer
+// cresceria sem limite e o watchdog nao salvaria, porque byte ESTA chegando.
+const MAX_LINE_LENGTH = 65_536
 
 /** Le o corpo SSE linha a linha e chama `onEvent` a cada bloco de evento.
  *
  *  O framing importa: um evento termina em linha vazia, uma linha pode chegar
  *  partida entre dois chunks (por isso o buffer) e linha comecando com ":" e
  *  comentario — o heartbeat do servidor ("`: ping`") passa por aqui e nao pode
- *  virar evento (mas conta como sinal de vida, por isso `onBytes`). O conteudo
- *  do `data:` e ignorado de proposito: o evento e so sinal, quem tem a verdade
- *  e a tabela, que o cliente reconsulta. */
+ *  virar evento, mas conta como prova de que do outro lado ha um servidor de
+ *  eventos vivo, por isso `onServerFrame`. O conteudo do `data:` e ignorado de
+ *  proposito: o evento e so sinal, quem tem a verdade e a tabela, que o cliente
+ *  reconsulta.
+ *
+ *  Lanca se a linha em montagem passar de `MAX_LINE_LENGTH` — quem chamou trata
+ *  como conexao ruim e cai no backoff. */
 async function readEventStream(
   body: NonNullable<Response["body"]>,
-  handlers: { onEvent: () => void; onBytes: () => void },
+  handlers: { onEvent: () => void; onServerFrame: () => void },
 ): Promise<void> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
@@ -68,7 +76,6 @@ async function readEventStream(
   for (;;) {
     const { done, value } = await reader.read()
     if (done) return
-    handlers.onBytes()
     buffer += decoder.decode(value, { stream: true })
     let breakAt = buffer.indexOf("\n")
     while (breakAt !== -1) {
@@ -81,9 +88,14 @@ async function readEventStream(
         }
       } else if (line.startsWith("data:")) {
         hasData = true
+        handlers.onServerFrame()
+      } else if (line.startsWith(":")) {
+        // comentario/heartbeat: nao e evento, mas e sinal de vida
+        handlers.onServerFrame()
       }
       breakAt = buffer.indexOf("\n")
     }
+    if (buffer.length > MAX_LINE_LENGTH) throw new Error("linha SSE sem fim")
   }
 }
 
@@ -93,10 +105,10 @@ async function readEventStream(
  *  Usa `fetch` (via `apiRaw`) e nao `EventSource`: o endpoint exige
  *  `Authorization: Bearer` e a API nativa nao envia header — de brinde vem o
  *  refresh-and-retry do `apiRaw` no 401. Queda de conexao reconecta com backoff
- *  de 1s a 30s, e conexao que emudece por mais de `IDLE_TIMEOUT_MS` (nem os
- *  heartbeats chegam) e cortada para reabrir; resposta 4xx encerra o loop,
- *  porque nao ha o que reconectar quando a sessao ou o tenant do token nao
- *  servem. */
+ *  de 1s a 30s, que so volta ao minimo depois de a conexao entregar um frame
+ *  SSE; conexao que passa de `IDLE_TIMEOUT_MS` sem frame (nem os heartbeats
+ *  chegam) e cortada para reabrir; resposta 4xx encerra o loop, porque nao ha o
+ *  que reconectar quando a sessao ou o tenant do token nao servem. */
 export function startNotificationStream(onEvent: () => void): () => void {
   let stopped = false
   let controller: AbortController | null = null
@@ -128,13 +140,19 @@ export function startNotificationStream(onEvent: () => void): () => void {
         scheduleReconnect()
         return
       }
-      // conexao aceita: a proxima queda volta a esperar so 1s
-      delayMs = RECONNECT_MIN_MS
       await readEventStream(res.body, {
         onEvent: () => {
           if (!stopped) onEvent()
         },
-        onBytes: armWatchdog,
+        // So o frame SSE zera o backoff, nunca o 200 nos headers: upstream que
+        // aceita e encerra o corpo na hora deixaria toda tentativa "bem
+        // sucedida", e o backoff nunca sairia de 1s — uma requisicao por segundo
+        // por aba aberta, para sempre. Provar que entrega frame e o que compra o
+        // retry rapido; o mesmo frame rearma o watchdog.
+        onServerFrame: () => {
+          delayMs = RECONNECT_MIN_MS
+          armWatchdog()
+        },
       })
       // o corpo terminou sem erro: o servidor fechou o stream, reabrir
       scheduleReconnect()
