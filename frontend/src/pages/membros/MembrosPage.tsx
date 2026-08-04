@@ -129,7 +129,7 @@ export default function MembrosPage() {
   const [editing, setEditing] = useState<MemberDetail | null>(null)
   const [editRole, setEditRole] = useState<MemberRole>("atendente")
   const [editActive, setEditActive] = useState(true)
-  const [resetting, setResetting] = useState<MemberDetail | null>(null)
+  const [resetTarget, setResetTarget] = useState<MemberDetail | null>(null)
 
   const currentUserId = session?.user.id ?? null
 
@@ -174,7 +174,7 @@ export default function MembrosPage() {
     mutationFn: ({ userId, password }: { userId: string; password: string }) =>
       resetMemberPassword(userId, password),
     onSuccess: () => {
-      setResetting(null)
+      setResetTarget(null)
       toast.success("Senha redefinida")
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -199,12 +199,10 @@ export default function MembrosPage() {
     })
   }
 
-  function onEditingChange(member: MemberDetail | null) {
+  function openEdit(member: MemberDetail) {
     setEditing(member)
-    if (member) {
-      setEditRole(member.role)
-      setEditActive(member.active)
-    }
+    setEditRole(member.role)
+    setEditActive(member.active)
   }
 
   function onEdit(event: FormEvent<HTMLFormElement>) {
@@ -215,9 +213,9 @@ export default function MembrosPage() {
 
   function onReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!resetting) return
+    if (!resetTarget) return
     const form = new FormData(event.currentTarget)
-    resetMutation.mutate({ userId: resetting.id, password: String(form.get("password")) })
+    resetMutation.mutate({ userId: resetTarget.id, password: String(form.get("password")) })
   }
 
   const rows = members ?? []
@@ -361,7 +359,7 @@ export default function MembrosPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onEditingChange(member)}
+                            onClick={() => openEdit(member)}
                             aria-label={`Alterar acesso de ${member.name}`}
                           >
                             <Pencil size={16} strokeWidth={1.5} />
@@ -370,7 +368,7 @@ export default function MembrosPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setResetting(member)}
+                            onClick={() => setResetTarget(member)}
                             aria-label={`Redefinir senha de ${member.name}`}
                           >
                             <KeyRound size={16} strokeWidth={1.5} />
@@ -431,10 +429,10 @@ export default function MembrosPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={resetting != null} onOpenChange={(open) => !open && setResetting(null)}>
+      <Dialog open={resetTarget != null} onOpenChange={(open) => !open && setResetTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Redefinir senha de {resetting?.name}</DialogTitle>
+            <DialogTitle>Redefinir senha de {resetTarget?.name}</DialogTitle>
             <DialogDescription>
               A senha atual para de valer assim que voce salvar. Combine a nova com o membro.
             </DialogDescription>
