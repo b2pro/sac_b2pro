@@ -30,7 +30,11 @@ export function StatusTrail({ status, sla }: { status: TicketStatus; sla: SlaSta
           />
         ))}
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-xs text-foreground/70">
+      {/* Token cheio e nao `text-foreground/70`: a 70% o rotulo compunha #797671
+          sobre o card claro, 4,41:1, abaixo de AA para texto normal (no escuro
+          passava raspando, 4,81:1). --muted-foreground e o par ja medido para
+          texto secundario e da 5,63:1 nos DOIS temas. */}
+      <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
         <span>{STATUS_LABELS[status]}</span>
         {lateral && status !== "aguardando_cliente" ? (
           <span className="font-medium text-destructive">{STATUS_LABELS[status]}</span>
