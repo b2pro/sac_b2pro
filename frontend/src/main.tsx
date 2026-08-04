@@ -13,6 +13,7 @@ import ClientesPage from "@/pages/cadastros/ClientesPage"
 import ProdutosPage from "@/pages/cadastros/ProdutosPage"
 import DashboardPage from "@/pages/dashboard/DashboardPage"
 import LoginPage from "@/pages/LoginPage"
+import MembrosPage from "@/pages/membros/MembrosPage"
 import MidiasPage from "@/pages/midias/MidiasPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
@@ -76,6 +77,11 @@ const router = createBrowserRouter([
                 element: <CatalogPage title="Canais de compra" path="canais" />,
               },
               { path: "/cadastros/clientes", element: <ClientesPage /> },
+              // Sem guarda de papel na rota: quem nao e admin nao ve o item no
+              // menu e a API recusa as quatro chamadas com 403 (a listagem
+              // inteira exige GERENCIAR_USUARIOS), entao a tela nao tem como
+              // vazar dado — o que ela mostra e o aviso de falha na carga.
+              { path: "/membros", element: <MembrosPage /> },
             ],
           },
         ],

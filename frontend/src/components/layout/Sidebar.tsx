@@ -9,6 +9,7 @@ import {
   Store,
   Tags,
   Ticket,
+  UserCog,
   Users,
   Wrench,
 } from "lucide-react"
@@ -52,6 +53,15 @@ export function Sidebar() {
         { to: "/cadastros/canais", label: "Canais", icon: Store },
         { to: "/cadastros/clientes", label: "Clientes", icon: Contact },
       ],
+    })
+  }
+  // Grupo proprio, e nao um item em "Cadastros": controle de acesso nao e
+  // cadastro de negocio, e o unico papel que alcanca a tela e o admin
+  // (GERENCIAR_USUARIOS). Com um item so o grupo ja diz do que se trata.
+  if (session?.tenantSlug && session.role === "admin") {
+    groups.push({
+      label: "Administracao",
+      items: [{ to: "/membros", label: "Membros", icon: UserCog }],
     })
   }
 
