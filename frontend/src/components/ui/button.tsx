@@ -10,10 +10,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // --destructive-solid (e nao --destructive) porque aqui o vermelho e
+        // preenchimento: no tema escuro ele precisa ser escuro o suficiente para
+        // o rotulo em --destructive-foreground passar em AA, enquanto
+        // --destructive clareia para servir de cor de texto. Sem o antigo
+        // dark:bg-destructive/60, que lavava o botao para um marrom.
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
+          "bg-destructive-solid text-destructive-foreground hover:bg-destructive-solid/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border bg-background hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:

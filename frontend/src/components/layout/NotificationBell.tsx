@@ -120,7 +120,7 @@ export function NotificationBell() {
           <Bell size={20} strokeWidth={1.5} />
           <span aria-live="polite" className="pointer-events-none absolute -top-0.5 -right-0.5">
             {unread > 0 ? (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-primary px-1 font-mono text-[10px] leading-none font-medium tabular-nums text-primary-foreground ring-1 ring-background">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-primary px-1 font-mono text-[10px] leading-none font-medium tabular-nums text-primary-foreground ring-1 ring-background">
                 <span aria-hidden="true">{unread > 99 ? "99+" : unread}</span>
                 <span className="sr-only">{unreadLabel(unread)}</span>
               </span>

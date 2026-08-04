@@ -63,7 +63,9 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-2">
         {groups.map((group) => (
           <div key={group.label} className="mb-4">
-            <p className="px-4 py-2 text-xs uppercase tracking-wider text-sidebar-foreground/60">
+            {/* /70 e nao /60: a 60% o rotulo do grupo dava 4,22:1 no tema claro
+                e 4,48:1 no escuro, os dois abaixo de AA para texto normal */}
+            <p className="px-4 py-2 text-xs uppercase tracking-wider text-sidebar-foreground/70">
               {group.label}
             </p>
             {group.items.map((item) => (

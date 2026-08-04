@@ -5,6 +5,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Superficies do tema claro, do fundo para o topo:
+   sidebar #252422 < background/card/popover #fffcf2 < muted/secondary/accent
+   #ece7da < border #ccc5b9. A navegacao e a superficie mais escura da tela
+   (identidade visual: "navegacao escura contra conteudo claro"). */
 :root {
   --background: #fffcf2;
   --foreground: #403d39;
@@ -17,10 +21,19 @@
   --secondary: #ece7da;
   --secondary-foreground: #403d39;
   --muted: #ece7da;
-  --muted-foreground: #736e66;
+  /* 4,68:1 sobre --muted e 5,63:1 sobre --card. Era #736e66, que dava 4,10:1
+     sobre --muted (abaixo de AA para texto normal: o rotulo mono de tipo de
+     arquivo na galeria e o badge de "Cancelado" ficam exatamente nesse par). */
+  --muted-foreground: #6a655d;
   --accent: #ece7da;
   --accent-foreground: #252422;
+  /* Dois vermelhos, nao um: --destructive e cor de TEXTO/borda (precisa ser
+     escura no claro e clara no escuro) e --destructive-solid e o PREENCHIMENTO
+     do botao (precisa do contraste inverso, para o rotulo em cima dele). No
+     tema claro os dois coincidem; no escuro nao ha um valor que sirva aos
+     dois. */
   --destructive: #b3261e;
+  --destructive-solid: #b3261e;
   --destructive-foreground: #fffcf2;
   --border: #ccc5b9;
   --input: #ccc5b9;
@@ -34,8 +47,40 @@
   --sidebar-accent-foreground: #fffcf2;
   --sidebar-border: #403d39;
   --sidebar-ring: #eb5e28;
+  /* Cor de cada status do ticket, usada em tres lugares que antes repetiam a
+     mesma lista de classes do Tailwind: a borda esquerda de 3px do card da
+     fila, a mesma borda na linha da tabela e o preenchimento da barra no
+     grafico de distribuicao. Todas passam de 3:1 contra a superficie do tema
+     (medido; ver task-15-report.md). "Cancelado" e o unico neutro de
+     proposito — estado inativo — e usa o cinza quente da paleta, nao o
+     cinza-azulado do zinc, que a identidade rejeita. */
+  --status-aberto: #0084d1;
+  --status-aguardando-cliente: #fe9a00;
+  --status-aguardando-analise: #8e51ff;
+  --status-aprovado: #009966;
+  --status-aguardando-envio-reverso: #615fff;
+  --status-produto-recebido: #009689;
+  --status-finalizado: #007a55;
+  --status-declinado: #ec003f;
+  --status-cancelado: #8d877d;
 }
 
+/* Superficies do tema escuro, na MESMA ordem relativa do claro:
+   sidebar #1b1a19 < background #252422 < card/popover #2e2c29 < muted #383531
+   < secondary/accent #3c3935 < border #4a4640.
+
+   O sidebar continua sendo a superficie mais escura da tela — e por isso ele
+   escurece abaixo do Carbon Black no tema escuro, em vez de ficar igual ao
+   fundo do conteudo. A relacao que a identidade descreve ("separa onde eu
+   navego de onde eu trabalho") e o que se preserva; o "escuro contra claro"
+   literal nao tem como valer num tema onde nada e claro.
+
+   No escuro os preenchimentos SOBEM a partir da superficie (no claro eles
+   descem), e por isso muted/secondary/accent se separam em dois valores aqui e
+   sao um valor unico no claro: --muted e o fundo passivo (skeleton, placeholder
+   de midia) e --secondary/--accent sao fundo de selecao/hover, que precisa
+   subir mais. --muted-foreground clareia junto para continuar em AA sobre o
+   mais claro dos dois (4,64:1 sobre #3c3935). */
 .dark {
   --background: #252422;
   --foreground: #ccc5b9;
@@ -45,17 +90,30 @@
   --popover-foreground: #ccc5b9;
   --primary: #eb5e28;
   --primary-foreground: #fffcf2;
-  --secondary: #403d39;
+  --secondary: #3c3935;
   --secondary-foreground: #ccc5b9;
-  --muted: #403d39;
-  --muted-foreground: #8d877d;
-  --accent: #403d39;
+  --muted: #383531;
+  --muted-foreground: #aaa49b;
+  --accent: #3c3935;
   --accent-foreground: #fffcf2;
-  --destructive: #d64545;
+  --destructive: #f2897c;
+  --destructive-solid: #c8342a;
   --destructive-foreground: #fffcf2;
-  --border: #403d39;
-  --input: #403d39;
+  --border: #4a4640;
+  --input: #4a4640;
   --ring: #ccc5b9;
+  --sidebar: #1b1a19;
+  --sidebar-accent: #34312d;
+  --sidebar-border: #34312d;
+  --status-aberto: #00a6f4;
+  --status-aguardando-cliente: #fe9a00;
+  --status-aguardando-analise: #a684ff;
+  --status-aprovado: #00d492;
+  --status-aguardando-envio-reverso: #7c86ff;
+  --status-produto-recebido: #46ecd5;
+  --status-finalizado: #009966;
+  --status-declinado: #ff2056;
+  --status-cancelado: #8d877d;
 }
 
 @theme inline {
@@ -74,6 +132,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -88,10 +147,15 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: "Public Sans Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-  --radius-sm: calc(var(--radius) - 2px);
+  /* A escala inteira cabe na faixa da identidade visual (4-6px, nunca zero):
+     4px, 5px, 6px, 6px. Com a escala do Tailwind crua, `rounded-lg` dava 7px e
+     `rounded-xl` (o Card do shadcn) dava 9px, fora da faixa; clampar aqui
+     conserta todo componente que ja usa esses nomes, sem editar nenhum. */
+  --radius-xs: calc(var(--radius) - 1px);
+  --radius-sm: calc(var(--radius) - 1px);
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: calc(var(--radius) + 1px);
+  --radius-xl: calc(var(--radius) + 1px);
 }
 
 @layer base {

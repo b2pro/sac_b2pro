@@ -97,7 +97,11 @@ createRoot(document.getElementById("root")!).render(
         proprio next-themes so roda depois do primeiro paint. Mudar storageKey,
         attribute ou enableSystem aqui obriga a mudar index.html no mesmo
         commit, senao o app abre num tema e troca para outro. */}
-    <ThemeProvider attribute="class" themes={["light", "dark"]} enableSystem>
+    {/* disableTransitionOnChange: sem ele, trocar de tema anima de uma vez todo
+        elemento com transition-colors (chips, linhas de tabela, cards, campos),
+        e a troca vira um esmaecimento lento em cascata em vez de um corte. O
+        next-themes suspende as transicoes durante a troca e devolve depois. */}
+    <ThemeProvider attribute="class" themes={["light", "dark"]} enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <RouterProvider router={router} />
