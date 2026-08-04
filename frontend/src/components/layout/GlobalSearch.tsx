@@ -54,9 +54,12 @@ function optionId(index: number): string {
 /** Cabecalho de grupo: rotulo, regua ate a margem e a contagem em mono. A
  *  contagem nao e enfeite — o servidor corta em 5 por grupo, entao ver "5" e
  *  saber que pode haver mais fora da lista. */
+/** `aria-hidden`: o rotulo ja chega ao leitor de tela pelo `aria-label` do
+ *  `role="group"` que envolve o grupo, e um div solto entre as opcoes quebraria a
+ *  estrutura que o papel de listbox promete. Aqui ele e puramente visual. */
 function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
-    <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+    <div aria-hidden="true" className="flex items-center gap-2 px-3 pt-3 pb-1">
       <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </span>
@@ -123,18 +126,33 @@ export function GlobalSearch() {
 
   const debounced = useDebounce(term, DEBOUNCE_MS)
   const trimmed = debounced.trim()
-  const canSearch = trimmed.length >= MIN_SEARCH_LENGTH
+  // `live` e o termo que esta na caixa AGORA; `trimmed` e o espelho atrasado em
+  // 250ms. Tudo que aparece na lista e tudo que o Enter aciona sai do `live`:
+  // gatear pelo espelho deixava resultado de termo anterior na tela (e
+  // acionavel) enquanto a caixa dizia outra coisa — reabrir a palette dentro da
+  // janela do debounce mostrava a lista antiga sob um campo vazio, e apagar o
+  // termo para 1 caractere nao voltava ao estado inicial.
+  const live = term.trim()
+  const canSearch = live.length >= MIN_SEARCH_LENGTH
+  // O debounce alcancou o termo da caixa. Enquanto nao alcanca, nao ha resultado
+  // que pertenca ao termo digitado, e a lista fica em "Buscando...".
+  const settled = live === trimmed
 
   // A chave inclui o termo, e por isso resposta lenta de um termo antigo nao
   // sobrescreve a de um termo novo: cada termo tem sua propria entrada no cache
   // e o componente le sempre a do termo atual.
-  const { data, isLoading, isError } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["busca", trimmed],
     queryFn: () => globalSearch(trimmed),
-    enabled: open && canSearch,
+    enabled: open && canSearch && settled,
   })
 
-  const entries = useMemo(() => flatten(data, canSearch), [data, canSearch])
+  // Os resultados so contam quando pertencem ao termo da caixa. Sem este porteiro
+  // unico, cada trecho do render teria que repetir a checagem — e um que
+  // esquecesse voltaria a mostrar (ou a abrir) o resultado do termo anterior.
+  const hits = canSearch && settled ? data : undefined
+
+  const entries = useMemo(() => flatten(hits, canSearch), [hits, canSearch])
 
   // O indice do realce e guardado junto da lista a que pertence, e por isso
   // volta ao topo sozinho quando a lista muda de identidade (termo novo,
@@ -160,10 +178,19 @@ export function GlobalSearch() {
       if (!event.ctrlKey && !event.metaKey) return
       // AltGr do teclado ABNT2 chega como Ctrl+Alt: sem esta guarda, digitar um
       // caractere de terceiro nivel abriria a busca no meio de um formulario.
-      if (event.altKey) return
+      // Shift tambem esta fora: Ctrl+Shift+K e o console do Firefox, e o atalho
+      // pedido e Ctrl+K — nao "Ctrl+K com qualquer modificador extra".
+      if (event.altKey || event.shiftKey) return
       // o navegador tambem usa Ctrl+K (busca na barra de endereco): sem o
       // preventDefault o foco sairia da pagina junto com a abertura do dialog
       event.preventDefault()
+      // O atalho fecha por fora do Radix, entao nao passa por `onOpenChange` e
+      // precisa fazer o mesmo reset dele — sem isto, fechar pelo atalho guardava
+      // o termo e reabrir trazia a busca anterior de volta. Limpar vale nos dois
+      // sentidos: ao abrir o termo ja esta vazio e isto e no-op, e assim o
+      // listener nao precisa ler `open` (nem ser recriado a cada render).
+      setTerm("")
+      setHighlight(null)
       setOpen((current) => !current)
     }
     window.addEventListener("keydown", onShortcut)
@@ -197,7 +224,10 @@ export function GlobalSearch() {
       navigate("/cadastros/produtos")
       return
     }
-    navigate(`/tickets?q=${encodeURIComponent(trimmed)}`)
+    // `live` e nao `trimmed`: a fila nao depende de resposta do servidor, entao
+    // nao ha motivo para levar o termo atrasado. Com o espelho, dar Enter aqui
+    // antes do debounce fechar mandava para /tickets?q= do termo anterior.
+    navigate(`/tickets?q=${encodeURIComponent(live)}`)
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -219,19 +249,24 @@ export function GlobalSearch() {
     }
   }
 
-  const tickets = data?.tickets ?? []
-  const clientes = data?.clientes ?? []
-  const produtos = data?.produtos ?? []
+  const tickets = hits?.tickets ?? []
+  const clientes = hits?.clientes ?? []
+  const produtos = hits?.produtos ?? []
   // Os deslocamentos vem dos mesmos grupos que a lista renderiza, e por isso o
   // indice de cada linha na tela e exatamente o indice dela em `entries` — o
   // que o teclado percorre e o que o olho ve.
   const clienteOffset = tickets.length
   const produtoOffset = clienteOffset + clientes.length
   const filaIndex = produtoOffset + produtos.length
+  // Os quatro estados da lista, exaustivos e nesta ordem — nenhum termo, erro
+  // sem nada em tela, esperando o termo da caixa, e resultado. Derivar de `hits`
+  // (nao de `data`) e o que garante que a mensagem descreve o termo digitado.
+  const mostrarErro = canSearch && settled && isError && data == null
+  const buscando = canSearch && !mostrarErro && hits == null
   // `entries` tem so a acao de fila: consultou e nenhum grupo trouxe nada.
-  const semResultados = canSearch && data != null && entries.length === 1
+  const semResultados = hits != null && entries.length === 1
 
-  function renderEntry(entry: Entry, index: number) {
+  function renderEntry(entry: Entry, index: number, extraClass?: string) {
     const isActive = index === active
     const railAtRest = entry.kind === "ticket" ? STATUS_ACCENTS[entry.item.status] : ""
     return (
@@ -256,6 +291,7 @@ export function GlobalSearch() {
           // Paprika: um elemento so diz "que tipo de linha" e "onde estou".
           "flex cursor-pointer items-center gap-3 border-l-[3px] px-3 py-2 text-sm",
           isActive ? "border-l-primary bg-secondary" : railAtRest || "border-l-transparent",
+          extraClass,
         )}
       >
         <EntryContent entry={entry} />
@@ -294,7 +330,7 @@ export function GlobalSearch() {
             onChange={(event) => setTerm(event.target.value)}
             onKeyDown={onKeyDown}
             role="combobox"
-            aria-expanded
+            aria-expanded={entries.length > 0}
             aria-controls="busca-resultados"
             aria-autocomplete="list"
             aria-activedescendant={entries.length > 0 ? optionId(active) : undefined}
@@ -321,10 +357,10 @@ export function GlobalSearch() {
                 </p>
               </div>
             ) : null}
-            {canSearch && isLoading ? (
+            {buscando ? (
               <p className="px-3 py-6 text-sm text-muted-foreground">Buscando...</p>
             ) : null}
-            {canSearch && isError && data == null ? (
+            {mostrarErro ? (
               <p className="px-3 py-6 text-sm text-destructive">Nao foi possivel buscar agora.</p>
             ) : null}
             {semResultados ? (
@@ -354,11 +390,11 @@ export function GlobalSearch() {
                 )}
               </div>
             ) : null}
-            {canSearch ? (
-              <div className="mt-1 border-t border-border pt-1">
-                {renderEntry({ kind: "fila" }, filaIndex)}
-              </div>
-            ) : null}
+            {/* o separador vai na propria opcao: um div envolvendo-a seria filho
+                direto do listbox sem ser opcao nem grupo. A cor do border-t vem
+                do `* { border-border }` da base, entao nao ha classe de cor que
+                possa vazar para a trilha da esquerda. */}
+            {canSearch ? renderEntry({ kind: "fila" }, filaIndex, "mt-1 border-t") : null}
           </div>
         </div>
       </DialogContent>
