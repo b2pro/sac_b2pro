@@ -29,6 +29,12 @@ const SURFACE_LIGHT = "#fffcf2"
 const SURFACE_DARK = "#252422"
 const LINE_LIGHT = "#ccc5b9"
 const LINE_DARK = "#4a4640"
+// --sidebar-border: o mesmo divisor que a navegacao real tem a direita. No tema
+// escuro ele e obrigatorio na amostra pelo mesmo motivo que e obrigatorio na
+// tela — #1b1a19 contra #252422 e 1,12:1, e sem a linha a faixa de navegacao
+// desaparece dentro da area de trabalho.
+const NAV_LINE_LIGHT = "#403d39"
+const NAV_LINE_DARK = "#34312d"
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: LucideIcon }[] = [
   { value: "claro", label: "Claro", icon: Sun },
@@ -52,8 +58,11 @@ function ThemeSwatch({ theme }: { theme: Theme }) {
       {surfaces.map((dark) => (
         <span key={dark ? "dark" : "light"} className="flex min-w-0 flex-1">
           <span
-            className="w-1/5 shrink-0"
-            style={{ backgroundColor: dark ? NAV_DARK : NAV_LIGHT }}
+            className="w-1/5 shrink-0 border-r"
+            style={{
+              backgroundColor: dark ? NAV_DARK : NAV_LIGHT,
+              borderRightColor: dark ? NAV_LINE_DARK : NAV_LINE_LIGHT,
+            }}
           />
           <span
             className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 px-2"

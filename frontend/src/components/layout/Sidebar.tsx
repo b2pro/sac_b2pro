@@ -56,7 +56,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+    // `border-r` e estrutural, nao decoracao: no tema claro o degrau de
+    // superficie entre a navegacao e o conteudo e 15,11:1 e a separacao se ve
+    // sozinha, mas no escuro --sidebar (#1b1a19) e --background (#252422) estao
+    // a 1,12:1 e sem divisor a coluna de navegacao e a area de trabalho viram
+    // uma superficie so. A borda (--sidebar-border, 1,34:1 contra o sidebar e
+    // 1,20:1 contra o fundo) devolve o limite que a identidade visual chama de
+    // estrutural, e usa o mesmo token do divisor do cabecalho logo abaixo.
+    <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border px-4 py-4 text-sm font-semibold tracking-wide text-sidebar-accent-foreground">
         SAC B2PRO
       </div>
