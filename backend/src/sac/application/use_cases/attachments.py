@@ -196,6 +196,16 @@ class ConfirmUploadUseCase:
         if is_closed(ticket):
             raise ConflictError("ticket encerrado nao aceita anexos")
         anexo = await _attachment_of_ticket(self._attachments, ticket.id, attachment_id)
+        # Intencao expirada nunca volta a viver. _attachment_of_ticket so barra
+        # deleted_at, e a expiracao nao marca deleted_at (apenas
+        # status=EXPIRADO), entao sem esta guarda o confirmar gravaria DISPONIVEL
+        # numa linha morta - possivelmente apontando para um objeto que a
+        # reconciliacao de orfaos ja apagou do bucket, o que produziria anexo
+        # visivel na listagem e quebrado no download. Nada legitimo cai aqui: a
+        # URL assinada do upload dura ttl_seconds (300s por padrao), muito menos
+        # que a janela de expiracao.
+        if anexo.status is AttachmentStatus.EXPIRADO:
+            raise ConflictError("intencao de upload expirada")
 
         head = self._storage.head(anexo.object_key)
         if head is None:

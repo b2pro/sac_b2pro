@@ -384,8 +384,9 @@ async def test_reconciliacao_apaga_orfaos_e_preserva_chaves_conhecidas(
     MinIO de verdade. Ficam: o original e as DUAS previews do anexo ativo, a
     foto do produto, seu preview gravado e o preview medio derivado (que o
     worker escreve no bucket mas nenhuma coluna guarda). Saem: o objeto do
-    anexo excluido por soft delete que a Task 10 nao conseguiu apagar e o
-    upload que ganhou URL assinada e nunca virou linha."""
+    anexo excluido por soft delete e o do anexo EXPIRADO - as duas delecoes
+    diretas que a Task 10 pode perder, e a expiracao nunca marca deleted_at -
+    mais o upload que ganhou URL assinada e nunca virou linha."""
     from sac.domain.cadastros import Product
     from sac.infrastructure.repositories_cadastros import SqlProductRepository
     from sac.infrastructure.worker import reconcile_orphans_all
@@ -433,6 +434,21 @@ async def test_reconciliacao_apaga_orfaos_e_preserva_chaves_conhecidas(
                 deleted_at=datetime.now(UTC),
             )
         )
+        expirado_key = f"{tenant.slug}/{ticket_id}/{uuid4()}.png"
+        await repos.attachments.add(
+            TicketAttachment(
+                id=uuid4(),
+                ticket_id=ticket_id,
+                filename="expirado.png",
+                content_type="image/png",
+                size_bytes=8,
+                object_key=expirado_key,
+                kind=AttachmentKind.IMAGEM,
+                status=AttachmentStatus.EXPIRADO,
+                preview_status=PreviewStatus.SEM_PREVIEW,
+                author_user_id=user.id,
+            )
+        )
         await SqlProductRepository(ts).add(
             Product(id=produto_id, name="Alicate com foto", sku=f"RO-{produto_id.hex[:8]}")
         )
@@ -441,19 +457,20 @@ async def test_reconciliacao_apaga_orfaos_e_preserva_chaves_conhecidas(
 
     solto = f"{tenant.slug}/{uuid4()}/upload-sem-linha.png"
     conhecidos = (ativo_key, ativo_thumb, ativo_medium, foto, foto_thumb, foto_medium)
-    for chave in (*conhecidos, excluido_key, solto):
+    orfaos = (excluido_key, expirado_key, solto)
+    for chave in (*conhecidos, *orfaos):
         storage.put_bytes(chave, b"conteudo", "image/png")
 
     # margem de idade: nada recem-gravado sai, nem o upload sem linha - senao a
     # varredura destruiria uploads em voo.
     await reconcile_orphans_all(engine, storage, hours=24)
-    assert storage.head(solto) is not None
-    assert storage.head(excluido_key) is not None
+    for chave in (*conhecidos, *orfaos):
+        assert storage.head(chave) is not None, chave
 
     await reconcile_orphans_all(engine, storage, hours=0)
 
-    assert storage.head(solto) is None
-    assert storage.head(excluido_key) is None
+    for chave in orfaos:
+        assert storage.head(chave) is None, chave
     for chave in conhecidos:
         assert storage.head(chave) is not None, chave
 

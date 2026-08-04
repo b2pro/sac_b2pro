@@ -222,22 +222,37 @@ class SqlProductPhotoRepository:
         return m.photo_key, m.photo_preview_key
 
 
+# Colunas de chave de objeto das duas fontes de chaves conhecidas. Existem como
+# constante, e nao inline na consulta, porque
+# tests/unit/infrastructure/test_reconcile_guards.py compara estas listas com as
+# colunas `*_key` reais dos modelos: uma coluna de chave nova quebra o teste alto
+# e claro, em vez de virar delecao silenciosa do objeto que ela aponta na
+# proxima varredura.
+ATTACHMENT_KEY_COLUMNS = (
+    TicketAttachmentModel.object_key,
+    TicketAttachmentModel.preview_key,
+    TicketAttachmentModel.preview_medium_key,
+)
+PRODUCT_KEY_COLUMNS = (ProductModel.photo_key, ProductModel.photo_preview_key)
+
+
 class SqlKnownKeysRepository:
     """Uniao das chaves de objeto que este tenant ainda reconhece. Alimenta a
     reconciliacao de orfaos, que apaga do bucket o que NAO estiver aqui - uma
     fonte esquecida nesta consulta e anexo vivo destruido.
 
-    Sao duas fontes, e as duas usam `deleted_at IS NULL` como definicao de
+    Sao duas fontes, e nas duas `deleted_at IS NULL` faz parte da definicao de
     legitimo:
 
-    - `ticket_attachments`: object_key + as duas previews. So linhas ativas. A
-      linha excluida por soft delete e o caso que esta varredura existe para
-      alcancar - a exclusao ja apaga os objetos direto (best-effort) e nao ha
-      caminho de restauracao de anexo, entao o objeto de um anexo excluido tem
-      que sumir; protege-lo aqui deixaria a rede de seguranca sem nada para
-      pegar. Anexo EXPIRADO continua conhecido: ele nao foi excluido, so perdeu
-      a vez (seus objetos ja foram apagados pela expiracao, entao a lista nao
-      custa nada).
+    - `ticket_attachments`: object_key + as duas previews, das linhas ativas e
+      NAO expiradas. Os dois estados excluidos sao justamente os que a delecao
+      direta (best-effort) pode perder: a exclusao e o descarte marcam
+      deleted_at, e a expiracao marca apenas status=EXPIRADO e nunca deleted_at.
+      Como nao existe caminho de restauracao de anexo - e confirmar uma intencao
+      expirada e recusado com conflito - o objeto dessas linhas tem que sumir;
+      proteger qualquer uma delas aqui deixaria a rede de seguranca sem nada
+      para pegar. O filtro de status e por diferenca (`!= EXPIRADO`) e nao por
+      lista: um status novo no futuro entra protegido, que e o lado seguro.
     - `products`: photo_key, photo_preview_key e AS DUAS previews derivadas da
       foto. A derivacao nao e enfeite: o worker escreve thumb e medium no
       bucket, mas a tabela guarda so a thumb (`photo_preview_key`), entao sem
@@ -252,16 +267,15 @@ class SqlKnownKeysRepository:
     async def known_keys(self) -> set[str]:
         chaves: set[str] = set()
         anexos = await self._session.execute(
-            select(
-                TicketAttachmentModel.object_key,
-                TicketAttachmentModel.preview_key,
-                TicketAttachmentModel.preview_medium_key,
-            ).where(TicketAttachmentModel.deleted_at.is_(None))
+            select(*ATTACHMENT_KEY_COLUMNS).where(
+                TicketAttachmentModel.deleted_at.is_(None),
+                TicketAttachmentModel.status != str(AttachmentStatus.EXPIRADO),
+            )
         )
         for linha in anexos.all():
             chaves.update(chave for chave in linha if chave)
         fotos = await self._session.execute(
-            select(ProductModel.photo_key, ProductModel.photo_preview_key).where(
+            select(*PRODUCT_KEY_COLUMNS).where(
                 ProductModel.deleted_at.is_(None),
                 or_(
                     ProductModel.photo_key.is_not(None),

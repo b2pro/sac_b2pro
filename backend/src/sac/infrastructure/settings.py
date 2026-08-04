@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,10 +22,13 @@ class Settings(BaseSettings):
     s3_secret_key: str = "sacminio123"
     presigned_ttl_seconds: int = 300
     pending_expiration_minutes: int = 30
-    # margem de idade da reconciliacao de orfaos: objeto mais novo que isso
+    # Margem de idade da reconciliacao de orfaos: objeto mais novo que isso
     # nunca e apagado, porque pode ser um upload em voo (objeto no bucket, linha
-    # ainda nao gravada). Nao reduzir em producao.
-    reconcile_orphans_hours: int = 24
+    # ainda nao gravada - a foto de produto nao tem linha nenhuma antes do
+    # confirmar). O floor ge=1 e a guarda de verdade: zerar isso por env ou por
+    # override de compose destruiria todo upload em andamento na proxima
+    # passada, sem volta, e comentario nao segura operacao irreversivel.
+    reconcile_orphans_hours: int = Field(default=24, ge=1)
     attachment_max_bytes: int = 52_428_800
     attachment_max_per_ticket: int = 10
     trusted_proxy: bool = False

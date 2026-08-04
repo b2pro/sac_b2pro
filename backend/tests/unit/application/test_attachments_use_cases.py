@@ -531,6 +531,34 @@ async def test_descartar_intencao_expirada_nao_reescreve_a_linha() -> None:
     assert intent.object_key not in env.storage.deleted
 
 
+async def test_confirmar_intencao_expirada_da_conflito_e_nao_ressuscita_a_linha() -> None:
+    """A varredura de reconciliacao (Task 11) apaga do bucket o objeto de um
+    anexo EXPIRADO depois de 24h. Sem guarda de status, o confirmar aceitaria
+    essa linha morta e gravaria DISPONIVEL apontando para um objeto destruido -
+    anexo visivel na listagem e quebrado no download. Nada legitimo ressuscita
+    uma intencao expirada: a URL assinada dura 300s.
+    """
+    env = Env()
+    ticket = await env.ticket()
+    intent = await env.request_uc().execute(
+        ADMIN, ticket.id, UploadIntentInput("foto.jpg", "image/jpeg", 10)
+    )
+    env.storage.simulate_upload(intent.object_key, b"1234567890", "image/jpeg")
+    anexo = await env.attachments.get(intent.attachment_id)
+    assert anexo is not None
+    anexo.status = AttachmentStatus.EXPIRADO
+    await env.attachments.update(anexo)
+
+    with pytest.raises(ConflictError):
+        await env.confirm_uc().execute(ADMIN, ticket.id, intent.attachment_id)
+
+    ainda_expirado = await env.attachments.get(intent.attachment_id)
+    assert ainda_expirado is not None
+    assert ainda_expirado.status is AttachmentStatus.EXPIRADO
+    assert ainda_expirado.confirmed_at is None
+    assert await env.attachments.count_active(ticket.id) == 0
+
+
 async def test_descartar_intencao_inexistente_da_404() -> None:
     env = Env()
     ticket = await env.ticket()
