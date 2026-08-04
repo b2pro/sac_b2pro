@@ -54,19 +54,19 @@ export function MediaTile({
             </span>
           </div>
         )}
+        {/* Os dois selos abaixo ficam por cima da foto do anexo, e nao de uma
+            superficie do tema: preto translucido com glifo branco vale nos dois
+            temas. Com tokens (--accent-foreground / --background) eles invertiam
+            no escuro e viravam selo claro sobre imagem clara. */}
         {showPreview && item.kind === "video" && (
           <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex size-10 items-center justify-center rounded-full bg-accent-foreground/65">
-              <Play
-                size={18}
-                strokeWidth={1.5}
-                className="ml-0.5 fill-background text-background"
-              />
+            <span className="flex size-10 items-center justify-center rounded-full bg-black/65">
+              <Play size={18} strokeWidth={1.5} className="ml-0.5 fill-white text-white" />
             </span>
           </span>
         )}
         {showChip && (
-          <span className="absolute right-1.5 bottom-1.5 flex size-[22px] items-center justify-center rounded-sm bg-accent-foreground/65 text-background">
+          <span className="absolute right-1.5 bottom-1.5 flex size-[22px] items-center justify-center rounded-sm bg-black/65 text-white">
             <Icon size={12} strokeWidth={1.5} />
           </span>
         )}

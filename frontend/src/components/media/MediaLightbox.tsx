@@ -67,7 +67,11 @@ export function MediaLightbox({
   return (
     <DialogPrimitive.Root open={item != null} onOpenChange={(open) => !open && onClose()}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-accent-foreground/80 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        {/* Escurecedor preto translucido, e nao um token do tema: --accent-foreground
+            inverte no tema escuro e a cortina virava um veu quase branco por cima
+            do app. Mesma familia do overlay do Dialog (bg-black/50), so mais densa
+            porque aqui o assunto e a midia. */}
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100vh-4rem)] w-[calc(100%-4rem)] max-w-[920px] -translate-x-1/2 -translate-y-1/2 flex-wrap overflow-hidden rounded-md border border-border bg-card outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
           {item && (
             <>

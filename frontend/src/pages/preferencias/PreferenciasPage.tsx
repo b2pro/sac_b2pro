@@ -19,14 +19,16 @@ import {
 import { cn } from "@/lib/utils"
 
 // Hex literal, e nao os tokens do tema: a amostra mostra como CADA tema fica,
-// entao ela e a unica coisa da tela que nao pode acompanhar o tema ativo. A
-// faixa de navegacao e escura nos dois temas (o sidebar e Carbon Black sempre),
-// so a area de trabalho troca.
-const NAV = "#252422"
+// entao ela e a unica coisa da tela que nao pode acompanhar o tema ativo. Os
+// valores tem que espelhar os tokens de index.css — a faixa de navegacao e
+// sempre a superficie mais escura da tela, e no tema escuro isso significa um
+// tom ABAIXO do Carbon Black, senao a navegacao encostaria na area de trabalho.
+const NAV_LIGHT = "#252422"
+const NAV_DARK = "#1b1a19"
 const SURFACE_LIGHT = "#fffcf2"
-const SURFACE_DARK = "#2e2c29"
+const SURFACE_DARK = "#252422"
 const LINE_LIGHT = "#ccc5b9"
-const LINE_DARK = "#403d39"
+const LINE_DARK = "#4a4640"
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: LucideIcon }[] = [
   { value: "claro", label: "Claro", icon: Sun },
@@ -38,23 +40,28 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
 }
 
-/** Miniatura da propria interface — faixa de navegacao escura mais a area de
- *  trabalho — em vez de bolinha de radio: quem escolhe reconhece o produto no
- *  tema, sem depender da palavra. "Sistema" parte a area de trabalho ao meio
- *  porque e literalmente o que ele faz: vale um ou o outro. */
+/** Miniatura da propria interface — faixa de navegacao mais a area de trabalho —
+ *  em vez de bolinha de radio: quem escolhe reconhece o produto no tema, sem
+ *  depender da palavra. "Sistema" mostra as duas miniaturas lado a lado porque e
+ *  literalmente o que ele faz: vale um ou o outro. Cada metade leva a propria
+ *  faixa de navegacao, ja que a navegacao tambem muda de tom entre os temas. */
 function ThemeSwatch({ theme }: { theme: Theme }) {
   const surfaces = theme === "sistema" ? [false, true] : [theme === "escuro"]
   return (
     <span aria-hidden="true" className="flex h-12 overflow-hidden rounded-sm border border-border">
-      <span className="w-1/5 shrink-0" style={{ backgroundColor: NAV }} />
       {surfaces.map((dark) => (
-        <span
-          key={dark ? "dark" : "light"}
-          className="flex flex-1 flex-col justify-center gap-1.5 px-2"
-          style={{ backgroundColor: dark ? SURFACE_DARK : SURFACE_LIGHT }}
-        >
-          <span className="h-1" style={{ backgroundColor: dark ? LINE_DARK : LINE_LIGHT }} />
-          <span className="h-1 w-2/3" style={{ backgroundColor: dark ? LINE_DARK : LINE_LIGHT }} />
+        <span key={dark ? "dark" : "light"} className="flex min-w-0 flex-1">
+          <span
+            className="w-1/5 shrink-0"
+            style={{ backgroundColor: dark ? NAV_DARK : NAV_LIGHT }}
+          />
+          <span
+            className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 px-2"
+            style={{ backgroundColor: dark ? SURFACE_DARK : SURFACE_LIGHT }}
+          >
+            <span className="h-1" style={{ backgroundColor: dark ? LINE_DARK : LINE_LIGHT }} />
+            <span className="h-1 w-2/3" style={{ backgroundColor: dark ? LINE_DARK : LINE_LIGHT }} />
+          </span>
         </span>
       ))}
     </span>

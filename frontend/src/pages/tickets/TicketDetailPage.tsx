@@ -334,7 +334,10 @@ export default function TicketDetailPage() {
                           className={cn(
                             "max-w-[80%] rounded-md border px-3 py-2 text-sm",
                             mine
-                              ? "border-primary/30 bg-primary/5"
+                              // no escuro a mesma tinta a 5% desaparece sobre o
+                              // card: a bolha propria precisa de mais Paprika
+                              // para continuar distinguivel da do colega
+                              ? "border-primary/30 bg-primary/5 dark:border-primary/40 dark:bg-primary/15"
                               : "border-border bg-muted/40",
                           )}
                         >
