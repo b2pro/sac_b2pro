@@ -45,7 +45,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = build_engine(settings.database_url)
     app.state.session_factory = build_session_factory(app.state.engine)
     app.state.storage = build_storage(settings)
-    app.state.login_limiter = SlidingWindowRateLimiter()
+    app.state.login_limiter = SlidingWindowRateLimiter(
+        max_attempts=settings.login_rate_ip_tenant,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+    app.state.login_ip_limiter = SlidingWindowRateLimiter(
+        max_attempts=settings.login_rate_ip,
+        window_seconds=settings.login_rate_window_seconds,
+    )
     # criado sem conectar: create_app tem de funcionar com Postgres fora do ar
     # (o /health responde). O LISTEN abre no primeiro subscribe do endpoint SSE.
     app.state.notify_listener = NotificationListener(asyncpg_dsn(settings.database_url))

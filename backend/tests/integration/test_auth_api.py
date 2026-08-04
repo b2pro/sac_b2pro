@@ -61,3 +61,59 @@ async def test_rate_limit_no_login(client: AsyncClient, session: AsyncSession) -
 
     assert response.status_code == 429
     assert response.json()["code"] == "rate_limited"
+
+
+async def test_rate_limit_no_login_por_ip_com_tenants_diferentes(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_user(session, email="ana@b2.com")
+
+    # 30 tentativas contra slugs diferentes: a janela por IP+tenant (5) nao
+    # bloqueia nenhuma delas, mas a janela larga por IP (30) esta no limite.
+    for i in range(30):
+        payload = {
+            "email": "ana@b2.com",
+            "password": "errada",
+            "tenant_slug": f"tenant-{i}",
+        }
+        response = await client.post("/api/auth/login", json=payload)
+        assert response.status_code == 401
+
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": "ana@b2.com", "password": "errada", "tenant_slug": "tenant-final"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "rate_limited"
+
+
+async def test_rate_limit_no_refresh(client: AsyncClient) -> None:
+    payload = {"refresh_token": "token-invalido"}
+
+    for _ in range(30):
+        response = await client.post("/api/auth/refresh", json=payload)
+        assert response.status_code == 401
+
+    response = await client.post("/api/auth/refresh", json=payload)
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "rate_limited"
+
+
+async def test_refresh_valido_nao_e_bloqueado_nas_primeiras_tentativas(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    user = await seed_user(session, email="ana@b2.com")
+    tenant = await seed_tenant(session, slug="b2pro")
+    await seed_link(session, user=user, tenant=tenant)
+
+    login_response = await client.post(
+        "/api/auth/login",
+        json={"email": "ana@b2.com", "password": DEFAULT_PASSWORD, "tenant_slug": "b2pro"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    for _ in range(5):
+        response = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+        assert response.status_code == 200

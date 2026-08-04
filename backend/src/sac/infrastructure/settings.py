@@ -23,3 +23,7 @@ class Settings(BaseSettings):
     pending_expiration_minutes: int = 30
     attachment_max_bytes: int = 52_428_800
     attachment_max_per_ticket: int = 10
+    trusted_proxy: bool = False
+    login_rate_ip_tenant: int = 5
+    login_rate_ip: int = 30
+    login_rate_window_seconds: float = 60.0
