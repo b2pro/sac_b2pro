@@ -93,16 +93,33 @@ export default function PreferenciasPage() {
   const { preferences, isLoading, isLoadingError } = usePreferences()
 
   const mutation = useMutation({
+    // Uma gravacao por vez. Os tres controles compartilham esta mutation, e sem
+    // serializar dois cliques rapidos viram dois PUT concorrentes: o `previous`
+    // do primeiro fica mais velho que o valor que o segundo talvez ja tenha
+    // confirmado, e o rollback do primeiro apagaria justamente o que o servidor
+    // aceitou. Com escopo, o segundo espera o primeiro terminar — ordem de
+    // clique = ordem de ida = ordem de volta —, entao nenhum snapshot pode ser
+    // velho em relacao a um valor confirmado e o estado final e sempre o do
+    // ultimo clique. O `onMutate` roda no clique mesmo com a mutation em espera
+    // na fila, entao o controle continua respondendo na hora.
+    scope: { id: "preferencias" },
     mutationFn: savePreferences,
     // Otimista: o controle marcado e o tema respondem no clique, sem esperar a
-    // rede. O corpo do PUT ja leva os tres campos e a resposta e ele de volta,
-    // entao nao ha o que reconciliar no sucesso.
+    // rede.
     onMutate: (next) => {
       const previous = queryClient.getQueryData<Preferences>(PREFERENCES_KEY)
       queryClient.setQueryData<Preferences>(PREFERENCES_KEY, next)
       return { previous }
     },
-    onSuccess: () => toast.success("Preferencias salvas"),
+    // Grava o que o servidor devolveu, e nao so confia no otimismo: quando uma
+    // gravacao falha e a seguinte da fila da certo, o rollback da primeira ja
+    // desfez o otimismo da segunda, e e esta linha que devolve a tela ao valor
+    // que o servidor passou a ter. So e seguro por causa do `scope`: sem
+    // serializar, resposta atrasada de um PUT antigo sobrescreveria um mais novo.
+    onSuccess: (saved) => {
+      queryClient.setQueryData<Preferences>(PREFERENCES_KEY, saved)
+      toast.success("Preferencias salvas")
+    },
     onError: (error, _next, context) => {
       toast.error(errorMessage(error))
       // Desfaz o otimismo com o valor guardado no `onMutate`, e nao com uma
