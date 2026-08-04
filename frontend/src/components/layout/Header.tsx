@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut } from "lucide-react"
+import { ChevronDown, LogOut, SlidersHorizontal } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 import { GlobalSearch } from "@/components/layout/GlobalSearch"
@@ -42,6 +42,13 @@ export function Header() {
           <DropdownMenuLabel className="font-mono text-xs">
             {session?.user.email}
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {/* Preferencia e do usuario, nao do tenant: entra aqui e nao no
+              sidebar de operacao, e vale tambem para quem navega sem tenant. */}
+          <DropdownMenuItem onSelect={() => navigate("/preferencias")}>
+            <SlidersHorizontal size={16} strokeWidth={1.5} />
+            Preferencias
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onLogout}>
             <LogOut size={16} strokeWidth={1.5} />

@@ -5,6 +5,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SAC-B2PRO</title>
+    <script>
+      // Pinta o tema antes do primeiro frame. Num SPA o next-themes so aplica a
+      // classe depois que o React monta — medido em build de producao, o
+      // primeiro paint sai ~70ms antes disso, entao quem escolheu escuro veria a
+      // tela clara e um pisca. Isto espelha exatamente o que o next-themes faz
+      // (mesma chave "theme", mesmos valores, mesma classe e color-scheme), e
+      // por isso quando o React assume nao ha nada para trocar.
+      try {
+        var salvo = localStorage.getItem("theme") || "system"
+        var tema =
+          salvo === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : salvo
+        if (tema === "light" || tema === "dark") {
+          document.documentElement.classList.add(tema)
+          document.documentElement.style.colorScheme = tema
+        }
+      } catch {
+        // localStorage bloqueado: segue no tema claro, sem quebrar o boot
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

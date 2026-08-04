@@ -30,16 +30,8 @@ import {
   type NotificationItem,
   type NotificationType,
 } from "@/lib/notifications"
+import { usePreferences } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
-
-// Preferencias do usuario chegam na Task 14 (`usePreferences`): trocar este
-// objeto pelo hook mantem o resto do componente igual. Default local: toast
-// ligado (o aviso e o motivo do recurso), som desligado (barulho sem o usuario
-// ter pedido incomoda em sala compartilhada).
-const preferences: { notifyToast: boolean; notifySound: boolean } = {
-  notifyToast: true,
-  notifySound: false,
-}
 
 // O icone diz o TIPO do aviso; a barra lateral esquerda diz lido/nao lido.
 // Cada elemento com um trabalho so.
@@ -66,6 +58,9 @@ export function NotificationBell() {
   // esta vazia. A distincao importa: sem ela, a primeira notificacao de quem
   // nunca recebeu nenhuma seria tratada como "carga inicial" e nao avisaria.
   const lastSeenIdRef = useRef<string | null | undefined>(undefined)
+  // Referencia estavel entre renders (ver `usePreferences`) — o efeito de aviso
+  // depende dela e rodaria a cada render com um objeto novo.
+  const { preferences } = usePreferences()
 
   const { data: counter } = useQuery({
     queryKey: ["notificacoes-contador"],
@@ -101,11 +96,11 @@ export function NotificationBell() {
     if (lastSeenId === undefined) return
     if (!newest || newest.id === lastSeenId) return
     if (newest.read_at !== null) return
-    if (preferences.notifyToast) {
+    if (preferences.notify_toast) {
       toast(newest.title, { description: newest.snippet ?? undefined })
     }
-    if (preferences.notifySound) playNotificationBeep()
-  }, [data])
+    if (preferences.notify_sound) playNotificationBeep()
+  }, [data, preferences])
 
   const markMutation = useMutation({
     mutationFn: markRead,

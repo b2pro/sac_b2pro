@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { ThemeProvider } from "next-themes"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom"
@@ -15,6 +16,7 @@ import LoginPage from "@/pages/LoginPage"
 import MidiasPage from "@/pages/midias/MidiasPage"
 import TenantsPage from "@/pages/platform/TenantsPage"
 import UsersPage from "@/pages/platform/UsersPage"
+import PreferenciasPage from "@/pages/preferencias/PreferenciasPage"
 import RelatoriosPage from "@/pages/relatorios/RelatoriosPage"
 import TicketCreatePage from "@/pages/tickets/TicketCreatePage"
 import TicketDetailPage from "@/pages/tickets/TicketDetailPage"
@@ -39,6 +41,10 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: "/", element: <HomeRedirect /> },
+          // Fora do RequireTenant de proposito: preferencia e do usuario, nao
+          // do tenant — acompanha quem entra em qualquer tenant e existe
+          // tambem para o super admin, que navega sem tenant ativo.
+          { path: "/preferencias", element: <PreferenciasPage /> },
           {
             element: <RequireSuperAdmin />,
             children: [
@@ -80,11 +86,17 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" />
-      </AuthProvider>
-    </QueryClientProvider>
+    {/* Mais externo que o resto porque o Toaster tambem consulta o tema. O
+        valor do servidor entra depois, pelo useApplyThemePreference no
+        AppShell; aqui o next-themes cuida so do cache local, que e o que evita
+        o flash no reload. */}
+    <ThemeProvider attribute="class" themes={["light", "dark"]} enableSystem>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 )
