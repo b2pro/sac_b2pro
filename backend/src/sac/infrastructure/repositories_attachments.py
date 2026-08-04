@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sac.application.ports_attachments import TenantMember
@@ -13,6 +13,7 @@ from sac.domain.attachments import (
     PreviewJobStatus,
     PreviewStatus,
     TicketAttachment,
+    preview_keys_for,
 )
 from sac.domain.errors import NotFoundError
 from sac.domain.permissions import Role
@@ -219,6 +220,62 @@ class SqlProductPhotoRepository:
         if m is None:
             return None
         return m.photo_key, m.photo_preview_key
+
+
+class SqlKnownKeysRepository:
+    """Uniao das chaves de objeto que este tenant ainda reconhece. Alimenta a
+    reconciliacao de orfaos, que apaga do bucket o que NAO estiver aqui - uma
+    fonte esquecida nesta consulta e anexo vivo destruido.
+
+    Sao duas fontes, e as duas usam `deleted_at IS NULL` como definicao de
+    legitimo:
+
+    - `ticket_attachments`: object_key + as duas previews. So linhas ativas. A
+      linha excluida por soft delete e o caso que esta varredura existe para
+      alcancar - a exclusao ja apaga os objetos direto (best-effort) e nao ha
+      caminho de restauracao de anexo, entao o objeto de um anexo excluido tem
+      que sumir; protege-lo aqui deixaria a rede de seguranca sem nada para
+      pegar. Anexo EXPIRADO continua conhecido: ele nao foi excluido, so perdeu
+      a vez (seus objetos ja foram apagados pela expiracao, entao a lista nao
+      custa nada).
+    - `products`: photo_key, photo_preview_key e AS DUAS previews derivadas da
+      foto. A derivacao nao e enfeite: o worker escreve thumb e medium no
+      bucket, mas a tabela guarda so a thumb (`photo_preview_key`), entao sem
+      derivar o medium ele seria apagado como orfao a cada varredura. Aqui o
+      filtro e apenas deleted_at: produto INATIVO continua listado na API com a
+      foto assinada, logo a foto dele e legitima.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def known_keys(self) -> set[str]:
+        chaves: set[str] = set()
+        anexos = await self._session.execute(
+            select(
+                TicketAttachmentModel.object_key,
+                TicketAttachmentModel.preview_key,
+                TicketAttachmentModel.preview_medium_key,
+            ).where(TicketAttachmentModel.deleted_at.is_(None))
+        )
+        for linha in anexos.all():
+            chaves.update(chave for chave in linha if chave)
+        fotos = await self._session.execute(
+            select(ProductModel.photo_key, ProductModel.photo_preview_key).where(
+                ProductModel.deleted_at.is_(None),
+                or_(
+                    ProductModel.photo_key.is_not(None),
+                    ProductModel.photo_preview_key.is_not(None),
+                ),
+            )
+        )
+        for photo_key, photo_preview_key in fotos.all():
+            if photo_preview_key:
+                chaves.add(photo_preview_key)
+            if photo_key:
+                chaves.add(photo_key)
+                chaves.update(preview_keys_for(photo_key))
+        return chaves
 
 
 class SqlTenantMemberDirectory:

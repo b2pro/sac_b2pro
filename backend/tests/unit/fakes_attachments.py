@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sac.application.ports_attachments import ObjectHead, TenantMember
@@ -16,10 +16,16 @@ class FakeStorage:
         self.assinaturas: list[tuple[str, str]] = []
         self.deleted: list[str] = []
         self.fail_delete_for: set[str] = set()
+        # last_modified do bucket, como no S3: toda gravacao marca "agora", e o
+        # teste que precisa de um objeto velho reescreve a entrada. O default
+        # nunca e uma data antiga, senao um objeto criado sem cuidado no teste
+        # entraria como candidato a delecao na reconciliacao.
+        self.last_modified: dict[str, datetime] = {}
 
     def simulate_upload(self, key: str, data: bytes, content_type: str) -> None:
         """Faz o papel do navegador: grava no bucket sem passar pelo backend."""
         self.objects[key] = (data, content_type)
+        self.last_modified[key] = datetime.now(UTC)
 
     def presigned_put(self, key: str, content_type: str, ttl_seconds: int) -> str:
         self.assinaturas.append(("put", key))
@@ -38,9 +44,15 @@ class FakeStorage:
 
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         self.objects[key] = (data, content_type)
+        self.last_modified[key] = datetime.now(UTC)
 
     def get_bytes(self, key: str) -> bytes:
         return self.objects[key][0]
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
+        return [
+            (key, self.last_modified[key]) for key in sorted(self.objects) if key.startswith(prefix)
+        ]
 
     def delete(self, key: str) -> None:
         if key in self.fail_delete_for:

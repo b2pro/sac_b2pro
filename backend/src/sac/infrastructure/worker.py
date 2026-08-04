@@ -12,12 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sac.application.ports_attachments import StoragePort
 from sac.application.use_cases.attachments import ExpirePendingUseCase
 from sac.application.use_cases.previews import PermanentJobError, ProcessPreviewJobUseCase
+from sac.application.use_cases.storage_reconcile import ReconcileOrphansUseCase
 from sac.domain.attachments import PreviewJob
 from sac.domain.entities import TenantStatus
 from sac.infrastructure.db import build_engine
 from sac.infrastructure.images import generate_previews
 from sac.infrastructure.models import TenantModel
 from sac.infrastructure.repositories_attachments import (
+    SqlKnownKeysRepository,
     SqlPreviewJobRepository,
     build_attachment_repos,
 )
@@ -182,6 +184,47 @@ async def expire_pending_all(engine: AsyncEngine, storage: StoragePort, minutes:
     )
 
 
+async def _reconcile_orphans(
+    engine: AsyncEngine, storage: StoragePort, slug: str, hours: int
+) -> int:
+    translated = engine.execution_options(schema_translate_map={"tenant": f"t_{slug}"})
+    factory = async_sessionmaker(translated, expire_on_commit=False)
+    async with factory() as session:
+        # o prefixo do tenant e o mesmo de build_object_key e
+        # build_product_photo_key: toda chave comeca com "{slug}/". Errar aqui
+        # faria a varredura de um tenant apagar objetos de outro.
+        return await ReconcileOrphansUseCase(
+            storage=storage,
+            known_keys=SqlKnownKeysRepository(session),
+            prefix=f"{slug}/",
+            older_than_hours=hours,
+        ).execute(datetime.now(UTC))
+
+
+async def reconcile_orphans_all(engine: AsyncEngine, storage: StoragePort, hours: int) -> None:
+    """Varre todos os tenants ativos, com o mesmo isolamento de falha da
+    expiracao: um tenant que falha e logado e os outros seguem. Aqui o
+    isolamento importa em dobro - a falha e lida ANTES de qualquer delete (a
+    leitura das chaves conhecidas acontece no inicio do use case), entao um
+    tenant com problema nao apaga nada."""
+    tenants = await _active_tenant_slugs(engine)
+    total = 0
+    falhas = 0
+    for slug in tenants:
+        try:
+            total += await _reconcile_orphans(engine, storage, slug, hours)
+        except Exception:  # noqa: BLE001 - um tenant ruim nao derruba a varredura
+            falhas += 1
+            logger.exception("falha ao reconciliar orfaos do tenant %s", slug)
+    logger.info(
+        "varredura de reconciliacao: %d objeto(s) orfaos apagados em %d tenant(s) ativo(s), "
+        "%d tenant(s) com falha",
+        total,
+        len(tenants),
+        falhas,
+    )
+
+
 class _Shutdown:
     """Flag mutavel setada pelos handlers de SIGTERM/SIGINT. run_forever so
     consulta 'requested' ENTRE iteracoes do laco (nunca no meio do
@@ -214,18 +257,25 @@ async def run_forever(
     settings: Settings,
     interval_seconds: float = 2.0,
     expire_every_seconds: float = 300.0,
+    reconcile_every_seconds: float = 86400.0,
 ) -> None:
     logger.info(
-        "worker de previews em execucao (poll=%.1fs, varredura de expiracao a cada %.0fs)",
+        "worker de previews em execucao (poll=%.1fs, varredura de expiracao a cada %.0fs, "
+        "reconciliacao de orfaos a cada %.0fs)",
         interval_seconds,
         expire_every_seconds,
+        reconcile_every_seconds,
     )
     proxima_expiracao = 0.0
+    proxima_reconciliacao = 0.0
     while not _shutdown.requested:
         agora = asyncio.get_running_loop().time()
         if agora >= proxima_expiracao:
             await expire_pending_all(engine, storage, settings.pending_expiration_minutes)
             proxima_expiracao = agora + expire_every_seconds
+        if agora >= proxima_reconciliacao:
+            await reconcile_orphans_all(engine, storage, settings.reconcile_orphans_hours)
+            proxima_reconciliacao = agora + reconcile_every_seconds
         processou = await run_once(engine, storage, settings)
         if not processou and not _shutdown.requested:
             await asyncio.sleep(interval_seconds)

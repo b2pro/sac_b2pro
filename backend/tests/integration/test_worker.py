@@ -375,6 +375,111 @@ async def test_expiracao_continua_quando_um_tenant_falha(
         assert relido.status is AttachmentStatus.EXPIRADO
 
 
+async def test_reconciliacao_apaga_orfaos_e_preserva_chaves_conhecidas(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+) -> None:
+    """A rede de seguranca do que a delecao direta perder, contra Postgres e
+    MinIO de verdade. Ficam: o original e as DUAS previews do anexo ativo, a
+    foto do produto, seu preview gravado e o preview medio derivado (que o
+    worker escreve no bucket mas nenhuma coluna guarda). Saem: o objeto do
+    anexo excluido por soft delete que a Task 10 nao conseguiu apagar e o
+    upload que ganhou URL assinada e nunca virou linha."""
+    from sac.domain.cadastros import Product
+    from sac.infrastructure.repositories_cadastros import SqlProductRepository
+    from sac.infrastructure.worker import reconcile_orphans_all
+
+    tenant = await seed_provisioned_tenant(session, engine, slug="workerorfao")
+    user = await seed_user(session, email="workerorfao@t.com")
+    produto_id = uuid4()
+    foto = f"{tenant.slug}/catalogo/produtos/{produto_id}/{uuid4()}.png"
+    foto_thumb, foto_medium = preview_keys_for(foto)
+    async with _factory(engine, tenant.schema_name)() as ts:
+        repos = build_attachment_repos(ts)
+        ticket_id = await _ticket_id(ts, user.id)
+        ativo_key = f"{tenant.slug}/{ticket_id}/{uuid4()}.png"
+        ativo_thumb, ativo_medium = preview_keys_for(ativo_key)
+        await repos.attachments.add(
+            TicketAttachment(
+                id=uuid4(),
+                ticket_id=ticket_id,
+                filename="ativo.png",
+                content_type="image/png",
+                size_bytes=8,
+                object_key=ativo_key,
+                kind=AttachmentKind.IMAGEM,
+                status=AttachmentStatus.DISPONIVEL,
+                preview_status=PreviewStatus.PRONTO,
+                author_user_id=user.id,
+                preview_key=ativo_thumb,
+                preview_medium_key=ativo_medium,
+                confirmed_at=datetime.now(UTC),
+            )
+        )
+        excluido_key = f"{tenant.slug}/{ticket_id}/{uuid4()}.png"
+        await repos.attachments.add(
+            TicketAttachment(
+                id=uuid4(),
+                ticket_id=ticket_id,
+                filename="excluido.png",
+                content_type="image/png",
+                size_bytes=8,
+                object_key=excluido_key,
+                kind=AttachmentKind.IMAGEM,
+                status=AttachmentStatus.DISPONIVEL,
+                preview_status=PreviewStatus.SEM_PREVIEW,
+                author_user_id=user.id,
+                deleted_at=datetime.now(UTC),
+            )
+        )
+        await SqlProductRepository(ts).add(
+            Product(id=produto_id, name="Alicate com foto", sku=f"RO-{produto_id.hex[:8]}")
+        )
+        await repos.photos.set_photo(produto_id, foto, foto_thumb)
+        await ts.commit()
+
+    solto = f"{tenant.slug}/{uuid4()}/upload-sem-linha.png"
+    conhecidos = (ativo_key, ativo_thumb, ativo_medium, foto, foto_thumb, foto_medium)
+    for chave in (*conhecidos, excluido_key, solto):
+        storage.put_bytes(chave, b"conteudo", "image/png")
+
+    # margem de idade: nada recem-gravado sai, nem o upload sem linha - senao a
+    # varredura destruiria uploads em voo.
+    await reconcile_orphans_all(engine, storage, hours=24)
+    assert storage.head(solto) is not None
+    assert storage.head(excluido_key) is not None
+
+    await reconcile_orphans_all(engine, storage, hours=0)
+
+    assert storage.head(solto) is None
+    assert storage.head(excluido_key) is None
+    for chave in conhecidos:
+        assert storage.head(chave) is not None, chave
+
+
+async def test_reconciliacao_continua_quando_um_tenant_falha(
+    session: AsyncSession,
+    engine: AsyncEngine,
+    storage: S3Storage,
+) -> None:
+    """Mesmo isolamento por tenant da expiracao: a varredura roda dentro do
+    run_forever, entao um tenant ativo sem schema provisionado (a leitura das
+    chaves conhecidas falha) e apenas logado e os outros tenants seguem sendo
+    reconciliados."""
+    from sac.infrastructure.worker import reconcile_orphans_all
+    from tests.integration.helpers import seed_tenant
+
+    await seed_tenant(session, slug="orfaosemschema")
+    tenant = await seed_provisioned_tenant(session, engine, slug="orfaoresil")
+    solto = f"{tenant.slug}/{uuid4()}/sem-linha.png"
+    storage.put_bytes(solto, b"conteudo", "image/png")
+
+    await reconcile_orphans_all(engine, storage, hours=0)
+
+    assert storage.head(solto) is None
+
+
 async def test_worker_resolve_tenant_correto_mesmo_com_job_mais_antigo_travado(
     session: AsyncSession,
     engine: AsyncEngine,

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 import boto3
@@ -116,6 +117,24 @@ class S3Storage:
         try:
             res = self._internal.get_object(Bucket=self._bucket, Key=key)
             return bytes(res["Body"].read())
+        except (BotoCoreError, ClientError) as exc:
+            raise StorageUnavailableError("storage indisponivel") from exc
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
+        """Todas as chaves sob o prefixo, com o last_modified que o proprio
+        bucket informa (ja timezone-aware, em UTC). Pagina com o paginator: um
+        list_objects_v2 cru pararia em 1000 objetos e a reconciliacao passaria a
+        ver como inexistente tudo o que ficou de fora - o que nao apaga nada
+        indevido (chave ausente da listagem nunca e apagada), mas deixaria orfaos
+        eternos no bucket.
+        """
+        try:
+            paginator = self._internal.get_paginator("list_objects_v2")
+            return [
+                (str(obj["Key"]), obj["LastModified"])
+                for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix)
+                for obj in page.get("Contents", [])
+            ]
         except (BotoCoreError, ClientError) as exc:
             raise StorageUnavailableError("storage indisponivel") from exc
 

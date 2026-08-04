@@ -26,6 +26,9 @@ class StoragePort(Protocol):
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...
     def get_bytes(self, key: str) -> bytes: ...
     def delete(self, key: str) -> None: ...
+    # list_keys devolve (chave, last_modified) para que a reconciliacao decida a
+    # idade do objeto sem nunca ver um tipo do boto3.
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]: ...
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,17 @@ class ProductPhotoRepository(Protocol):
         self, product_id: UUID, photo_key: str | None, preview_key: str | None
     ) -> None: ...
     async def get_photo(self, product_id: UUID) -> tuple[str | None, str | None] | None: ...
+
+
+class KnownKeysPort(Protocol):
+    """Todas as chaves de objeto que o banco do tenant ainda reconhece como
+    legitimas. E a lista de protecao da reconciliacao de orfaos: o que nao esta
+    aqui pode ser apagado do bucket, entao uma implementacao que esqueca uma
+    fonte de chaves destroi anexo vivo. Nunca pode devolver um conjunto vazio
+    "por seguranca" quando a leitura falha - a falha tem que subir.
+    """
+
+    async def known_keys(self) -> set[str]: ...
 
 
 class TenantMemberDirectory(Protocol):
