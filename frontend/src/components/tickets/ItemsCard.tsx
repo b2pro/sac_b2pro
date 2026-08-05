@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Pencil, Plus, Trash2 } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { AutocompleteField } from "@/components/tickets/AutocompleteField"
@@ -68,6 +68,7 @@ export function ItemsCard({
   const [productQuery, setProductQuery] = useState("")
   const [defectTypeId, setDefectTypeId] = useState("")
   const [quantity, setQuantity] = useState(1)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const { data: defectTypes } = useQuery({
     queryKey: ["defeitos"],
@@ -224,11 +225,27 @@ export function ItemsCard({
         open={dialog === "adicionar" || dialog === "editar"}
         onOpenChange={(open) => !open && closeDialog()}
       >
-        <DialogContent>
+        <DialogContent
+          onOpenAutoFocus={(event) => {
+            // Nao deixar o Radix autofocar o campo Produto: com o valor
+            // pre-preenchido (edicao), o onFocus dele reabriria a lista de
+            // sugestoes sem o usuario ter pedido, e esse overlay fica por
+            // cima do select de Defeito. O foco entra no dialogo pelo
+            // formulario; o usuario ainda abre as sugestoes ao focar o
+            // campo de proposito.
+            event.preventDefault()
+            formRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{dialog === "editar" ? "Editar item" : "Adicionar item"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={onSubmitForm} className="flex flex-col gap-4">
+          <form
+            ref={formRef}
+            tabIndex={-1}
+            onSubmit={onSubmitForm}
+            className="flex flex-col gap-4 outline-none"
+          >
             <div className="flex flex-col gap-2">
               <Label htmlFor="item-produto">Produto</Label>
               <AutocompleteField
