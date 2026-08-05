@@ -200,7 +200,8 @@ export default function TicketsListPage() {
             {counters !== undefined && (
               <>
                 {" — "}
-                <span className="font-mono">{counters.ativos}</span> tickets ativos
+                <span className="font-mono">{counters.ativos}</span> tickets ativos, de{" "}
+                <span className="font-mono">{counters.todos}</span> no total
               </>
             )}
           </p>
