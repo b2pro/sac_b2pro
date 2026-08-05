@@ -33,6 +33,12 @@ async def _recreate_database() -> None:
 @pytest.fixture(scope="session")
 def database() -> str:
     os.environ["SAC_DATABASE_URL"] = TEST_DB_URL
+    # A suite roda o caminho de producao da guarda de boot (environment nao e
+    # development), entao precisa de um segredo forte. Vai no ambiente, e nao
+    # apenas no Settings do app, porque helpers.token_for constroi o proprio
+    # JwtTokenService a partir de Settings() - se os dois lados nao lessem o mesmo
+    # segredo, todo token de teste seria recusado.
+    os.environ["SAC_JWT_SECRET"] = "segredo-de-teste-com-tamanho-mais-que-suficiente"
     asyncio.run(_recreate_database())
     from sac.infrastructure.migrate import upgrade_public
 

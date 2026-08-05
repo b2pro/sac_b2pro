@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sac.infrastructure.db import build_engine, build_session_factory
 from sac.infrastructure.notify_listener import NotificationListener, asyncpg_dsn
-from sac.infrastructure.settings import Settings
+from sac.infrastructure.settings import Settings, ensure_boot_secrets
 from sac.infrastructure.storage import build_storage
 from sac.interface.errors import register_error_handlers
 from sac.interface.rate_limit import SlidingWindowRateLimiter
@@ -40,6 +40,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    # antes de qualquer outra coisa: nao existe aplicacao meio de pe com segredo
+    # de assinatura conhecido.
+    ensure_boot_secrets(settings)
     app = FastAPI(title="SAC-B2PRO", lifespan=_lifespan)
     app.state.settings = settings
     app.state.engine = build_engine(settings.database_url)
