@@ -15,3 +15,8 @@ frontend/playwright-report/
 frontend/blob-report/
 frontend/.playwright/
 .superpowers/
+
+# Clone de outro projeto (gerenciador_leads, Laravel) mantido aqui dentro por
+# conveniencia de trabalho. Repositorio proprio, com git proprio: nao entra
+# nesta arvore.
+LEDDO/
