@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -28,6 +29,7 @@ import {
 import { ApiError } from "@/lib/api"
 import { deleteProductPhoto, uploadProductPhoto } from "@/lib/attachments"
 import { useAuth } from "@/lib/auth"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   canCreateCadastros,
   canManageCadastros,
@@ -65,6 +67,74 @@ function validarFotoProduto(arquivo: File): string | null {
   return null
 }
 
+function CreateProductForm({
+  onSubmit,
+  submitting,
+}: {
+  onSubmit: (values: { name: string; sku: string; segment?: string; description?: string }) => void
+  submitting: boolean
+}) {
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [skuError, setSkuError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const name = String(form.get("name")).trim()
+    const sku = String(form.get("sku")).trim()
+
+    const nextNameError = name ? null : "Informe o nome"
+    const nextSkuError = sku ? null : "Informe o SKU"
+    setNameError(nextNameError)
+    setSkuError(nextSkuError)
+    if (nextNameError || nextSkuError) return
+
+    onSubmit({
+      name,
+      sku,
+      segment: String(form.get("segment")).trim() || undefined,
+      description: String(form.get("description")).trim() || undefined,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="name">Nome</Label>
+        <Input id="name" name="name" required {...fieldErrorProps("name", nameError)} />
+        <FieldError fieldId="name" message={nameError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="sku">SKU</Label>
+        <Input
+          id="sku"
+          name="sku"
+          required
+          className="font-mono"
+          {...fieldErrorProps("sku", skuError)}
+        />
+        <FieldError fieldId="sku" message={skuError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="segment">Segmento</Label>
+        <Input id="segment" name="segment" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="description">Descricao</Label>
+        <Input id="description" name="description" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="foto-criar">Foto</Label>
+        <Input id="foto-criar" type="file" accept={PHOTO_ACCEPT} disabled />
+        <p className="text-xs text-muted-foreground">Salve o produto para enviar a foto.</p>
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Criar
+      </Button>
+    </form>
+  )
+}
+
 function ProductThumb({ product }: { product: Product }) {
   if (product.photo_url) {
     return (
@@ -90,6 +160,8 @@ export default function ProdutosPage() {
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [editNameError, setEditNameError] = useState<string | null>(null)
+  const [editSkuError, setEditSkuError] = useState<string | null>(null)
   const [confirmingPhotoDelete, setConfirmingPhotoDelete] = useState<Product | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ id: string; percent: number } | null>(null)
   // Produtos cuja foto ficou pendente de preview alem do orcamento de polling
@@ -307,32 +379,40 @@ export default function ProdutosPage() {
     setEditing(null)
   }
 
+  function openEdit(product: Product) {
+    setEditNameError(null)
+    setEditSkuError(null)
+    setEditing(product)
+  }
+
   function onSearchChange(value: string) {
     setSearch(value)
     setPage(1)
   }
 
-  function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    createMutation.mutate({
-      name: String(form.get("name")),
-      sku: String(form.get("sku")),
-      segment: String(form.get("segment")) || undefined,
-      description: String(form.get("description")) || undefined,
-    })
+  function onCreate(values: { name: string; sku: string; segment?: string; description?: string }) {
+    createMutation.mutate(values)
   }
 
   function onEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!editing) return
     const form = new FormData(event.currentTarget)
+    const name = String(form.get("name")).trim()
+    const sku = String(form.get("sku")).trim()
+
+    const nextNameError = name ? null : "Informe o nome"
+    const nextSkuError = sku ? null : "Informe o SKU"
+    setEditNameError(nextNameError)
+    setEditSkuError(nextSkuError)
+    if (nextNameError || nextSkuError) return
+
     updateMutation.mutate({
       id: editing.id,
-      name: String(form.get("name")),
-      sku: String(form.get("sku")),
-      segment: String(form.get("segment")) || undefined,
-      description: String(form.get("description")) || undefined,
+      name,
+      sku,
+      segment: String(form.get("segment")).trim() || undefined,
+      description: String(form.get("description")).trim() || undefined,
     })
   }
 
@@ -362,34 +442,7 @@ export default function ProdutosPage() {
                 <DialogHeader>
                   <DialogTitle>Novo produto</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={onCreate} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="name">Nome</Label>
-                    <Input id="name" name="name" required />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="sku">SKU</Label>
-                    <Input id="sku" name="sku" required className="font-mono" />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="segment">Segmento</Label>
-                    <Input id="segment" name="segment" />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="description">Descricao</Label>
-                    <Input id="description" name="description" />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="foto-criar">Foto</Label>
-                    <Input id="foto-criar" type="file" accept={PHOTO_ACCEPT} disabled />
-                    <p className="text-xs text-muted-foreground">
-                      Salve o produto para enviar a foto.
-                    </p>
-                  </div>
-                  <Button type="submit" disabled={createMutation.isPending} className="mt-1">
-                    Criar
-                  </Button>
-                </form>
+                <CreateProductForm onSubmit={onCreate} submitting={createMutation.isPending} />
               </DialogContent>
             </Dialog>
           )}
@@ -442,7 +495,7 @@ export default function ProdutosPage() {
                             activeMutation.mutate({ id: item.id, active: checked })
                           }
                         />
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(item)}>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
                           Editar
                         </Button>
                       </div>
@@ -488,10 +541,17 @@ export default function ProdutosPage() {
             <DialogTitle>Editar produto</DialogTitle>
           </DialogHeader>
           {editingLive && (
-            <form onSubmit={onEdit} className="flex flex-col gap-4">
+            <form onSubmit={onEdit} noValidate className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="edit-name">Nome</Label>
-                <Input id="edit-name" name="name" defaultValue={editingLive.name} required />
+                <Input
+                  id="edit-name"
+                  name="name"
+                  defaultValue={editingLive.name}
+                  required
+                  {...fieldErrorProps("edit-name", editNameError)}
+                />
+                <FieldError fieldId="edit-name" message={editNameError} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="edit-sku">SKU</Label>
@@ -501,7 +561,9 @@ export default function ProdutosPage() {
                   defaultValue={editingLive.sku}
                   required
                   className="font-mono"
+                  {...fieldErrorProps("edit-sku", editSkuError)}
                 />
+                <FieldError fieldId="edit-sku" message={editSkuError} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="edit-segment">Segmento</Label>

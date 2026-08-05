@@ -17,6 +17,7 @@ import { AutocompleteField } from "@/components/tickets/AutocompleteField"
 import { SupervisorSelect } from "@/components/tickets/SupervisorSelect"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -30,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { listCatalog, listCustomers, listProducts, lookupCep } from "@/lib/cadastros"
+import { fieldErrorProps } from "@/lib/field-error"
 import { formatCep, formatDocument, formatPhone, onlyDigits } from "@/lib/format"
 import {
   canCreateTicket,
@@ -38,6 +40,7 @@ import {
   type TicketCreateInput,
   type TicketPriority,
 } from "@/lib/tickets"
+import { isValidEmail } from "@/lib/validation"
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
@@ -102,6 +105,7 @@ export default function TicketCreatePage() {
   const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null)
   const [matchedDocument, setMatchedDocument] = useState<string | null>(null)
   const [customerFields, setCustomerFields] = useState<CustomerFieldValues>(emptyCustomerFields)
+  const [customerEmailError, setCustomerEmailError] = useState<string | null>(null)
   const [customerLookupLoading, setCustomerLookupLoading] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
 
@@ -230,11 +234,23 @@ export default function TicketCreatePage() {
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    let hasError = false
     if (!brandId) {
       setBrandError(true)
-      return
+      hasError = true
+    } else {
+      setBrandError(false)
     }
-    setBrandError(false)
+
+    const trimmedEmail = customerFields.email.trim()
+    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+      setCustomerEmailError("Informe um email valido, com @ e dominio (ex.: nome@empresa.com)")
+      hasError = true
+    } else {
+      setCustomerEmailError(null)
+    }
+
+    if (hasError) return
 
     const validItems = items.filter((item) => item.productId && item.defectTypeId)
     const discarded = items.length - validItems.length
@@ -309,7 +325,7 @@ export default function TicketCreatePage() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={onSubmit} noValidate className="space-y-6">
       <div className="space-y-2">
         <Link
           to="/tickets"
@@ -383,8 +399,13 @@ export default function TicketCreatePage() {
                 id="cliente-email"
                 type="email"
                 value={customerFields.email}
-                onChange={(e) => setCustomerField("email", e.target.value)}
+                onChange={(e) => {
+                  setCustomerField("email", e.target.value)
+                  if (customerEmailError) setCustomerEmailError(null)
+                }}
+                {...fieldErrorProps("cliente-email", customerEmailError)}
               />
+              <FieldError fieldId="cliente-email" message={customerEmailError} />
             </div>
           </div>
 

@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   canCreateCadastros,
   canManageCadastros,
@@ -45,6 +47,64 @@ const PATH_ICON: Record<CatalogPath, typeof Tags> = {
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
+}
+
+function CatalogItemForm({
+  idPrefix,
+  defaultName,
+  defaultDescription,
+  onSubmit,
+  submitLabel,
+  submitting,
+}: {
+  idPrefix: string
+  defaultName?: string
+  defaultDescription?: string
+  onSubmit: (values: { name: string; description?: string }) => void
+  submitLabel: string
+  submitting: boolean
+}) {
+  const [nameError, setNameError] = useState<string | null>(null)
+  const nameFieldId = `${idPrefix}-name`
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const name = String(form.get("name")).trim()
+    if (!name) {
+      setNameError("Informe o nome")
+      return
+    }
+    setNameError(null)
+    onSubmit({ name, description: String(form.get("description")).trim() || undefined })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={nameFieldId}>Nome</Label>
+        <Input
+          id={nameFieldId}
+          name="name"
+          defaultValue={defaultName}
+          required
+          {...fieldErrorProps(nameFieldId, nameError)}
+        />
+        <FieldError fieldId={nameFieldId} message={nameError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${idPrefix}-description`}>Descricao</Label>
+        <Input
+          id={`${idPrefix}-description`}
+          name="description"
+          defaultValue={defaultDescription}
+        />
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        {submitLabel}
+      </Button>
+    </form>
+  )
 }
 
 export default function CatalogPage({ title, path }: { title: string; path: CatalogPath }) {
@@ -96,24 +156,13 @@ export default function CatalogPage({ title, path }: { title: string; path: Cata
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-  function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    createMutation.mutate({
-      name: String(form.get("name")),
-      description: String(form.get("description")) || undefined,
-    })
+  function onCreate(values: { name: string; description?: string }) {
+    createMutation.mutate(values)
   }
 
-  function onEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function onEdit(values: { name: string; description?: string }) {
     if (!editing) return
-    const form = new FormData(event.currentTarget)
-    updateMutation.mutate({
-      id: editing.id,
-      name: String(form.get("name")),
-      description: String(form.get("description")) || undefined,
-    })
+    updateMutation.mutate({ id: editing.id, ...values })
   }
 
   return (
@@ -142,19 +191,12 @@ export default function CatalogPage({ title, path }: { title: string; path: Cata
                 <DialogHeader>
                   <DialogTitle>Novo registro</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={onCreate} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="name">Nome</Label>
-                    <Input id="name" name="name" required />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="description">Descricao</Label>
-                    <Input id="description" name="description" />
-                  </div>
-                  <Button type="submit" disabled={createMutation.isPending} className="mt-1">
-                    Criar
-                  </Button>
-                </form>
+                <CatalogItemForm
+                  idPrefix="create"
+                  onSubmit={onCreate}
+                  submitLabel="Criar"
+                  submitting={createMutation.isPending}
+                />
               </DialogContent>
             </Dialog>
           )}
@@ -222,23 +264,14 @@ export default function CatalogPage({ title, path }: { title: string; path: Cata
             <DialogTitle>Editar registro</DialogTitle>
           </DialogHeader>
           {editing && (
-            <form onSubmit={onEdit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="edit-name">Nome</Label>
-                <Input id="edit-name" name="name" defaultValue={editing.name} required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="edit-description">Descricao</Label>
-                <Input
-                  id="edit-description"
-                  name="description"
-                  defaultValue={editing.description ?? ""}
-                />
-              </div>
-              <Button type="submit" disabled={updateMutation.isPending} className="mt-1">
-                Salvar
-              </Button>
-            </form>
+            <CatalogItemForm
+              idPrefix="edit"
+              defaultName={editing.name}
+              defaultDescription={editing.description ?? ""}
+              onSubmit={onEdit}
+              submitLabel="Salvar"
+              submitting={updateMutation.isPending}
+            />
           )}
         </DialogContent>
       </Dialog>

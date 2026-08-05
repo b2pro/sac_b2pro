@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -42,7 +43,9 @@ import {
   type Customer,
   type CustomerInput,
 } from "@/lib/cadastros"
+import { fieldErrorProps } from "@/lib/field-error"
 import { formatCep, formatDocument, formatPhone, onlyDigits } from "@/lib/format"
+import { isValidEmail } from "@/lib/validation"
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
@@ -131,6 +134,7 @@ function ClienteForm({
   submitting: boolean
 }) {
   const [cepLoading, setCepLoading] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<"name" | "document" | "email", string>>>({})
 
   function fieldId(key: keyof ClienteFormValues): string {
     return `${idPrefix}-${key}`
@@ -138,6 +142,23 @@ function ClienteForm({
 
   function setField(key: keyof ClienteFormValues, value: string) {
     onChange((current) => ({ ...current, [key]: value }))
+  }
+
+  function validate(): boolean {
+    const next: typeof errors = {}
+    if (!values.name.trim()) next.name = "Informe o nome"
+    if (!values.document.trim()) next.document = "Informe o documento"
+    if (values.email.trim() && !isValidEmail(values.email.trim())) {
+      next.email = "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+    }
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!validate()) return
+    onSubmit(event)
   }
 
   async function onCepBlur(event: FocusEvent<HTMLInputElement>) {
@@ -162,7 +183,7 @@ function ClienteForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor={fieldId("name")}>Nome</Label>
         <Input
@@ -171,7 +192,9 @@ function ClienteForm({
           value={values.name}
           onChange={(e) => setField("name", e.target.value)}
           required
+          {...fieldErrorProps(fieldId("name"), errors.name ?? null)}
         />
+        <FieldError fieldId={fieldId("name")} message={errors.name ?? null} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -184,7 +207,9 @@ function ClienteForm({
             onChange={(e) => setField("document", formatDocument(e.target.value))}
             required
             className="font-mono"
+            {...fieldErrorProps(fieldId("document"), errors.document ?? null)}
           />
+          <FieldError fieldId={fieldId("document")} message={errors.document ?? null} />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor={fieldId("phone")}>Telefone</Label>
@@ -206,7 +231,9 @@ function ClienteForm({
           type="email"
           value={values.email}
           onChange={(e) => setField("email", e.target.value)}
+          {...fieldErrorProps(fieldId("email"), errors.email ?? null)}
         />
+        <FieldError fieldId={fieldId("email")} message={errors.email ?? null} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
