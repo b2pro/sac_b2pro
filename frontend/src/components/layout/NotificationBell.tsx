@@ -132,7 +132,11 @@ export function NotificationBell() {
         <DropdownMenuLabel className="border-b border-border px-3 py-2">
           Notificacoes
         </DropdownMenuLabel>
-        <div className="max-h-80 overflow-y-auto">
+        {/* max-h e exatamente 4 linhas (75.703125px cada, com todas as
+            linhas com a mesma altura agora): a rolagem sempre para numa
+            borda de linha, nunca no meio — a barra "marcar todas" abaixo
+            nunca fica encostada numa linha cortada. */}
+        <div className="max-h-[303px] overflow-y-auto">
           {isLoading ? (
             <p className="px-3 py-6 text-sm text-muted-foreground">Carregando notificacoes...</p>
           ) : null}
@@ -166,11 +170,16 @@ export function NotificationBell() {
                 <Icon size={16} strokeWidth={1.5} className="mt-0.5" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{item.title}</span>
-                  {item.snippet ? (
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {item.snippet}
-                    </span>
-                  ) : null}
+                  {/* Linha sempre presente (mesmo sem snippet, so com espaco
+                      reservado): toda linha fica com a mesma altura, para o
+                      recorte da area de rolagem cair sempre numa borda de
+                      linha — nunca no meio de uma. */}
+                  <span
+                    className="block truncate text-xs text-muted-foreground"
+                    aria-hidden={item.snippet ? undefined : true}
+                  >
+                    {item.snippet ?? " "}
+                  </span>
                   <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
                     #{item.ticket_number} · {formatShortDateTime(item.created_at)}
                   </span>
