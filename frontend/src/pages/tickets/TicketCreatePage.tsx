@@ -106,6 +106,7 @@ export default function TicketCreatePage() {
   const [cepLoading, setCepLoading] = useState(false)
 
   const [brandId, setBrandId] = useState("")
+  const [brandError, setBrandError] = useState(false)
   const [priority, setPriority] = useState<TicketPriority>("media")
   const [channelId, setChannelId] = useState("")
   const [channelQuery, setChannelQuery] = useState("")
@@ -230,9 +231,10 @@ export default function TicketCreatePage() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!brandId) {
-      toast.error("Selecione a marca")
+      setBrandError(true)
       return
     }
+    setBrandError(false)
 
     const validItems = items.filter((item) => item.productId && item.defectTypeId)
     const discarded = items.length - validItems.length
@@ -539,8 +541,19 @@ export default function TicketCreatePage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="marca">Marca</Label>
-              <Select value={brandId || undefined} onValueChange={setBrandId}>
-                <SelectTrigger id="marca" className="w-full">
+              <Select
+                value={brandId}
+                onValueChange={(value) => {
+                  setBrandId(value)
+                  setBrandError(false)
+                }}
+              >
+                <SelectTrigger
+                  id="marca"
+                  className="w-full"
+                  aria-invalid={brandError}
+                  aria-describedby={brandError ? "marca-error" : undefined}
+                >
                   <SelectValue placeholder="Selecione a marca" />
                 </SelectTrigger>
                 <SelectContent>
@@ -551,6 +564,11 @@ export default function TicketCreatePage() {
                   ))}
                 </SelectContent>
               </Select>
+              {brandError && (
+                <p id="marca-error" className="text-xs text-destructive">
+                  Selecione a marca
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="prioridade">Prioridade</Label>
@@ -621,7 +639,7 @@ export default function TicketCreatePage() {
                   />
 
                   <Select
-                    value={item.defectTypeId || undefined}
+                    value={item.defectTypeId}
                     onValueChange={(value) => updateItem(item.key, { defectTypeId: value })}
                   >
                     <SelectTrigger className="w-full">

@@ -106,6 +106,7 @@ export function ActionPanel({
   const [dialog, setDialog] = useState<DialogKind>(null)
   const [notes, setNotes] = useState("")
   const [declineReason, setDeclineReason] = useState("")
+  const [declineReasonError, setDeclineReasonError] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [reverseCode, setReverseCode] = useState("")
   const [solutionTypeId, setSolutionTypeId] = useState("")
@@ -149,7 +150,10 @@ export function ActionPanel({
 
   function openDialog(kind: DialogKind) {
     if (kind === "aprovar") setNotes("")
-    if (kind === "declinar") setDeclineReason("")
+    if (kind === "declinar") {
+      setDeclineReason("")
+      setDeclineReasonError(false)
+    }
     if (kind === "cancelar") setCancelReason("")
     if (kind === "reverso") setReverseCode("")
     if (kind === "finalizar") {
@@ -343,9 +347,10 @@ export function ActionPanel({
   function onSubmitDeclinar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!declineReason.trim()) {
-      toast.error("Informe o motivo do declinio")
+      setDeclineReasonError(true)
       return
     }
+    setDeclineReasonError(false)
     declineMutation.mutate()
   }
 
@@ -519,10 +524,19 @@ export function ActionPanel({
               <Textarea
                 id="declinar-reason"
                 value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)}
+                onChange={(e) => {
+                  setDeclineReason(e.target.value)
+                  if (declineReasonError && e.target.value.trim()) setDeclineReasonError(false)
+                }}
                 rows={3}
-                required
+                aria-invalid={declineReasonError}
+                aria-describedby={declineReasonError ? "declinar-reason-error" : undefined}
               />
+              {declineReasonError && (
+                <p id="declinar-reason-error" className="text-xs text-destructive">
+                  Informe o motivo do declinio
+                </p>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>
