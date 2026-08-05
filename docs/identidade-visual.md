@@ -15,6 +15,19 @@ Algo entre um painel de controle industrial e uma prancheta de oficina — serio
 | Charcoal Brown | `#403d39` | Corpo de texto principal. Nunca preto puro; ar de documento impresso. |
 | Carbon Black | `#252422` | Titulos, texto de alta enfase e fundo do sidebar/nav (navegacao escura contra conteudo claro: separa "onde eu navego" de "onde eu trabalho"). |
 | Spicy Paprika | `#eb5e28` | So tres usos: acao primaria (ex.: "Aprovar", "Enviar a analise"), indicador de urgencia/SLA vencendo e numero do ticket em destaque. Se aparecer em mais de 3 lugares na mesma tela, esta errado. Como PREENCHIMENTO, borda e sinalizacao e este valor exato; como TEXTO ele reprova AA nos dois temas (3,32:1 no claro, 4,09:1 no escuro), entao texto em Paprika usa `--primary-text` — mesmo matiz e saturacao, luminosidade ajustada por tema. Rotulo EM CIMA do Paprika (botao primario, contador) e Carbon Black, nao Floral White: 4,55:1 contra 3,32:1. |
+| Paprika para texto | `#b13d11` claro, `#f18a5f` escuro | O valor de `--primary-text`, o irmao do Paprika que carrega TEXTO (link, rotulo, numero de ticket). Matiz e saturacao presos ao Paprika (17/83); so a luminosidade muda, entao e a mesma cor e nao um segundo laranja na marca. APROVADO em 2026-08-05 apos comparar tres candidatos. |
+
+**A superficie que decide o contraste do `--primary-text` e a LINHA EM HOVER**, nao o fundo
+da pagina: no hover o preenchimento sobe (`#ece7da` no claro, `#3c3935` no escuro) e o
+contraste cai para o pior caso da paleta — 4,80:1 e 4,67:1 com os valores aprovados. Ao
+mexer em qualquer tom aqui, e esse numero que precisa passar de 4,5:1, nunca o do fundo.
+
+O tom mais proximo do Paprika que ainda passaria e `#b64011` / `#f0865c`, e ele foi
+RECUSADO de proposito: deixa so 0,06 e 0,02 de folga acima do piso. A rampa escura e
+conhecidamente comprimida (fundo -> card 1,11, card -> muted 1,14) e descomprimi-la
+significa clarear as superficies escuras, o que consumiria essa folga e derrubaria o tom
+abaixo de AA. Os valores aprovados ficam um passo de luminosidade atras do limite
+justamente para sobreviver a essa revisao.
 
 ## Tipografia
 
