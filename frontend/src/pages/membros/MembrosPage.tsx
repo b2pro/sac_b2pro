@@ -104,8 +104,14 @@ function RoleSelect({
 }) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next as MemberRole)}>
+      {/* O SelectValue leva filho de proposito: sem filho nenhum, o Radix portala
+       *  os filhos INTEIROS do item selecionado para dentro do trigger (dist/index.mjs,
+       *  `hasChildren = children !== void 0` e o portal condicionado a
+       *  `!valueNodeHasChildren`), o que arrastaria a descricao de 12px para dentro dos
+       *  36px do trigger. A descricao serve a escolha, no menu aberto; fechado vale so
+       *  o rotulo. */}
       <SelectTrigger id={id} className="w-full">
-        <SelectValue />
+        <SelectValue>{roleLabel(value)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {ROLES.map((role) => (
