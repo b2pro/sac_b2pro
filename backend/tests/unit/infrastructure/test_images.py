@@ -44,6 +44,35 @@ def test_bytes_que_nao_sao_imagem_viram_erro_de_validacao() -> None:
         generate_previews(b"isto nao e uma imagem")
 
 
+@pytest.mark.parametrize("formato", ["GIF", "TIFF", "BMP"])
+def test_imagem_valida_de_formato_fora_do_allowlist_e_recusada(formato: str) -> None:
+    """A checagem de tipo do anexo e toda por metadado declarado: o cliente pede
+    presigned URL dizendo `image/jpeg`, a assinatura amarra esse header, e o
+    confirmar compara o content-type do HEAD com o declarado - metadado contra
+    metadado, os bytes nunca sao olhados. Quem decide o formato de verdade e o
+    Pillow, pelos magic bytes. Sem allowlist no Image.open, qualquer arquivo que
+    passe pelo content-type declarado alcanca todo o parser surface do Pillow,
+    incluindo o plugin EPS, que rasteriza chamando o binario externo `gs` em
+    subprocesso com o conteudo PostScript do proprio arquivo."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (50, 50), color=(10, 20, 30)).save(buffer, format=formato)
+
+    with pytest.raises(ValidationError):
+        generate_previews(buffer.getvalue())
+
+
+@pytest.mark.parametrize("formato", ["JPEG", "PNG", "WEBP"])
+def test_formatos_do_allowlist_continuam_gerando_preview(formato: str) -> None:
+    buffer = io.BytesIO()
+    Image.new("RGB", (600, 300), color=(10, 20, 30)).save(buffer, format=formato)
+
+    thumb, medio = generate_previews(buffer.getvalue())
+
+    for conteudo in (thumb, medio):
+        with Image.open(io.BytesIO(conteudo)) as img:
+            assert img.format == "WEBP"
+
+
 def test_fundo_transparente_e_composto_sobre_branco_e_nao_mantem_a_cor_por_baixo() -> None:
     """convert('RGB') direto em RGBA nao composita: mantem os valores de RGB que
     estavam por baixo do alpha, que sao arbitrarios por encoder. Um pixel
