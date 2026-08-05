@@ -83,6 +83,33 @@ export async function loginViaForm(page: Page, who: Who): Promise<void> {
   await expect(page.getByRole("link", { name: "Tickets" })).toBeVisible()
 }
 
+/** Entra pelo formulario com email/senha que NAO estao em `USERS` (ex.: membro
+ *  recem-criado pelo proprio teste) e por isso nao tem sessao cacheada. Este
+ *  login sempre gasta uma tentativa do rate limit de 5/minuto por IP+tenant,
+ *  entao segue o mesmo formato de retry de `requestSession`: em 429, espera e
+ *  tenta de novo, em vez de estourar a suite quando outros logins de formulario
+ *  ja gastaram o bucket. */
+export async function loginViaFormRetrying(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.goto("/login")
+    await page.locator("#tenant").fill(SLUG)
+    await page.locator("#email").fill(email)
+    await page.locator("#password").fill(password)
+    const response = page.waitForResponse((res) => res.url().endsWith("/api/auth/login"))
+    await page.getByRole("button", { name: "Entrar" }).click()
+    if ((await response).status() !== 429) {
+      await expect(page.getByRole("link", { name: "Tickets" })).toBeVisible()
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 15_000))
+  }
+  throw new Error(`login de ${email} excedeu tentativas de retry por 429`)
+}
+
 /** Injeta a sessao autenticada, sem gastar tentativa de login no rate limit. */
 export async function login(page: Page, request: APIRequestContext, who: Who): Promise<void> {
   const session = await requestSession(request, who)
@@ -268,6 +295,14 @@ export function randomCpf(): string {
   return [...base, d1, d2].join("")
 }
 
+/** Email unico por execucao, para cadastros que a propria suite cria (ex.:
+ *  membro novo em 10-preferencias-e-membros.spec.ts) — um endereco fixo
+ *  colidiria com o registro que a execucao anterior deixou no banco. */
+export function randomEmail(prefixo: string): string {
+  const marca = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
+  return `${prefixo}-${marca}@b2pro.com`
+}
+
 export function formatCpf(digits: string): string {
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
 }
@@ -290,4 +325,45 @@ export async function selectOption(
  *  string ou em um caractere nao-digito logo depois. */
 export function ticketCard(page: Page, number: number) {
   return page.getByRole("link").filter({ hasText: new RegExp(`#${number}(\\D|$)`) })
+}
+
+/** Zera as notificacoes nao lidas de `who` pela API — usado para dar a um
+ *  teste de SSE uma base conhecida (0 nao lidas) sem depender de quantas
+ *  notificacoes execucoes anteriores deixaram para esse usuario seedado. */
+export async function apiMarkAllNotificationsRead(
+  request: APIRequestContext,
+  who: Who,
+): Promise<void> {
+  const res = await request.post(`${API}/notificacoes/marcar-lidas`, {
+    headers: { Authorization: `Bearer ${await token(request, who)}` },
+    data: { ids: null },
+  })
+  expect(res.ok(), `marcar-lidas de ${who} falhou: ${await res.text()}`).toBeTruthy()
+}
+
+export type ApiPreferences = {
+  theme: "claro" | "escuro" | "sistema"
+  notify_toast: boolean
+  notify_sound: boolean
+}
+
+/** Le as preferencias de `who` direto do backend — usado para guardar o valor
+ *  original antes de um teste mudar o tema, e devolve-lo depois. */
+export async function apiGetPreferences(
+  request: APIRequestContext,
+  who: Who,
+): Promise<ApiPreferences> {
+  return authGet<ApiPreferences>(request, who, "/preferencias")
+}
+
+export async function apiSavePreferences(
+  request: APIRequestContext,
+  who: Who,
+  preferences: ApiPreferences,
+): Promise<void> {
+  const res = await request.put(`${API}/preferencias`, {
+    headers: { Authorization: `Bearer ${await token(request, who)}` },
+    data: preferences,
+  })
+  expect(res.ok(), `salvar preferencias de ${who} falhou: ${await res.text()}`).toBeTruthy()
 }
