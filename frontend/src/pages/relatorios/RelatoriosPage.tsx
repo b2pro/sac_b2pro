@@ -26,7 +26,7 @@ import {
 import { ApiError } from "@/lib/api"
 import { listCatalog, listProducts, type CatalogItem } from "@/lib/cadastros"
 import {
-  formatDuration,
+  formatAvgResolutionHours,
   isoEndExclusive,
   isoEndExclusiveToDateInput,
   isoStart,
@@ -524,8 +524,9 @@ export default function RelatoriosPage() {
             <KpiCard label="Declinados" value={data.kpis.declined} caption="do recorte atual" />
             <KpiCard
               label="Tempo medio de resolucao"
-              value={formatDuration(data.kpis.avg_resolution_hours)}
+              value={formatAvgResolutionHours(data.kpis.avg_resolution_hours)}
               caption="do recorte atual"
+              mono={data.kpis.avg_resolution_hours !== null && data.kpis.avg_resolution_hours > 0}
             />
           </div>
 

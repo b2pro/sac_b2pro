@@ -40,6 +40,22 @@ export function formatDuration(hours: number | null): string {
   return `${h}h`
 }
 
+// Formatador dedicado ao KPI "Tempo medio de resolucao" (Dashboard e
+// Relatorios). Nao reaproveita formatDuration: aquele e compartilhado com o
+// badge de SLA (font-mono compacto, "-1h"/"3d 2h"), onde arredondar pra hora
+// inteira e o formato certo. Aqui a media de resolucao de tickets fechados em
+// minutos ficava ilegivel como "0h" — abaixo de 1h mostra em minutos, e a
+// media null/zero (nenhum ticket finalizado no recorte) diz isso em palavras
+// em vez de sugerir "resolvido em zero horas".
+export function formatAvgResolutionHours(hours: number | null): string {
+  if (hours === null || hours <= 0) return "Sem tickets finalizados"
+  if (hours < 1) {
+    const minutes = Math.max(1, Math.round(hours * 60))
+    return `${minutes}min`
+  }
+  return formatDuration(hours)
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const kb = bytes / 1024

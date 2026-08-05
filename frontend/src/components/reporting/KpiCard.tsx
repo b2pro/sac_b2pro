@@ -10,6 +10,7 @@ export function KpiCard({
   accent,
   caption,
   title,
+  mono = true,
 }: {
   label: string
   value: number | string
@@ -17,6 +18,9 @@ export function KpiCard({
   accent?: boolean
   caption?: string
   title?: string
+  // false quando `value` e uma frase (ex.: "Sem tickets finalizados") em vez
+  // de numero/codigo: mono e reservado a dado numerico pela identidade visual.
+  mono?: boolean
 }) {
   const content = (
     <>
@@ -33,7 +37,8 @@ export function KpiCard({
       </div>
       <div
         className={cn(
-          "mt-1.5 font-mono text-[26px] font-semibold",
+          "mt-1.5 font-semibold",
+          mono ? "font-mono text-[26px]" : "text-base",
           accent ? "text-primary-text" : "text-accent-foreground",
         )}
       >
