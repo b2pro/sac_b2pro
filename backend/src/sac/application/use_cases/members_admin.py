@@ -134,7 +134,11 @@ async def _resolve_target(
         raise NotFoundError(_ALVO_NAO_ENCONTRADO)
     link = await links.get(user_id, tenant_id)
     if link is None:
-        raise NotFoundError("vinculo nao encontrado")
+        # mesma mensagem do ramo acima (usuario ausente ou super_admin): um
+        # user_id de outro tenant nao pode devolver um 404 diferente do de um
+        # user_id que nao existe em lugar nenhum, senao o admin usa a
+        # distincao como oraculo para confirmar que o UUID e uma conta real.
+        raise NotFoundError(_ALVO_NAO_ENCONTRADO)
     return user, link
 
 

@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -425,6 +427,50 @@ async def test_admin_de_um_tenant_nao_alcanca_membro_de_outro(
         f"/api/membros/{membro_b.id}/senha", json={"password": "outra-senha-forte"}, headers=headers
     )
     assert reset.status_code == 404
+
+
+async def test_recusas_de_vinculo_inexistente_e_de_outro_tenant_sao_indistinguiveis(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Mesma logica do teste de indistinguibilidade do POST /api/membros, mas
+    para as duas rotas que passam por _resolve_target: PATCH e o reset de
+    senha. Um user_id que nao existe em lugar nenhum tem que devolver a MESMA
+    resposta (status E corpo) que um user_id real mas vinculado so a outro
+    tenant -- senao o admin usa o 404 como oraculo para confirmar que um UUID
+    estrangeiro e de fato uma conta valida.
+    """
+    tenant_a = await seed_tenant(session, slug="resolvea")
+    tenant_b = await seed_tenant(session, slug="resolveb")
+    admin_a = await seed_user(session, email="admin@resolvea.com")
+    de_outro_tenant = await seed_user(session, email="outro@resolve.com")
+    await seed_link(session, user=admin_a, tenant=tenant_a, role=Role.ADMIN)
+    await seed_link(session, user=de_outro_tenant, tenant=tenant_b, role=Role.ATENDENTE)
+    headers = token_for(admin_a, tenant_slug=tenant_a.slug, role=Role.ADMIN)
+    jamais_existiu = uuid4()
+
+    patch_inexistente = await client.patch(
+        f"/api/membros/{jamais_existiu}", json={"role": "supervisor"}, headers=headers
+    )
+    patch_outro_tenant = await client.patch(
+        f"/api/membros/{de_outro_tenant.id}", json={"role": "supervisor"}, headers=headers
+    )
+    assert patch_inexistente.status_code == 404
+    assert patch_outro_tenant.status_code == 404
+    assert patch_inexistente.json() == patch_outro_tenant.json()
+
+    senha_inexistente = await client.post(
+        f"/api/membros/{jamais_existiu}/senha",
+        json={"password": "outra-senha-forte"},
+        headers=headers,
+    )
+    senha_outro_tenant = await client.post(
+        f"/api/membros/{de_outro_tenant.id}/senha",
+        json={"password": "outra-senha-forte"},
+        headers=headers,
+    )
+    assert senha_inexistente.status_code == 404
+    assert senha_outro_tenant.status_code == 404
+    assert senha_inexistente.json() == senha_outro_tenant.json()
 
 
 async def test_listagem_gerencial_traz_email_e_estado_do_usuario(
