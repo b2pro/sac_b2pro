@@ -15,6 +15,13 @@ export function RequireSuperAdmin() {
   return <Outlet />
 }
 
+export function RequireAdmin() {
+  const { session } = useAuth()
+  if (!session) return <Navigate to="/login" replace />
+  if (session.role !== "admin") return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 export function RequireTenant() {
   const { session } = useAuth()
   if (!session) return <Navigate to="/login" replace />

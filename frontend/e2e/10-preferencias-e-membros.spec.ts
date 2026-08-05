@@ -87,22 +87,19 @@ test.describe("Preferencias e membros", () => {
     await loginViaFormRetrying(page, email, senha)
   })
 
-  test("supervisor nao ve o item Membros no menu nem dados ao navegar direto", async ({
+  test("supervisor nao ve o item Membros no menu nem alcanca a rota navegando direto", async ({
     page,
     request,
   }) => {
     await login(page, request, "supervisor")
     await expect(page.getByRole("link", { name: "Membros" })).toHaveCount(0)
 
-    // Sem guarda na rota (ver comentario em main.tsx): a pagina carrega, mas
-    // a API de gerencia devolve 403 e a tabela mostra so o aviso de falha —
-    // nunca um redirecionamento e nunca dado de outro membro.
+    // RequireAdmin (main.tsx / guards.tsx) recusa a rota antes da pagina
+    // montar: quem nao e admin e mandado para "/", que o HomeRedirect leva
+    // para o dashboard do tenant ativo — nunca chega a montar a tela nem a
+    // chamar a API de gerencia.
     await page.goto("/membros")
-    await expect(page.getByRole("heading", { name: "Membros", level: 1 })).toBeVisible()
-    await expect(
-      page.getByText("Nao foi possivel carregar os membros. Recarregue a pagina para tentar de novo."),
-    ).toBeVisible()
-    await expect(page.getByText("e2e-admin@b2pro.com")).toHaveCount(0)
-    await expect(page.getByRole("row")).toHaveCount(2) // cabecalho + linha de erro, nenhuma linha de dado
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole("heading", { name: "Membros", level: 1 })).toHaveCount(0)
   })
 })
