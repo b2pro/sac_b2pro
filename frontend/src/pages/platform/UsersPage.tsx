@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -25,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   createUser,
   listUsers,
@@ -32,9 +34,141 @@ import {
   setUserActive,
   type PlatformUser,
 } from "@/lib/platform"
+import { isValidEmail, MIN_PASSWORD_LENGTH } from "@/lib/validation"
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
+}
+
+function CreateUserForm({
+  isSuperAdmin,
+  onSuperAdminChange,
+  onSubmit,
+  submitting,
+}: {
+  isSuperAdmin: boolean
+  onSuperAdminChange: (checked: boolean) => void
+  onSubmit: (values: { name: string; email: string; password: string }) => void
+  submitting: boolean
+}) {
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const name = String(form.get("name")).trim()
+    const email = String(form.get("email")).trim()
+    const password = String(form.get("password"))
+
+    const nextNameError = name ? null : "Informe o nome"
+    const nextEmailError = !email
+      ? "Informe o email"
+      : !isValidEmail(email)
+        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        : null
+    const nextPasswordError = !password
+      ? "Informe a senha"
+      : password.length < MIN_PASSWORD_LENGTH
+        ? `A senha precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres`
+        : null
+    setNameError(nextNameError)
+    setEmailError(nextEmailError)
+    setPasswordError(nextPasswordError)
+    if (nextNameError || nextEmailError || nextPasswordError) return
+
+    onSubmit({ name, email, password })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="name">Nome</Label>
+        <Input id="name" name="name" required {...fieldErrorProps("name", nameError)} />
+        <FieldError fieldId="name" message={nameError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          className="font-mono"
+          required
+          {...fieldErrorProps("email", emailError)}
+        />
+        <FieldError fieldId="email" message={emailError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="password">Senha</Label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          {...fieldErrorProps("password", passwordError)}
+        />
+        <FieldError fieldId="password" message={passwordError} />
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="is_super_admin"
+          checked={isSuperAdmin}
+          onCheckedChange={(checked) => onSuperAdminChange(checked === true)}
+        />
+        <Label htmlFor="is_super_admin">Super admin</Label>
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Criar
+      </Button>
+    </form>
+  )
+}
+
+function ResetUserPasswordForm({
+  onSubmit,
+  submitting,
+}: {
+  onSubmit: (password: string) => void
+  submitting: boolean
+}) {
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const password = String(form.get("password"))
+    const nextError = !password
+      ? "Informe a senha"
+      : password.length < MIN_PASSWORD_LENGTH
+        ? `A senha precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres`
+        : null
+    setPasswordError(nextError)
+    if (nextError) return
+    onSubmit(password)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="new-password">Nova senha</Label>
+        <Input
+          id="new-password"
+          name="password"
+          type="password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          {...fieldErrorProps("new-password", passwordError)}
+        />
+        <FieldError fieldId="new-password" message={passwordError} />
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Salvar
+      </Button>
+    </form>
+  )
 }
 
 export default function UsersPage() {
@@ -79,22 +213,13 @@ export default function UsersPage() {
     if (!open) setIsSuperAdmin(false)
   }
 
-  function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    createMutation.mutate({
-      name: String(form.get("name")),
-      email: String(form.get("email")),
-      password: String(form.get("password")),
-      is_super_admin: isSuperAdmin,
-    })
+  function onCreate(values: { name: string; email: string; password: string }) {
+    createMutation.mutate({ ...values, is_super_admin: isSuperAdmin })
   }
 
-  function onReset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function onReset(password: string) {
     if (!resetUser) return
-    const form = new FormData(event.currentTarget)
-    resetMutation.mutate({ id: resetUser.id, password: String(form.get("password")) })
+    resetMutation.mutate({ id: resetUser.id, password })
   }
 
   return (
@@ -115,31 +240,12 @@ export default function UsersPage() {
             <DialogHeader>
               <DialogTitle>Novo usuario</DialogTitle>
             </DialogHeader>
-            <form onSubmit={onCreate} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Nome</Label>
-                <Input id="name" name="name" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" className="font-mono" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input id="password" name="password" type="password" required minLength={8} />
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="is_super_admin"
-                  checked={isSuperAdmin}
-                  onCheckedChange={(checked) => setIsSuperAdmin(checked === true)}
-                />
-                <Label htmlFor="is_super_admin">Super admin</Label>
-              </div>
-              <Button type="submit" disabled={createMutation.isPending} className="mt-1">
-                Criar
-              </Button>
-            </form>
+            <CreateUserForm
+              isSuperAdmin={isSuperAdmin}
+              onSuperAdminChange={setIsSuperAdmin}
+              onSubmit={onCreate}
+              submitting={createMutation.isPending}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -202,15 +308,7 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Redefinir senha de {resetUser?.name}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={onReset} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="new-password">Nova senha</Label>
-              <Input id="new-password" name="password" type="password" required minLength={8} />
-            </div>
-            <Button type="submit" disabled={resetMutation.isPending} className="mt-1">
-              Salvar
-            </Button>
-          </form>
+          <ResetUserPasswordForm onSubmit={onReset} submitting={resetMutation.isPending} />
         </DialogContent>
       </Dialog>
     </section>

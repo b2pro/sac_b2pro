@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   createMember,
   listMembersAdmin,
@@ -41,9 +43,9 @@ import {
   type MemberDetail,
   type MemberRole,
 } from "@/lib/members"
+import { isValidEmail, MIN_PASSWORD_LENGTH } from "@/lib/validation"
 
 const MEMBERS_KEY = ["membros-gerencia"]
-const MIN_PASSWORD_LENGTH = 8
 
 /** A descricao de cada papel fica no seletor, e nao numa coluna da tabela: ela
  *  muda uma decisao no momento em que o admin escolhe, e repetida em toda linha
@@ -127,6 +129,158 @@ function RoleSelect({
   )
 }
 
+function CreateMemberForm({
+  role,
+  onRoleChange,
+  onSubmit,
+  submitting,
+}: {
+  role: MemberRole
+  onRoleChange: (role: MemberRole) => void
+  onSubmit: (values: { name: string; email: string; password: string }) => void
+  submitting: boolean
+}) {
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const name = String(form.get("name")).trim()
+    const email = String(form.get("email")).trim()
+    const password = String(form.get("password"))
+
+    const nextNameError = name ? null : "Informe o nome"
+    const nextEmailError = !email
+      ? "Informe o email"
+      : !isValidEmail(email)
+        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        : null
+    const nextPasswordError = !password
+      ? "Informe a senha"
+      : password.length < MIN_PASSWORD_LENGTH
+        ? `A senha precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres`
+        : null
+    setNameError(nextNameError)
+    setEmailError(nextEmailError)
+    setPasswordError(nextPasswordError)
+    if (nextNameError || nextEmailError || nextPasswordError) return
+
+    onSubmit({ name, email, password })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="membro-nome">Nome</Label>
+        <Input
+          id="membro-nome"
+          name="name"
+          required
+          autoComplete="off"
+          {...fieldErrorProps("membro-nome", nameError)}
+        />
+        <FieldError fieldId="membro-nome" message={nameError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="membro-email">Email</Label>
+        <Input
+          id="membro-email"
+          name="email"
+          type="email"
+          className="font-mono"
+          required
+          autoComplete="off"
+          {...fieldErrorProps("membro-email", emailError)}
+        />
+        <FieldError fieldId="membro-email" message={emailError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="membro-papel">Papel</Label>
+        <RoleSelect id="membro-papel" value={role} onChange={onRoleChange} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="membro-senha">Senha</Label>
+        <Input
+          id="membro-senha"
+          name="password"
+          type="password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          autoComplete="new-password"
+          aria-invalid={passwordError != null}
+          aria-describedby={passwordError ? "membro-senha-error" : "membro-senha-ajuda"}
+        />
+        {passwordError ? (
+          <FieldError fieldId="membro-senha" message={passwordError} />
+        ) : (
+          <p id="membro-senha-ajuda" className="text-[12.5px] text-muted-foreground">
+            Ao menos {MIN_PASSWORD_LENGTH} caracteres.
+          </p>
+        )}
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Cadastrar membro
+      </Button>
+    </form>
+  )
+}
+
+function ResetPasswordForm({
+  fieldId,
+  onSubmit,
+  submitting,
+}: {
+  fieldId: string
+  onSubmit: (password: string) => void
+  submitting: boolean
+}) {
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const password = String(form.get("password"))
+    const nextError = !password
+      ? "Informe a senha"
+      : password.length < MIN_PASSWORD_LENGTH
+        ? `A senha precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres`
+        : null
+    setPasswordError(nextError)
+    if (nextError) return
+    onSubmit(password)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={fieldId}>Nova senha</Label>
+        <Input
+          id={fieldId}
+          name="password"
+          type="password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          autoComplete="new-password"
+          aria-invalid={passwordError != null}
+          aria-describedby={passwordError ? `${fieldId}-error` : `${fieldId}-ajuda`}
+        />
+        {passwordError ? (
+          <FieldError fieldId={fieldId} message={passwordError} />
+        ) : (
+          <p id={`${fieldId}-ajuda`} className="text-[12.5px] text-muted-foreground">
+            Ao menos {MIN_PASSWORD_LENGTH} caracteres.
+          </p>
+        )}
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Redefinir senha
+      </Button>
+    </form>
+  )
+}
+
 export default function MembrosPage() {
   const { session } = useAuth()
   const queryClient = useQueryClient()
@@ -191,18 +345,11 @@ export default function MembrosPage() {
     if (!open) setCreateRole("atendente")
   }
 
-  function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
+  function onCreate(values: { name: string; email: string; password: string }) {
     // Nome e senha vao em TODA requisicao, sem ramo que os omita: o use case
     // exige os dois inclusive quando o email ja existe na plataforma e ele vai
     // descartar ambos. Ver o comentario de createMember em lib/members.ts.
-    createMutation.mutate({
-      name: String(form.get("name")).trim(),
-      email: String(form.get("email")).trim(),
-      password: String(form.get("password")),
-      role: createRole,
-    })
+    createMutation.mutate({ ...values, role: createRole })
   }
 
   function openEdit(member: MemberDetail) {
@@ -217,11 +364,9 @@ export default function MembrosPage() {
     updateMutation.mutate({ userId: editing.id, role: editRole, active: editActive })
   }
 
-  function onReset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function onReset(password: string) {
     if (!resetTarget) return
-    const form = new FormData(event.currentTarget)
-    resetMutation.mutate({ userId: resetTarget.id, password: String(form.get("password")) })
+    resetMutation.mutate({ userId: resetTarget.id, password })
   }
 
   const rows = members ?? []
@@ -250,45 +395,12 @@ export default function MembrosPage() {
                 Defina o acesso e o papel de quem vai usar o SAC neste tenant.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={onCreate} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="membro-nome">Nome</Label>
-                <Input id="membro-nome" name="name" required autoComplete="off" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="membro-email">Email</Label>
-                <Input
-                  id="membro-email"
-                  name="email"
-                  type="email"
-                  className="font-mono"
-                  required
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="membro-papel">Papel</Label>
-                <RoleSelect id="membro-papel" value={createRole} onChange={setCreateRole} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="membro-senha">Senha</Label>
-                <Input
-                  id="membro-senha"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={MIN_PASSWORD_LENGTH}
-                  autoComplete="new-password"
-                  aria-describedby="membro-senha-ajuda"
-                />
-                <p id="membro-senha-ajuda" className="text-[12.5px] text-muted-foreground">
-                  Ao menos {MIN_PASSWORD_LENGTH} caracteres.
-                </p>
-              </div>
-              <Button type="submit" disabled={createMutation.isPending} className="mt-1">
-                Cadastrar membro
-              </Button>
-            </form>
+            <CreateMemberForm
+              role={createRole}
+              onRoleChange={setCreateRole}
+              onSubmit={onCreate}
+              submitting={createMutation.isPending}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -403,7 +515,7 @@ export default function MembrosPage() {
             <DialogDescription className="font-mono">{editing?.email}</DialogDescription>
           </DialogHeader>
           {editing && (
-            <form onSubmit={onEdit} className="flex flex-col gap-4">
+            <form onSubmit={onEdit} noValidate className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="membro-editar-papel">Papel</Label>
                 <RoleSelect id="membro-editar-papel" value={editRole} onChange={setEditRole} />
@@ -443,26 +555,11 @@ export default function MembrosPage() {
               A senha atual para de valer assim que voce salvar. Combine a nova com o membro.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={onReset} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="membro-nova-senha">Nova senha</Label>
-              <Input
-                id="membro-nova-senha"
-                name="password"
-                type="password"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                autoComplete="new-password"
-                aria-describedby="membro-nova-senha-ajuda"
-              />
-              <p id="membro-nova-senha-ajuda" className="text-[12.5px] text-muted-foreground">
-                Ao menos {MIN_PASSWORD_LENGTH} caracteres.
-              </p>
-            </div>
-            <Button type="submit" disabled={resetMutation.isPending} className="mt-1">
-              Redefinir senha
-            </Button>
-          </form>
+          <ResetPasswordForm
+            fieldId="membro-nova-senha"
+            onSubmit={onReset}
+            submitting={resetMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
     </section>

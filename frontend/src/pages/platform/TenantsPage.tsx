@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -38,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   KNOWN_MODULES,
   createLink,
@@ -59,6 +61,56 @@ const STATUSES: TenantStatus[] = ["ativa", "teste", "suspensa", "inativa"]
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
+}
+
+function CreateTenantForm({
+  onSubmit,
+  submitting,
+}: {
+  onSubmit: (values: { slug: string; name: string }) => void
+  submitting: boolean
+}) {
+  const [slugError, setSlugError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const slug = String(form.get("slug")).trim()
+    const name = String(form.get("name")).trim()
+
+    const nextSlugError = slug ? null : "Informe o slug"
+    const nextNameError = name ? null : "Informe o nome"
+    setSlugError(nextSlugError)
+    setNameError(nextNameError)
+    if (nextSlugError || nextNameError) return
+
+    onSubmit({ slug, name })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="slug">Slug</Label>
+        <Input
+          id="slug"
+          name="slug"
+          className="font-mono"
+          required
+          {...fieldErrorProps("slug", slugError)}
+        />
+        <FieldError fieldId="slug" message={slugError} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="name">Nome</Label>
+        <Input id="name" name="name" required {...fieldErrorProps("name", nameError)} />
+        <FieldError fieldId="name" message={nameError} />
+      </div>
+      <Button type="submit" disabled={submitting} className="mt-1">
+        Criar
+      </Button>
+    </form>
+  )
 }
 
 export default function TenantsPage() {
@@ -97,13 +149,8 @@ export default function TenantsPage() {
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-  function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    createMutation.mutate({
-      slug: String(form.get("slug")),
-      name: String(form.get("name")),
-    })
+  function onCreate(values: { slug: string; name: string }) {
+    createMutation.mutate(values)
   }
 
   return (
@@ -124,19 +171,7 @@ export default function TenantsPage() {
             <DialogHeader>
               <DialogTitle>Novo tenant</DialogTitle>
             </DialogHeader>
-            <form onSubmit={onCreate} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input id="slug" name="slug" className="font-mono" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Nome</Label>
-                <Input id="name" name="name" required />
-              </div>
-              <Button type="submit" disabled={createMutation.isPending} className="mt-1">
-                Criar
-              </Button>
-            </form>
+            <CreateTenantForm onSubmit={onCreate} submitting={createMutation.isPending} />
           </DialogContent>
         </Dialog>
       </div>

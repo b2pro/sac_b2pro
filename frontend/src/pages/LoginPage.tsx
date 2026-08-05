@@ -6,10 +6,13 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { fieldErrorProps } from "@/lib/field-error"
+import { isValidEmail } from "@/lib/validation"
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -19,12 +22,25 @@ export default function LoginPage() {
   const [tenantSlug, setTenantSlug] = useState("")
   const [remember, setRemember] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
+    const trimmedEmail = email.trim()
+    const nextEmailError = !trimmedEmail
+      ? "Informe o email"
+      : !isValidEmail(trimmedEmail)
+        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        : null
+    const nextPasswordError = !password ? "Informe a senha" : null
+    setEmailError(nextEmailError)
+    setPasswordError(nextPasswordError)
+    if (nextEmailError || nextPasswordError) return
+
     setLoading(true)
     try {
-      await login({ email, password, tenantSlug, remember })
+      await login({ email: trimmedEmail, password, tenantSlug, remember })
       navigate("/")
     } catch (error) {
       const message =
@@ -51,7 +67,7 @@ export default function LoginPage() {
             <CardDescription>Informe o slug da organizacao e suas credenciais.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={onSubmit} className="flex flex-col gap-5">
+            <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="tenant">Organizacao (slug)</Label>
                 <Input
@@ -70,9 +86,14 @@ export default function LoginPage() {
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (emailError) setEmailError(null)
+                  }}
                   autoComplete="username"
+                  {...fieldErrorProps("email", emailError)}
                 />
+                <FieldError fieldId="email" message={emailError} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="password">Senha</Label>
@@ -81,9 +102,14 @@ export default function LoginPage() {
                   type="password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    if (passwordError) setPasswordError(null)
+                  }}
                   autoComplete="current-password"
+                  {...fieldErrorProps("password", passwordError)}
                 />
+                <FieldError fieldId="password" message={passwordError} />
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
