@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api"
 import { listCatalog, listProducts } from "@/lib/cadastros"
+import { fieldErrorProps } from "@/lib/field-error"
 import {
   addTicketItem,
   canEditTicket,
@@ -66,7 +68,9 @@ export function ItemsCard({
   const [target, setTarget] = useState<TicketItemView | null>(null)
   const [productId, setProductId] = useState("")
   const [productQuery, setProductQuery] = useState("")
+  const [productError, setProductError] = useState<string | null>(null)
   const [defectTypeId, setDefectTypeId] = useState("")
+  const [defectError, setDefectError] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -80,7 +84,9 @@ export function ItemsCard({
     setTarget(null)
     setProductId("")
     setProductQuery("")
+    setProductError(null)
     setDefectTypeId("")
+    setDefectError(null)
     setQuantity(1)
     setDialog("adicionar")
   }
@@ -89,7 +95,9 @@ export function ItemsCard({
     setTarget(item)
     setProductId(item.product_id)
     setProductQuery(item.product_name)
+    setProductError(null)
     setDefectTypeId(item.defect_type_id)
+    setDefectError(null)
     setQuantity(item.quantity)
     setDialog("editar")
   }
@@ -141,14 +149,11 @@ export function ItemsCard({
 
   function onSubmitForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!productId) {
-      toast.error("Selecione o produto")
-      return
-    }
-    if (!defectTypeId) {
-      toast.error("Selecione o defeito")
-      return
-    }
+    const nextProductError = productId ? null : "Busque e selecione um produto da lista"
+    const nextDefectError = defectTypeId ? null : "Selecione o defeito"
+    setProductError(nextProductError)
+    setDefectError(nextDefectError)
+    if (nextProductError || nextDefectError) return
     if (dialog === "editar") {
       updateMutation.mutate()
     } else {
@@ -244,6 +249,7 @@ export function ItemsCard({
             ref={formRef}
             tabIndex={-1}
             onSubmit={onSubmitForm}
+            noValidate
             className="flex flex-col gap-4 outline-none"
           >
             <div className="flex flex-col gap-2">
@@ -255,10 +261,12 @@ export function ItemsCard({
                 onValueChange={(value) => {
                   setProductQuery(value)
                   setProductId("")
+                  setProductError(null)
                 }}
                 onSelect={(option) => {
                   setProductId(option.id)
                   setProductQuery(option.label)
+                  setProductError(null)
                 }}
                 queryKey="item-card-produto"
                 fetchOptions={async (search) => {
@@ -269,13 +277,21 @@ export function ItemsCard({
                     sublabel: product.sku,
                   }))
                 }}
+                {...fieldErrorProps("item-produto", productError)}
               />
+              <FieldError fieldId="item-produto" message={productError} />
             </div>
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="item-defeito">Defeito</Label>
-              <Select value={defectTypeId || undefined} onValueChange={setDefectTypeId}>
-                <SelectTrigger id="item-defeito" className="w-full">
+              <Select
+                value={defectTypeId}
+                onValueChange={(value) => {
+                  setDefectTypeId(value)
+                  setDefectError(null)
+                }}
+              >
+                <SelectTrigger id="item-defeito" className="w-full" {...fieldErrorProps("item-defeito", defectError)}>
                   <SelectValue placeholder="Selecione o defeito" />
                 </SelectTrigger>
                 <SelectContent>
@@ -286,6 +302,7 @@ export function ItemsCard({
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError fieldId="item-defeito" message={defectError} />
             </div>
 
             <div className="flex flex-col gap-2">

@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { FieldError } from "@/components/ui/field-error"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -37,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { listCatalog, listCustomers } from "@/lib/cadastros"
+import { fieldErrorProps } from "@/lib/field-error"
 import { formatDocument, onlyDigits } from "@/lib/format"
 import {
   approveTicket,
@@ -106,12 +108,15 @@ export function ActionPanel({
   const [dialog, setDialog] = useState<DialogKind>(null)
   const [notes, setNotes] = useState("")
   const [declineReason, setDeclineReason] = useState("")
-  const [declineReasonError, setDeclineReasonError] = useState(false)
+  const [declineReasonError, setDeclineReasonError] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [reverseCode, setReverseCode] = useState("")
+  const [reverseCodeError, setReverseCodeError] = useState<string | null>(null)
   const [solutionTypeId, setSolutionTypeId] = useState("")
+  const [solutionTypeError, setSolutionTypeError] = useState<string | null>(null)
   const [finalNotes, setFinalNotes] = useState("")
   const [warrantyOrderCode, setWarrantyOrderCode] = useState("")
+  const [warrantyOrderCodeError, setWarrantyOrderCodeError] = useState<string | null>(null)
   const [warrantyTracking, setWarrantyTracking] = useState("")
   const [editBrandId, setEditBrandId] = useState(ticket.brand_id)
   const [editChannelId, setEditChannelId] = useState(ticket.purchase_channel_id ?? CHANNEL_NONE)
@@ -152,16 +157,21 @@ export function ActionPanel({
     if (kind === "aprovar") setNotes("")
     if (kind === "declinar") {
       setDeclineReason("")
-      setDeclineReasonError(false)
+      setDeclineReasonError(null)
     }
     if (kind === "cancelar") setCancelReason("")
-    if (kind === "reverso") setReverseCode("")
+    if (kind === "reverso") {
+      setReverseCode("")
+      setReverseCodeError(null)
+    }
     if (kind === "finalizar") {
       setSolutionTypeId("")
+      setSolutionTypeError(null)
       setFinalNotes("")
     }
     if (kind === "garantia") {
       setWarrantyOrderCode(ticket.warranty_order_code ?? "")
+      setWarrantyOrderCodeError(null)
       setWarrantyTracking(ticket.warranty_tracking_code ?? "")
     }
     if (kind === "editar") {
@@ -347,37 +357,40 @@ export function ActionPanel({
   function onSubmitDeclinar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!declineReason.trim()) {
-      setDeclineReasonError(true)
+      setDeclineReasonError("Informe o motivo do declinio")
       return
     }
-    setDeclineReasonError(false)
+    setDeclineReasonError(null)
     declineMutation.mutate()
   }
 
   function onSubmitFinalizar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!solutionTypeId) {
-      toast.error("Selecione a solucao")
+      setSolutionTypeError("Selecione a solucao aplicada")
       return
     }
+    setSolutionTypeError(null)
     finalizeMutation.mutate()
   }
 
   function onSubmitReverso(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!reverseCode.trim()) {
-      toast.error("Informe o codigo reverso")
+      setReverseCodeError("Informe o codigo reverso")
       return
     }
+    setReverseCodeError(null)
     reverseMutation.mutate()
   }
 
   function onSubmitGarantia(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!warrantyOrderCode.trim()) {
-      toast.error("Informe o codigo do pedido de garantia")
+      setWarrantyOrderCodeError("Informe o codigo do pedido de garantia")
       return
     }
+    setWarrantyOrderCodeError(null)
     warrantyMutation.mutate()
   }
 
@@ -489,6 +502,7 @@ export function ActionPanel({
               event.preventDefault()
               approveMutation.mutate()
             }}
+            noValidate
             className="flex flex-col gap-4"
           >
             <div className="flex flex-col gap-2">
@@ -518,7 +532,7 @@ export function ActionPanel({
             <DialogTitle>Declinar ticket</DialogTitle>
             <DialogDescription>Informe o motivo da recusa.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSubmitDeclinar} className="flex flex-col gap-4">
+          <form onSubmit={onSubmitDeclinar} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="declinar-reason">Motivo</Label>
               <Textarea
@@ -526,17 +540,13 @@ export function ActionPanel({
                 value={declineReason}
                 onChange={(e) => {
                   setDeclineReason(e.target.value)
-                  if (declineReasonError && e.target.value.trim()) setDeclineReasonError(false)
+                  if (declineReasonError && e.target.value.trim()) setDeclineReasonError(null)
                 }}
                 rows={3}
-                aria-invalid={declineReasonError}
-                aria-describedby={declineReasonError ? "declinar-reason-error" : undefined}
+                required
+                {...fieldErrorProps("declinar-reason", declineReasonError)}
               />
-              {declineReasonError && (
-                <p id="declinar-reason-error" className="text-xs text-destructive">
-                  Informe o motivo do declinio
-                </p>
-              )}
+              <FieldError fieldId="declinar-reason" message={declineReasonError} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>
@@ -563,6 +573,7 @@ export function ActionPanel({
               event.preventDefault()
               cancelMutation.mutate()
             }}
+            noValidate
             className="flex flex-col gap-4"
           >
             <div className="flex flex-col gap-2">
@@ -592,11 +603,21 @@ export function ActionPanel({
             <DialogTitle>Finalizar ticket</DialogTitle>
             <DialogDescription>Selecione a solucao aplicada.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSubmitFinalizar} className="flex flex-col gap-4">
+          <form onSubmit={onSubmitFinalizar} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="finalizar-solucao">Solucao</Label>
-              <Select value={solutionTypeId} onValueChange={setSolutionTypeId}>
-                <SelectTrigger id="finalizar-solucao" className="w-full">
+              <Select
+                value={solutionTypeId}
+                onValueChange={(value) => {
+                  setSolutionTypeId(value)
+                  setSolutionTypeError(null)
+                }}
+              >
+                <SelectTrigger
+                  id="finalizar-solucao"
+                  className="w-full"
+                  {...fieldErrorProps("finalizar-solucao", solutionTypeError)}
+                >
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
@@ -607,6 +628,7 @@ export function ActionPanel({
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError fieldId="finalizar-solucao" message={solutionTypeError} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="finalizar-notes">Notas (opcional)</Label>
@@ -635,16 +657,21 @@ export function ActionPanel({
             <DialogTitle>Registrar reverso</DialogTitle>
             <DialogDescription>Informe o codigo de rastreio do envio reverso.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSubmitReverso} className="flex flex-col gap-4">
+          <form onSubmit={onSubmitReverso} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="reverso-code">Codigo</Label>
               <Input
                 id="reverso-code"
                 className="font-mono"
                 value={reverseCode}
-                onChange={(e) => setReverseCode(e.target.value)}
+                onChange={(e) => {
+                  setReverseCode(e.target.value)
+                  if (reverseCodeError && e.target.value.trim()) setReverseCodeError(null)
+                }}
                 required
+                {...fieldErrorProps("reverso-code", reverseCodeError)}
               />
+              <FieldError fieldId="reverso-code" message={reverseCodeError} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>
@@ -664,16 +691,21 @@ export function ActionPanel({
             <DialogTitle>Registrar garantia</DialogTitle>
             <DialogDescription>Pedido de garantia junto ao fabricante.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSubmitGarantia} className="flex flex-col gap-4">
+          <form onSubmit={onSubmitGarantia} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="garantia-order">Pedido</Label>
               <Input
                 id="garantia-order"
                 className="font-mono"
                 value={warrantyOrderCode}
-                onChange={(e) => setWarrantyOrderCode(e.target.value)}
+                onChange={(e) => {
+                  setWarrantyOrderCode(e.target.value)
+                  if (warrantyOrderCodeError && e.target.value.trim()) setWarrantyOrderCodeError(null)
+                }}
                 required
+                {...fieldErrorProps("garantia-order", warrantyOrderCodeError)}
               />
+              <FieldError fieldId="garantia-order" message={warrantyOrderCodeError} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="garantia-tracking">Rastreio (opcional)</Label>
@@ -706,6 +738,7 @@ export function ActionPanel({
               event.preventDefault()
               editMutation.mutate()
             }}
+            noValidate
             className="flex flex-col gap-4"
           >
             <div className="flex flex-col gap-2 border-b border-border pb-4">

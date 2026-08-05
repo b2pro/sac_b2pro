@@ -16,6 +16,8 @@ export function AutocompleteField({
   fetchOptions,
   queryKey,
   disabled,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   id: string
   placeholder: string
@@ -25,6 +27,8 @@ export function AutocompleteField({
   fetchOptions: (search: string) => Promise<AutocompleteOption[]>
   queryKey: string
   disabled?: boolean
+  "aria-invalid"?: boolean
+  "aria-describedby"?: string
 }) {
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
@@ -80,6 +84,8 @@ export function AutocompleteField({
         value={value}
         disabled={disabled}
         autoComplete="off"
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         onChange={(e) => {
           onValueChange(e.target.value)
           setOpen(true)
