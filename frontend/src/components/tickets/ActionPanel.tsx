@@ -806,6 +806,7 @@ export function ActionPanel({
                 <AttendantSelect
                   id="editar-atendente"
                   value={editAttendantId}
+                  currentName={detail.attendant_name}
                   onChange={setEditAttendantId}
                 />
               </div>
