@@ -214,7 +214,10 @@ async def test_update_recalcula_sla_ao_mudar_prioridade() -> None:
         ADMIN,
         ticket.id,
         UpdateTicketInput(
-            brand_id=ticket.brand_id, priority=TicketPriority.URGENTE, description="quebrou"
+            brand_id=ticket.brand_id,
+            priority=TicketPriority.URGENTE,
+            attendant_user_id=ticket.attendant_user_id,
+            description="quebrou",
         ),
     )
     assert updated.priority is TicketPriority.URGENTE
@@ -232,14 +235,22 @@ async def test_atendente_nao_edita_ticket_alheio_nem_fora_de_estado_editavel() -
         await update.execute(
             ATENDENTE,
             de_outro.id,
-            UpdateTicketInput(brand_id=de_outro.brand_id, priority=TicketPriority.MEDIA),
+            UpdateTicketInput(
+                brand_id=de_outro.brand_id,
+                priority=TicketPriority.MEDIA,
+                attendant_user_id=de_outro.attendant_user_id,
+            ),
         )
     de_outro.status = TicketStatus.AGUARDANDO_ANALISE
     with pytest.raises(ConflictError):
         await update.execute(
             ADMIN,
             de_outro.id,
-            UpdateTicketInput(brand_id=de_outro.brand_id, priority=TicketPriority.MEDIA),
+            UpdateTicketInput(
+                brand_id=de_outro.brand_id,
+                priority=TicketPriority.MEDIA,
+                attendant_user_id=de_outro.attendant_user_id,
+            ),
         )
 
 
@@ -254,7 +265,11 @@ async def test_visualizador_ve_mas_nao_edita() -> None:
         await update.execute(
             visualizador,
             ticket.id,
-            UpdateTicketInput(brand_id=ticket.brand_id, priority=TicketPriority.MEDIA),
+            UpdateTicketInput(
+                brand_id=ticket.brand_id,
+                priority=TicketPriority.MEDIA,
+                attendant_user_id=ticket.attendant_user_id,
+            ),
         )
 
 
@@ -509,16 +524,23 @@ async def test_update_troca_atendente_para_o_proprio_ator_nao_notifica() -> None
     assert publisher.publish_calls == []
 
 
-async def test_update_sem_attendant_user_id_nao_mexe_no_atendente() -> None:
+async def test_update_attendant_user_id_igual_ao_atual_e_no_op_sem_permissao_elevada() -> None:
+    # PUT e substituicao pura (Fase 4): attendant_user_id e obrigatorio, mas
+    # mandar o mesmo atendente que ja esta no ticket continua um no-op --
+    # inclusive pra quem so tem EDITAR_PROPRIO_TICKET, sem EDITAR_QUALQUER_TICKET.
     create, tickets, _, _, _, _ = make_create_use_case()
     ticket = await create.execute(
-        ADMIN, CreateTicketInput(brand_id=uuid4(), priority=TicketPriority.MEDIA)
+        ATENDENTE, CreateTicketInput(brand_id=uuid4(), priority=TicketPriority.MEDIA)
     )
     original = ticket.attendant_user_id
     update = make_update_use_case(tickets)
 
     updated = await update.execute(
-        ADMIN, ticket.id, UpdateTicketInput(brand_id=ticket.brand_id, priority=ticket.priority)
+        ATENDENTE,
+        ticket.id,
+        UpdateTicketInput(
+            brand_id=ticket.brand_id, priority=ticket.priority, attendant_user_id=original
+        ),
     )
 
     assert updated.attendant_user_id == original

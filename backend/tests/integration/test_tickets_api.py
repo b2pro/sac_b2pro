@@ -254,7 +254,12 @@ async def test_update_recalcula_sla_e_edita_itens(
 
     res = await client.put(
         f"/api/tickets/{ticket_id}",
-        json={"brand_id": brand, "priority": "urgente", "description": "editado"},
+        json={
+            "brand_id": brand,
+            "priority": "urgente",
+            "description": "editado",
+            "attendant_user_id": created["attendant_user_id"],
+        },
         headers=headers,
     )
     assert res.status_code == 200
@@ -278,6 +283,29 @@ async def test_update_recalcula_sla_e_edita_itens(
 
     res = await client.delete(f"/api/tickets/{ticket_id}/itens/{item_id}", headers=headers)
     assert res.status_code == 204
+
+
+async def test_update_sem_attendant_user_id_da_422(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    # PUT e substituicao pura (decisao da Fase 4): omitir attendant_user_id
+    # nao pode mais significar "nao mexer no atendente" -- e um 422
+    # explicito, como qualquer outro campo obrigatorio omitido.
+    env = await _setup(session, engine, "tapi422")
+    headers = env.headers
+    brand = await _brand_id(client, headers)
+    created = (
+        await client.post(
+            "/api/tickets", json={"brand_id": brand, "priority": "baixa"}, headers=headers
+        )
+    ).json()
+
+    res = await client.put(
+        f"/api/tickets/{created['id']}",
+        json={"brand_id": brand, "priority": "urgente", "description": "editado"},
+        headers=headers,
+    )
+    assert res.status_code == 422
 
 
 async def test_visualizador_nao_cria_mas_lista(

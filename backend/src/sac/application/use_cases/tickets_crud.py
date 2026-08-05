@@ -74,10 +74,11 @@ class CreateTicketInput:
 class UpdateTicketInput:
     brand_id: UUID
     priority: TicketPriority
+    # PUT e substituicao pura: obrigatorio, sem excecao de "omitido". Igual
+    # ao atendente atual e no-op; diferente dispara a checagem de permissao
+    # de reatribuicao (EDITAR_QUALQUER_TICKET).
+    attendant_user_id: UUID
     customer_id: UUID | None = None
-    # None (omitido) significa "nao mexer no atendente"; so um valor
-    # diferente do atual dispara a checagem de permissao de reatribuicao.
-    attendant_user_id: UUID | None = None
     supervisor_user_id: UUID | None = None
     purchase_channel_id: UUID | None = None
     order_code: str | None = None
@@ -252,7 +253,7 @@ class UpdateTicketUseCase:
         old_attendant = ticket.attendant_user_id
         new_attendant = data.attendant_user_id
         reassigned = False
-        if new_attendant is not None and new_attendant != old_attendant:
+        if new_attendant != old_attendant:
             if not has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
                 raise PermissionDeniedError("sem permissao para reatribuir o ticket")
             ticket.attendant_user_id = new_attendant
