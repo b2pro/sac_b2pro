@@ -35,6 +35,7 @@ class UserModel(TimestampMixin, Base):
     password_hash: Mapped[str] = mapped_column(Text)
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    credentials_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

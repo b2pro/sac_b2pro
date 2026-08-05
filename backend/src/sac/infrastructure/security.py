@@ -44,15 +44,39 @@ class JwtTokenService:
         )
 
     def create_access(
-        self, user_id: UUID, tenant_slug: str | None, role: Role | None, is_super_admin: bool
-    ) -> str:
-        return self._create(user_id, tenant_slug, role, is_super_admin, "access", self._access_ttl)
-
-    def create_refresh(
-        self, user_id: UUID, tenant_slug: str | None, role: Role | None, is_super_admin: bool
+        self,
+        user_id: UUID,
+        tenant_slug: str | None,
+        role: Role | None,
+        is_super_admin: bool,
+        credentials_version: int,
     ) -> str:
         return self._create(
-            user_id, tenant_slug, role, is_super_admin, "refresh", self._refresh_ttl
+            user_id,
+            tenant_slug,
+            role,
+            is_super_admin,
+            credentials_version,
+            "access",
+            self._access_ttl,
+        )
+
+    def create_refresh(
+        self,
+        user_id: UUID,
+        tenant_slug: str | None,
+        role: Role | None,
+        is_super_admin: bool,
+        credentials_version: int,
+    ) -> str:
+        return self._create(
+            user_id,
+            tenant_slug,
+            role,
+            is_super_admin,
+            credentials_version,
+            "refresh",
+            self._refresh_ttl,
         )
 
     def _create(
@@ -61,6 +85,7 @@ class JwtTokenService:
         tenant_slug: str | None,
         role: Role | None,
         is_super_admin: bool,
+        credentials_version: int,
         token_type: str,
         ttl: timedelta,
     ) -> str:
@@ -69,6 +94,7 @@ class JwtTokenService:
             "sub": str(user_id),
             "type": token_type,
             "sa": is_super_admin,
+            "cv": credentials_version,
             "iat": now,
             "exp": now + ttl,
         }
@@ -92,4 +118,7 @@ class JwtTokenService:
             role=Role(role_value) if role_value else None,
             is_super_admin=bool(claims.get("sa", False)),
             token_type=expected_type,
+            # ausencia do claim vale zero, nunca a versao atual: token do formato
+            # antigo nao pode ser aceito por omissao.
+            credentials_version=int(claims.get("cv", 0)),
         )

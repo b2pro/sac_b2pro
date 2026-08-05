@@ -78,5 +78,7 @@ def token_for(
     user: User, *, tenant_slug: str | None = None, role: Role | None = None
 ) -> dict[str, str]:
     tokens = JwtTokenService.from_settings(Settings())
-    access = tokens.create_access(user.id, tenant_slug, role, user.is_super_admin)
+    access = tokens.create_access(
+        user.id, tenant_slug, role, user.is_super_admin, user.credentials_version
+    )
     return {"Authorization": f"Bearer {access}"}

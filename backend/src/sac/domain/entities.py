@@ -35,6 +35,21 @@ class User:
     is_super_admin: bool = False
     active: bool = True
     deleted_at: datetime | None = None
+    # Versao da credencial: vai como claim no token e e reconferida no refresh.
+    # Sem isso o sistema nao tem como invalidar sessao (JWT stateless, sem jti nem
+    # denylist) e um refresh token roubado sobrevive a troca de senha por todo o
+    # TTL. Comeca em 1 para que token antigo, sem o claim, nunca bata.
+    credentials_version: int = 1
+
+    def change_password(self, password_hash: str) -> None:
+        """Troca a senha e derruba as sessoes emitidas antes.
+
+        A invariante mora aqui, e nao em quem chama, porque resetar senha sem
+        invalidar token e exatamente a falha que o versionamento fecha: qualquer
+        caminho novo de troca de senha herda o comportamento correto.
+        """
+        self.password_hash = password_hash
+        self.credentials_version += 1
 
 
 @dataclass

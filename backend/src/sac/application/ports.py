@@ -13,6 +13,9 @@ class TokenPayload:
     role: Role | None
     is_super_admin: bool
     token_type: str
+    # Zero quando o token nao traz o claim (formato anterior ao versionamento):
+    # nunca bate com a versao do banco, que comeca em 1.
+    credentials_version: int = 0
 
 
 class UserRepository(Protocol):
@@ -52,10 +55,20 @@ class PasswordHasherPort(Protocol):
 
 class TokenServicePort(Protocol):
     def create_access(
-        self, user_id: UUID, tenant_slug: str | None, role: Role | None, is_super_admin: bool
+        self,
+        user_id: UUID,
+        tenant_slug: str | None,
+        role: Role | None,
+        is_super_admin: bool,
+        credentials_version: int,
     ) -> str: ...
     def create_refresh(
-        self, user_id: UUID, tenant_slug: str | None, role: Role | None, is_super_admin: bool
+        self,
+        user_id: UUID,
+        tenant_slug: str | None,
+        role: Role | None,
+        is_super_admin: bool,
+        credentials_version: int,
     ) -> str: ...
     def decode(self, token: str, expected_type: str) -> TokenPayload: ...
 

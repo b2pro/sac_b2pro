@@ -25,6 +25,7 @@ def _user_entity(m: UserModel) -> User:
         is_super_admin=m.is_super_admin,
         active=m.active,
         deleted_at=m.deleted_at,
+        credentials_version=m.credentials_version,
     )
 
 
@@ -67,6 +68,7 @@ class SqlUserRepository:
                 is_super_admin=user.is_super_admin,
                 active=user.active,
                 deleted_at=user.deleted_at,
+                credentials_version=user.credentials_version,
             )
         )
         try:
@@ -90,6 +92,7 @@ class SqlUserRepository:
         m.is_super_admin = user.is_super_admin
         m.active = user.active
         m.deleted_at = user.deleted_at
+        m.credentials_version = user.credentials_version
         try:
             await self._session.flush()
         except IntegrityError as exc:

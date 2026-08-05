@@ -79,7 +79,11 @@ class ResetPasswordUseCase:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise NotFoundError("usuario nao encontrado")
-        user.password_hash = self._hasher.hash(new_password)
+        # change_password (e nao atribuir password_hash direto) porque a troca tem
+        # de incrementar a versao de credencial: e o que invalida os refresh tokens
+        # ja emitidos. Este use case e o unico ponto de troca de senha do sistema --
+        # ResetMemberPasswordUseCase delega para ele.
+        user.change_password(self._hasher.hash(new_password))
         await self._users.update(user)
 
 

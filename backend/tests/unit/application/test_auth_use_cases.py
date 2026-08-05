@@ -1,6 +1,7 @@
-from datetime import timedelta
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
+import jwt
 import pytest
 
 from sac.application.use_cases.auth import LoginUseCase, RefreshTokenUseCase
@@ -15,7 +16,26 @@ from tests.unit.fakes import (
     InMemoryUserTenantRepository,
 )
 
-TOKENS = JwtTokenService("segredo-teste", "HS256", timedelta(minutes=15), timedelta(days=7))
+SEGREDO = "segredo-de-teste-com-32-bytes-ou-mais"
+TOKENS = JwtTokenService(SEGREDO, "HS256", timedelta(minutes=15), timedelta(days=7))
+
+
+def _refresh_sem_claim_de_versao(user_id: UUID) -> str:
+    """Um refresh token no formato de antes do versionamento de credencial."""
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "type": "refresh",
+            "sa": False,
+            "tenant": "b2pro",
+            "role": Role.ADMIN.value,
+            "iat": now,
+            "exp": now + timedelta(days=7),
+        },
+        SEGREDO,
+        algorithm="HS256",
+    )
 
 
 class Cenario:
@@ -170,6 +190,53 @@ async def test_refresh_falha_se_tenant_suspenso_apos_login() -> None:
     with pytest.raises(AuthError) as exc:
         await c.refresh.execute(login.refresh_token)
     assert str(exc.value) == "sessao invalida"
+
+
+async def test_refresh_falha_depois_que_a_senha_e_trocada() -> None:
+    """Resetar a senha e a resposta padrao a um token roubado. Sem versionamento
+    de credencial o refresh so olha `user.active` e o vinculo, entao o refresh
+    token roubado continuaria valendo por todo o TTL (7 dias) mesmo depois do
+    reset - a acao de contencao nao conteria nada."""
+    c = Cenario()
+    user = await c.com_usuario()
+    tenant = await c.com_tenant()
+    await c.com_vinculo(user, tenant)
+    roubado = (await c.login.execute("ana@b2.com", "senha123", "b2pro")).refresh_token
+
+    user.change_password("h:senha-nova")
+    await c.users.update(user)
+
+    with pytest.raises(AuthError) as exc:
+        await c.refresh.execute(roubado)
+    assert str(exc.value) == "sessao invalida"
+
+
+async def test_login_depois_da_troca_de_senha_emite_sessao_valida() -> None:
+    c = Cenario()
+    user = await c.com_usuario()
+    tenant = await c.com_tenant()
+    await c.com_vinculo(user, tenant)
+    user.change_password("h:senha-nova")
+    await c.users.update(user)
+
+    login = await c.login.execute("ana@b2.com", "senha-nova", "b2pro")
+
+    result = await c.refresh.execute(login.refresh_token)
+    assert result.role is Role.ADMIN
+
+
+async def test_token_emitido_antes_do_versionamento_nao_serve_para_refresh() -> None:
+    """Token antigo nao tem o claim `cv`. Ele nao pode ser aceito por omissao: a
+    ausencia do claim vale zero, que nunca bate com a versao do banco (comeca em
+    1). O efeito e um logout forcado no deploy, que e o comportamento correto."""
+    c = Cenario()
+    user = await c.com_usuario()
+    tenant = await c.com_tenant()
+    await c.com_vinculo(user, tenant)
+    antigo = _refresh_sem_claim_de_versao(user.id)
+
+    with pytest.raises(AuthError):
+        await c.refresh.execute(antigo)
 
 
 async def test_refresh_falha_se_vinculo_desativado_apos_login() -> None:

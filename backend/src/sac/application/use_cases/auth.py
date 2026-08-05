@@ -70,6 +70,12 @@ class RefreshTokenUseCase:
         user = await self._users.get_by_id(payload.user_id)
         if user is None or not user.active:
             raise AuthError(_SESSION_INVALID)
+        # Unico ponto onde uma sessao pode ser revogada: o refresh. O access token
+        # nao consulta o banco (seria uma query por request) e vale ate expirar --
+        # 15 minutos por default. Trocar a senha corta a renovacao aqui, entao o
+        # alcance de um refresh token roubado cai de 7 dias para esses minutos.
+        if payload.credentials_version != user.credentials_version:
+            raise AuthError(_SESSION_INVALID)
         role: Role | None = None
         if payload.tenant_slug:
             role = await _tenant_role(
@@ -99,8 +105,12 @@ async def _tenant_role(
 def _issue(
     tokens: TokenServicePort, user: User, tenant_slug: str | None, role: Role | None
 ) -> AuthResult:
-    access = tokens.create_access(user.id, tenant_slug, role, user.is_super_admin)
-    refresh = tokens.create_refresh(user.id, tenant_slug, role, user.is_super_admin)
+    access = tokens.create_access(
+        user.id, tenant_slug, role, user.is_super_admin, user.credentials_version
+    )
+    refresh = tokens.create_refresh(
+        user.id, tenant_slug, role, user.is_super_admin, user.credentials_version
+    )
     return AuthResult(
         access_token=access,
         refresh_token=refresh,
