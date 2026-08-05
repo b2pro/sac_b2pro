@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
+import { AttendantSelect } from "@/components/tickets/AttendantSelect"
 import { StatusTrail } from "@/components/tickets/StatusTrail"
 import { SupervisorSelect } from "@/components/tickets/SupervisorSelect"
 import { Button } from "@/components/ui/button"
@@ -121,6 +122,7 @@ export function ActionPanel({
   const [editSupervisorId, setEditSupervisorId] = useState<string | null>(
     ticket.supervisor_user_id ?? null,
   )
+  const [editAttendantId, setEditAttendantId] = useState(ticket.attendant_user_id)
   const [editDocument, setEditDocument] = useState("")
   const [editCustomerId, setEditCustomerId] = useState<string | null>(ticket.customer_id)
   const [editCustomerName, setEditCustomerName] = useState<string | null>(
@@ -167,6 +169,7 @@ export function ActionPanel({
       setEditDeliveryDate(ticket.delivery_date?.slice(0, 10) ?? "")
       setEditDescription(ticket.description ?? "")
       setEditSupervisorId(ticket.supervisor_user_id ?? null)
+      setEditAttendantId(ticket.attendant_user_id)
       setEditDocument("")
       setEditCustomerId(ticket.customer_id)
       setEditCustomerName(detail.customer?.name ?? null)
@@ -289,6 +292,7 @@ export function ActionPanel({
         priority: editPriority,
         customer_id: editCustomerId,
         supervisor_user_id: editSupervisorId,
+        attendant_user_id: editAttendantId,
         purchase_channel_id: editChannelId === CHANNEL_NONE ? null : editChannelId,
         order_code: editOrderCode.trim() || null,
         purchase_date: editPurchaseDate || null,
@@ -795,6 +799,17 @@ export function ActionPanel({
                 onChange={setEditSupervisorId}
               />
             </div>
+
+            {canDecide(role) && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="editar-atendente">Atendente responsavel</Label>
+                <AttendantSelect
+                  id="editar-atendente"
+                  value={editAttendantId}
+                  onChange={setEditAttendantId}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">

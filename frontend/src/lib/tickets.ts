@@ -191,7 +191,14 @@ export type TicketCreateInput = {
   items?: TicketItemInput[]
 }
 
-export type TicketUpdateInput = Omit<TicketCreateInput, "customer" | "items">
+// attendant_user_id so entra aqui (nao em TicketCreateInput): a criacao ainda
+// nao oferece escolha de atendente, e alargar o tipo de criacao exporia o
+// campo ali silenciosamente. Enviar null e um no-op no backend (nunca um
+// "remover atendente" — todo ticket sempre tem um), entao o formulario de
+// edicao sempre envia o atendente atual quando o campo nao aparece na tela.
+export type TicketUpdateInput = Omit<TicketCreateInput, "customer" | "items"> & {
+  attendant_user_id?: string | null
+}
 
 export type ListTicketsParams = {
   status?: TicketStatus

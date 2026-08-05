@@ -319,22 +319,27 @@ export default function TicketsListPage() {
         onSelect={onSelectQuickFilter}
       />
 
-      {customerId && (
-        <div className="-mt-2.5 mb-5">
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card pr-1 pl-2.5 text-[13px]">
-            <span className="text-muted-foreground">Filtrando por cliente</span>
-            {customerName && <span className="font-medium">{customerName}</span>}
-            <button
-              type="button"
-              onClick={() => setParam("customer_id", "")}
-              aria-label="Remover filtro de cliente"
-              className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <X size={16} strokeWidth={1.5} aria-hidden />
-            </button>
-          </span>
-        </div>
-      )}
+      {/* aria-live precisa do container sempre no DOM: se o bloco todo so
+          entrasse quando ha customerId, a pill nasceria ja dentro da regiao e
+          o leitor de tela nunca perceberia a insercao. */}
+      <div aria-live="polite">
+        {customerId && (
+          <div className="-mt-2.5 mb-5">
+            <span className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card pr-1 pl-2.5 text-[13px]">
+              <span className="text-muted-foreground">Filtrando por cliente</span>
+              {customerName && <span className="font-medium">{customerName}</span>}
+              <button
+                type="button"
+                onClick={() => setParam("customer_id", "")}
+                aria-label="Remover filtro de cliente"
+                className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X size={16} strokeWidth={1.5} aria-hidden />
+              </button>
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2.5">
         {isLoading ? (
