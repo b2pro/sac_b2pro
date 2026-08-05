@@ -12,6 +12,7 @@ from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sac.application.use_cases.global_search import (
+    MIN_DOCUMENT_DIGITS,
     CustomerHit,
     GlobalSearchResult,
     ProductHit,
@@ -74,13 +75,15 @@ class SqlGlobalSearchRepository:
         self, escaped: str, digits: str, limit: int
     ) -> tuple[CustomerHit, ...]:
         # nome/email usam o termo original (escapado); documento/telefone
-        # casam so pelos digitos, e ficam de fora quando o termo nao tem
-        # nenhum (senao "%%" combinaria com qualquer linha).
+        # casam so pelos digitos, e ficam de fora quando o termo tem menos
+        # digitos que MIN_DOCUMENT_DIGITS (senao um LIKE de 1-2 digitos
+        # combinaria com quase qualquer linha -- mesmo raciocinio do
+        # MIN_TERM_LENGTH em global_search.py, aplicado ao atalho de digitos).
         conditions = [
             CustomerModel.name.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
             CustomerModel.email.ilike(f"%{escaped}%", escape=LIKE_ESCAPE_CHAR),
         ]
-        if digits:
+        if len(digits) >= MIN_DOCUMENT_DIGITS:
             escaped_digits = escape_like(digits)
             conditions.append(
                 CustomerModel.document.like(f"%{escaped_digits}%", escape=LIKE_ESCAPE_CHAR)

@@ -34,13 +34,18 @@ async def _setup_trio(
 
 
 async def _criar_cliente(
-    client: AsyncClient, headers: dict[str, str], *, name: str, document: str, email: str
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    name: str,
+    document: str,
+    email: str,
+    phone: str | None = None,
 ) -> str:
-    res = await client.post(
-        "/api/cadastros/clientes",
-        json={"name": name, "document": document, "email": email},
-        headers=headers,
-    )
+    body: dict[str, object] = {"name": name, "document": document, "email": email}
+    if phone is not None:
+        body["phone"] = phone
+    res = await client.post("/api/cadastros/clientes", json=body, headers=headers)
     assert res.status_code == 201
     return str(res.json()["id"])
 
@@ -232,3 +237,79 @@ async def test_busca_termo_curto_nao_retorna_nada(
     res = await client.get("/api/busca", params={"q": "x"}, headers=headers_admin)
     assert res.status_code == 200
     assert res.json() == {"tickets": [], "clientes": [], "produtos": []}
+
+
+async def test_busca_termo_com_poucos_digitos_nao_casa_cliente_por_documento_ou_telefone(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers_admin, _, _, _ = await _setup_trio(session, engine, "buscapoucosdig")
+    # CPF_A ("39053344705") contem o digito "7", mas o nome/email do cliente
+    # nao contem "zz7zz" -- sem o piso de MIN_DOCUMENT_DIGITS,
+    # normalize_digits("zz7zz") colapsaria para "7" e o LIKE '%7%' casaria
+    # esse cliente so por um digito, a mesma falta de seletividade que
+    # MIN_TERM_LENGTH existe pra evitar no termo geral.
+    await _criar_cliente(
+        client,
+        headers_admin,
+        name="Fulano Nada A Ver",
+        document=CPF_A,
+        email="fulano.naoacha@example.com",
+        phone="11988887654",
+    )
+
+    res = await client.get("/api/busca", params={"q": "zz7zz"}, headers=headers_admin)
+    assert res.status_code == 200
+    assert res.json()["clientes"] == []
+
+
+async def test_busca_encontra_cliente_por_fragmento_de_documento_no_piso_de_tres_digitos(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers_admin, _, _, _ = await _setup_trio(session, engine, "buscapisodig")
+    customer_id = await _criar_cliente(
+        client,
+        headers_admin,
+        name="Beltrano Piso",
+        document=CPF_A,  # "39053344705"
+        email="beltrano.piso@example.com",
+    )
+
+    # "705" e os 3 ultimos digitos de CPF_A -- exatamente no piso, deve casar.
+    res = await client.get("/api/busca", params={"q": "705"}, headers=headers_admin)
+    assert res.status_code == 200
+    assert [c["id"] for c in res.json()["clientes"]] == [customer_id]
+
+
+async def test_busca_encontra_cliente_por_ultimos_digitos_do_telefone(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers_admin, _, _, _ = await _setup_trio(session, engine, "buscatelefone")
+    customer_id = await _criar_cliente(
+        client,
+        headers_admin,
+        name="Cicrano Telefone",
+        document=CPF_B,
+        email="cicrano.telefone@example.com",
+        phone="11988887654",
+    )
+
+    res = await client.get("/api/busca", params={"q": "7654"}, headers=headers_admin)
+    assert res.status_code == 200
+    assert [c["id"] for c in res.json()["clientes"]] == [customer_id]
+
+
+async def test_busca_termo_alfabetico_continua_casando_por_nome_sem_digitos(
+    client: AsyncClient, session: AsyncSession, engine: AsyncEngine
+) -> None:
+    headers_admin, _, _, _ = await _setup_trio(session, engine, "buscaalfa")
+    customer_id = await _criar_cliente(
+        client,
+        headers_admin,
+        name="Alfabetico Puro",
+        document=CPF_A,
+        email="alfabetico.puro@example.com",
+    )
+
+    res = await client.get("/api/busca", params={"q": "Alfabetico"}, headers=headers_admin)
+    assert res.status_code == 200
+    assert [c["id"] for c in res.json()["clientes"]] == [customer_id]

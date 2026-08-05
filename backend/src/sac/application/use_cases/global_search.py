@@ -18,6 +18,14 @@ from sac.domain.tickets import TicketStatus
 # termo de 1 char casa quase tudo). Por isso o minimo e 2.
 MIN_TERM_LENGTH = 2
 
+# mesma logica de seletividade do MIN_TERM_LENGTH, mas para o atalho de
+# digitos usado por documento/telefone: normalize_digits() colapsa o termo
+# original para so os digitos, entao um termo qualquer com 1 ou 2 digitos
+# (ex.: "zz7zz") virava um LIKE de 1-2 chars sobre a coluna inteira e casava
+# quase todo cliente. Abaixo deste piso o atalho de digitos fica desligado
+# -- o termo ainda casa por nome/email normalmente.
+MIN_DOCUMENT_DIGITS = 3
+
 # limite por grupo, nao total: a busca e um preview rapido de command
 # palette, nao uma listagem paginada.
 RESULTS_PER_GROUP = 5
