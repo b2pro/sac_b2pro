@@ -2,8 +2,8 @@
 # Entrypoint de PRODUCAO. Diferencas deliberadas em relacao ao
 # docker-entrypoint.sh (desenvolvimento):
 #
-#   - sem a flag de reload automatico: em producao o reload reinicia o
-#     processo a cada arquivo tocado e e incompativel com --workers;
+#   - sem --reload: em producao o reload reinicia o processo a cada arquivo
+#     tocado e e incompativel com --workers;
 #   - sem seed: o super admin e criado uma vez, por comando manual, para nao
 #     exigir SAC_SEED_ADMIN_PASSWORD permanente no ambiente do servidor
 #     (ver docs/deploy.md);

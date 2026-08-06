@@ -16,6 +16,23 @@ ENTRYPOINT_PROD = RAIZ / "backend" / "docker-entrypoint.prod.sh"
 COMPOSE_PROD = RAIZ / "docker-compose.prod.yml"
 
 
+def _conteudo_prod() -> str:
+    return ENTRYPOINT_PROD.read_text(encoding="utf-8")
+
+
+def _sem_comentarios(conteudo: str) -> str:
+    """Descarta linhas de comentario antes de comparar substring.
+
+    Um comentario pode legitimamente citar o nome de uma flag para explicar
+    que o script NAO a usa (e o entrypoint de producao faz isso). Comparar
+    substring no arquivo inteiro faz esse comentario quebrar a suite sem
+    relacao com o comportamento real do script -- por isso a comparacao roda
+    so sobre as linhas executaveis.
+    """
+    linhas = [linha for linha in conteudo.splitlines() if not linha.strip().startswith("#")]
+    return "\n".join(linhas)
+
+
 def test_entrypoint_de_prod_existe() -> None:
     assert ENTRYPOINT_PROD.is_file()
 
@@ -23,17 +40,18 @@ def test_entrypoint_de_prod_existe() -> None:
 def test_entrypoint_de_prod_nao_usa_reload() -> None:
     """--reload derruba os workers (uvicorn recusa reload com --workers) e
     reinicia o processo a cada arquivo tocado."""
-    assert "--reload" not in ENTRYPOINT_PROD.read_text(encoding="utf-8")
+    assert "--reload" not in _sem_comentarios(_conteudo_prod())
 
 
 def test_entrypoint_de_prod_nao_roda_seed() -> None:
     """O super admin nasce por comando manual: deixar o seed no boot exige a
     senha do admin permanente no ambiente do servidor."""
-    assert "sac.infrastructure.seed" not in ENTRYPOINT_PROD.read_text(encoding="utf-8")
+    assert "sac.infrastructure.seed" not in _sem_comentarios(_conteudo_prod())
 
 
 def test_entrypoint_de_prod_roda_as_migrations() -> None:
     """Sem isto o container sobe e responde 500 em toda rota com tabela
-    faltando depois de um deploy que trouxe migration nova."""
-    conteudo = ENTRYPOINT_PROD.read_text(encoding="utf-8")
-    assert "sac.infrastructure.migrate all" in conteudo
+    faltando depois de um deploy que trouxe migration nova. Filtrar
+    comentarios so torna esta assercao mais forte: um comentario que apenas
+    cite o comando de migration deixa de bastar para o teste passar."""
+    assert "sac.infrastructure.migrate all" in _sem_comentarios(_conteudo_prod())
