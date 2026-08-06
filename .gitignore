@@ -6,6 +6,12 @@ __pycache__/
 .ruff_cache/
 .env
 .env.prod
+# Qualquer .env com sufixo (.env.wasabi, .env.staging, ...): a regra por nome
+# exato acima ja deixou passar .env.prod uma vez. Os modelos sao a excecao,
+# porque nascem sem valor e existem para ser copiados.
+.env.*
+!.env.example
+!.env.prod.example
 node_modules/
 dist/
 flowhub/
