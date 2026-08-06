@@ -69,7 +69,7 @@ Risco aceito e consciente: uma **presigned URL de `put_object` não suporta `con
 ### Objetos órfãos: a varredura do worker resolve isso hoje
 
 O worker de produção roda uma reconciliação periódica que lista o bucket e apaga,
-tenant por tenant, todo objeto sem linha correspondente no banco: `reconcile_orphans_all` (chamada dentro de `run_forever`, em `backend/src/sac/infrastructure/worker.py:204`) usa `ReconcileOrphansUseCase` para isso. A opção 2 abaixo, antes listada como pendente, está implementada.
+tenant por tenant, todo objeto sem linha correspondente no banco: `reconcile_orphans_all` (chamada dentro do loop de `run_forever`, em `backend/src/sac/infrastructure/worker.py`) usa `ReconcileOrphansUseCase` para isso. A opção 2 abaixo, antes listada como pendente, está implementada.
 
 - A margem de idade é `SAC_RECONCILE_ORPHANS_HOURS` (padrão 24 horas, com piso de 1 hora — `settings.py:42`): objeto mais novo que a margem nunca é apagado, porque pode ser um upload em voo (o PUT já gravou o objeto no bucket, a confirmação ainda não gravou a linha no banco).
 - Continua **não** existindo regra de ciclo de vida no bucket capaz de resolver isso: as chaves nascem na posição final (`{tenant}/{ticket}/…`, `{tenant}/catalogo/produtos/…`) e a confirmação só muda uma linha no banco — nenhum atributo do objeto distingue confirmado de abandonado. Uma regra `Expiration: Days: N` sobre esses prefixos apagaria anexos em uso; essa parte do documento permanece válida.

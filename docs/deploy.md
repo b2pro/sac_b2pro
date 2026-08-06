@@ -10,8 +10,10 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml <comando>
 ```
 
 O `--env-file` não é enfeite: a interpolação de `${POSTGRES_PASSWORD}` dentro de
-`docker-compose.prod.yml` depende dele. Sem ele o compose sobe com a senha vazia
-ou com o valor default do shell, e a conexão do backend com o banco falha.
+`docker-compose.prod.yml` depende dele. Sem ele o compose **aborta** ao subir —
+`${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}` recusa interpolar
+para vazio e mostra essa mensagem, em vez de subir com senha vazia ou com algum
+valor do shell.
 
 ## Topologia
 
@@ -121,6 +123,15 @@ autenticar de novo. Trocar o segredo é uma operação deliberada (rotação por
 de vazamento, por exemplo), nunca algo para fazer sem avisar quem está usando o
 sistema.
 
+**`SAC_RECONCILE_ORPHANS_HOURS` merece atenção antes de preencher.** É a margem de
+idade da varredura de objetos órfãos que o `worker` roda no bucket (padrão 24h, piso
+de 1h) — e essa varredura **apaga** objetos, quase imediatamente no boot do worker
+(`proxima_reconciliacao = 0.0` em `backend/src/sac/infrastructure/worker.py`). Apontar
+um segundo stack (staging, ambiente de teste) com banco vazio ou desatualizado para o
+bucket de **produção** apaga todo objeto com mais de 24h que não tenha linha
+correspondente no banco daquele stack — inclusive anexos em uso. Ver
+`docs/armazenamento-anexos.md`, item 3 do checklist.
+
 ## Proxy reverso do host
 
 ```nginx
@@ -210,6 +221,17 @@ este bloco.
 
 ## Primeiro deploy
 
+**Nunca rode `docker compose up -d` sem `-f docker-compose.prod.yml` dentro de
+`/opt/sac`.** O clone traz o repositório inteiro, e sem o `-f` o comando sobe o
+compose de **desenvolvimento**: Postgres em `5432:5432` com senha `sac`, backend
+em `8000:8000`, MinIO nas portas dele, tudo em `0.0.0.0`, e
+`SAC_ENVIRONMENT: development` — que libera o boot com o segredo JWT público do
+repositório, e quem tem esse segredo emite token com `sa: true` e vira
+super_admin. Some isso ao fato de que a publicação de porta do Docker entra por
+`DOCKER-USER`/`PREROUTING` — um firewall do host (`ufw`, por exemplo) **não**
+bloqueia essas portas — e é a pior exposição possível, a partir de um comando de
+uma linha.
+
 ```bash
 git clone <repo> /opt/sac && cd /opt/sac
 cp .env.prod.example .env.prod && chmod 600 .env.prod
@@ -293,6 +315,19 @@ Esperado, em ordem: `200`; `200`; `200` com corpo JSON de health; falha de conex
 não publicada); a listagem com as tabelas globais (`users`, `tenants`,
 `user_tenants`); a linha do loop do worker; e, nas linhas do uvicorn, nenhuma menção a
 reload, com mais de um processo iniciado.
+
+Nenhum item acima toca storage: com `SAC_S3_BUCKET` vazio o stack sobe healthy do
+mesmo jeito, porque nada valida a configuração de S3 no boot. Por isso, acrescentar
+um último item manual: rodar
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend \
+  uv run --frozen --no-dev python -m sac.infrastructure.provision_bucket --conferir
+```
+
+e depois fazer upload real de um anexo pela interface, aguardando o preview
+aparecer. É o único jeito de exercitar CORS do bucket, presigned PUT e o job de
+preview de ponta a ponta — nada nos itens 1-8 passa por ali.
 
 Depois disso, criar o super admin pelo comando da seção "Primeiro deploy" e confirmar
 a resposta esperada (`super admin criado: ...`, depois `super admin ja existe: ...`
