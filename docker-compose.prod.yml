@@ -48,6 +48,11 @@ services:
       timeout: 3s
       retries: 30
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   worker:
     build: ./backend
@@ -62,6 +67,11 @@ services:
       - .env.prod
     environment:
       SAC_DATABASE_URL: postgresql+asyncpg://sac:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}@db:5432/sac
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   web:
     build: ./frontend
@@ -82,6 +92,11 @@ services:
       # host fica sempre fixo em 127.0.0.1, para nao dar para escrever por
       # engano um bind que publique na interface publica.
       - "127.0.0.1:${SAC_WEB_PORT:-8080}:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
