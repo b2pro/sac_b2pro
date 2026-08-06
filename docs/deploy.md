@@ -178,13 +178,42 @@ Cloudflare, porque as faixas mudam:
 
 ```bash
 sudo mkdir -p /etc/nginx/snippets
-{ curl -s https://www.cloudflare.com/ips-v4; curl -s https://www.cloudflare.com/ips-v6; } \
+{ curl -s https://www.cloudflare.com/ips-v4; echo; \
+  curl -s https://www.cloudflare.com/ips-v6; echo; } \
+  | grep -v '^$' \
   | sed 's|^|set_real_ip_from |; s|$|;|' \
   | sudo tee /etc/nginx/snippets/cloudflare-realip.conf > /dev/null
 echo 'real_ip_header CF-Connecting-IP;' \
   | sudo tee -a /etc/nginx/snippets/cloudflare-realip.conf > /dev/null
+wc -l /etc/nginx/snippets/cloudflare-realip.conf   # 23 linhas em 2026-08
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+**Os dois `echo` não são enfeite.** A lista `ips-v4` da Cloudflare não termina com
+newline, então sem eles a última faixa IPv4 cola na primeira IPv6 e o nginx recusa a
+configuração inteira:
+
+```
+[emerg] host not found in set_real_ip_from "131.0.72.0/222400:cb00::/32"
+```
+
+O `grep -v '^$'` remove as linhas vazias que os `echo` introduzem. Como o `nginx -t`
+roda antes do `reload`, esse erro para o processo sem derrubar nada — mas só se você
+respeitar o `&&`.
+
+Depois de instalar o server block, o `include` já está no `ops/nginx/sac.conf`. Se o
+certbot já editou o arquivo instalado, acrescente a linha nele sem sobrescrever o
+arquivo:
+
+```bash
+sudo cp /etc/nginx/sites-available/sac.conf /etc/nginx/sites-available/sac.conf.bak
+sudo sed -i '/set \$sac_upstream/a\    include /etc/nginx/snippets/cloudflare-realip*.conf;' \
+  /etc/nginx/sites-available/sac.conf
+sudo nginx -t
+```
+
+**Verificar que funcionou:** abra o site e confira o `access.log` — o IP das linhas novas
+tem de ser o do visitante, não `104.21.x.x` nem `172.67.x.x`.
 
 Se o domínio sair de trás da Cloudflare, **apague o snippet**: confiar em
 `CF-Connecting-IP` sem a Cloudflare na frente permite que qualquer cliente mande esse
