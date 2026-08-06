@@ -78,6 +78,7 @@ def multipart_lifecycle(dias: int) -> dict[str, Any]:
 
 
 _SEM_CICLO_DE_VIDA = {"NoSuchLifecycleConfiguration", "NoSuchLifecycleConfigurationError"}
+_SEM_CORS = {"NoSuchCORSConfiguration", "NoSuchCORSConfigurationError"}
 
 
 def regras_atuais(cliente: Any, bucket: str) -> list[dict[str, Any]]:
@@ -106,17 +107,40 @@ def mesclar_multipart(existentes: list[dict[str, Any]], dias: int) -> dict[str, 
     return {"Rules": [*outras, multipart_lifecycle(dias)["Rules"][0]]}
 
 
+def _relatar_falha_de_leitura(rotulo: str, codigo: str | None, ausencia: set[str]) -> None:
+    """Distingue "o bucket nao tem esta configuracao" de "eu nao consegui olhar".
+
+    Confundir os dois custou caro num primeiro deploy real: a credencial nao
+    tinha permissao de bucket, o --conferir respondeu "nenhum (AccessDenied)", e
+    a leitura natural foi que faltava aplicar o CORS. O CORS estava aplicado --
+    quem nao conseguia ler era a credencial. Diagnostico que afirma o que nao
+    verificou manda a investigacao para o lado errado.
+    """
+    if codigo in ausencia:
+        logger.info("%s: nenhum (%s)", rotulo, codigo)
+        return
+    logger.info(
+        "%s: nao foi possivel verificar (%s). Isto NAO diz que o bucket esta sem a "
+        "configuracao -- diz que esta credencial nao consegue le-la. Confira a policy "
+        "do sub-user (o nome do bucket no Resource, e se ela esta anexada ao usuario).",
+        rotulo,
+        codigo,
+    )
+
+
 def _mostrar(cliente: Any, bucket: str) -> None:
     try:
         atual = cliente.get_bucket_cors(Bucket=bucket)
         logger.info("CORS atual: %s", json.dumps(atual.get("CORSRules"), default=str))
     except ClientError as erro:
-        logger.info("CORS atual: nenhum (%s)", erro.response["Error"].get("Code"))
+        _relatar_falha_de_leitura("CORS atual", erro.response["Error"].get("Code"), _SEM_CORS)
     try:
         atual = cliente.get_bucket_lifecycle_configuration(Bucket=bucket)
         logger.info("Ciclo de vida atual: %s", json.dumps(atual.get("Rules"), default=str))
     except ClientError as erro:
-        logger.info("Ciclo de vida atual: nenhum (%s)", erro.response["Error"].get("Code"))
+        _relatar_falha_de_leitura(
+            "Ciclo de vida atual", erro.response["Error"].get("Code"), _SEM_CICLO_DE_VIDA
+        )
 
 
 def aplicar(cliente: Any, bucket: str, origens: list[str], multipart_dias: int | None) -> list[str]:

@@ -5,6 +5,7 @@ from botocore.exceptions import ClientError
 
 from sac.infrastructure.provision_bucket import (
     MULTIPART_RULE_ID,
+    _mostrar,
     aplicar,
     cors_configuration,
     mesclar_multipart,
@@ -26,10 +27,12 @@ class FakeS3:
         self,
         erros: dict[str, ClientError] | None = None,
         regras: list[dict[str, Any]] | None = None,
+        cors: list[dict[str, Any]] | None = None,
     ) -> None:
         self.chamadas: list[tuple[str, dict[str, Any]]] = []
         self._erros = erros or {}
         self._regras = regras
+        self._cors = cors
 
     def _executar(self, operacao: str, **kwargs: Any) -> dict[str, Any]:
         self.chamadas.append((operacao, kwargs))
@@ -52,6 +55,15 @@ class FakeS3:
         if self._regras is None:
             raise _erro("NoSuchLifecycleConfiguration", "GetBucketLifecycleConfiguration")
         return {"Rules": self._regras}
+
+    def get_bucket_cors(self, **kwargs: Any) -> dict[str, Any]:
+        self.chamadas.append(("get_bucket_cors", kwargs))
+        erro = self._erros.get("get_bucket_cors")
+        if erro is not None:
+            raise erro
+        if self._cors is None:
+            raise _erro("NoSuchCORSConfiguration", "GetBucketCors")
+        return {"CORSRules": self._cors}
 
 
 def test_cors_permite_so_o_header_que_dispara_o_preflight() -> None:
@@ -192,3 +204,65 @@ def test_aplicar_manda_ao_bucket_a_configuracao_mesclada() -> None:
     )
     ids = [regra["ID"] for regra in enviado["LifecycleConfiguration"]["Rules"]]
     assert ids == ["expira-staging", MULTIPART_RULE_ID]
+
+
+def test_conferir_nao_afirma_ausencia_quando_nao_conseguiu_ler(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AccessDenied nao e ausencia de configuracao.
+
+    O modo de falha que este teste fecha aconteceu de verdade num primeiro
+    deploy: a credencial nao tinha permissao de bucket, o `--conferir` respondeu
+    "CORS atual: nenhum (AccessDenied)", e a conclusao natural -- errada -- foi
+    que o bucket estava sem CORS. O CORS estava aplicado; quem nao conseguia
+    ler era a credencial. Um diagnostico que afirma o que nao verificou custa
+    mais caro que um diagnostico que se cala.
+    """
+    cliente = FakeS3(
+        erros={
+            "get_bucket_cors": _erro("AccessDenied", "GetBucketCors"),
+            "get_bucket_lifecycle_configuration": _erro(
+                "AccessDenied", "GetBucketLifecycleConfiguration"
+            ),
+        }
+    )
+
+    with caplog.at_level("INFO", logger="sac.provisionamento"):
+        _mostrar(cliente, "sac-prod")
+
+    texto = caplog.text
+    assert "nao foi possivel verificar" in texto
+    assert "AccessDenied" in texto
+    assert "nenhum" not in texto
+
+
+def test_conferir_afirma_ausencia_quando_o_bucket_realmente_nao_tem(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """O outro lado: NoSuchCORSConfiguration e ausencia de verdade, e continua
+    sendo reportada como ausencia -- senao o teste acima teria sido "resolvido"
+    tornando a saida vaga para todo caso, o que perde informacao real."""
+    with caplog.at_level("INFO", logger="sac.provisionamento"):
+        _mostrar(FakeS3(), "sac-prod")
+
+    texto = caplog.text
+    assert "nenhum" in texto
+    assert "nao foi possivel verificar" not in texto
+
+
+def test_conferir_mostra_a_configuracao_quando_consegue_ler(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    cliente = FakeS3(
+        cors=[{"AllowedOrigins": ["https://solucionix.com.br"]}],
+        regras=[{"ID": MULTIPART_RULE_ID}],
+    )
+
+    with caplog.at_level("INFO", logger="sac.provisionamento"):
+        _mostrar(cliente, "sac-prod")
+
+    texto = caplog.text
+    assert "solucionix.com.br" in texto
+    assert MULTIPART_RULE_ID in texto
+    assert "nao foi possivel verificar" not in texto
+    assert "nenhum" not in texto
