@@ -122,12 +122,14 @@ perguntar_se_vazio() {
 
 # ------------------------------------------------------------------- .env.prod
 
+primeira_vez=0
 if [ -f "$ENV_FILE" ]; then
   passo "$ENV_FILE ja existe -- completando so o que falta"
   aviso "Nenhum valor ja preenchido sera alterado (ver comentario no topo deste script)."
 else
   passo "Criando $ENV_FILE a partir de $EXEMPLO"
   cp "$EXEMPLO" "$ENV_FILE"
+  primeira_vez=1
 fi
 
 chmod 600 "$ENV_FILE"
@@ -148,6 +150,25 @@ else
 fi
 
 passo "Valores que so voce sabe"
+
+# A regiao vem pre-preenchida no modelo, entao "perguntar so se vazio" nunca
+# perguntaria -- e uma regiao errada nao da erro obvio: a assinatura da URL cobre
+# o header Host, e o Wasabi recusa com mensagem de credencial/endpoint invalido.
+# Por isso ela e confirmada na PRIMEIRA execucao, e nunca depois.
+if [ "$primeira_vez" -eq 1 ] && [ -t 0 ]; then
+  regiao_atual=$(ler_valor SAC_S3_REGION)
+  read -rp "  regiao do bucket no Wasabi [${regiao_atual}]: " regiao
+  regiao=${regiao:-$regiao_atual}
+  if [ "$regiao" != "$regiao_atual" ]; then
+    gravar_valor SAC_S3_REGION "$regiao"
+    gravar_valor SAC_S3_ENDPOINT_URL "https://s3.${regiao}.wasabisys.com"
+    gravar_valor SAC_S3_PUBLIC_ENDPOINT_URL "https://s3.${regiao}.wasabisys.com"
+    verde "  regiao e endpoints ajustados para $regiao"
+  else
+    printf '  %-28s %s\n' "SAC_S3_REGION" "$regiao_atual (mantido)"
+  fi
+fi
+
 perguntar_se_vazio SAC_S3_BUCKET "nome do bucket no Wasabi"
 perguntar_se_vazio SAC_S3_ACCESS_KEY "access key do Wasabi"
 perguntar_se_vazio SAC_S3_SECRET_KEY "secret key do Wasabi (nao aparece na tela)" sim
