@@ -91,7 +91,7 @@ services:
       # acesso HTTP sem TLS direto no IP da VPS. So a porta e configuravel: o
       # host fica sempre fixo em 127.0.0.1, para nao dar para escrever por
       # engano um bind que publique na interface publica.
-      - "127.0.0.1:${SAC_WEB_PORT:-8080}:80"
+      - "127.0.0.1:${SAC_WEB_PORT:-52010}:80"
     logging:
       driver: json-file
       options:

@@ -19,7 +19,7 @@ valor do shell.
 
 ```
 internet -> proxy reverso do host (TLS, dominio)
-              -> 127.0.0.1:8080  web (nginx: SPA + proxy /api)
+              -> 127.0.0.1:52010  web (nginx: SPA + proxy /api)
                                    -> backend:8000 (uvicorn, sem porta publicada)
                                         -> db:5432 (sem porta publicada)
                                    worker (previews, expiracao de pendentes, orfaos)
@@ -30,7 +30,7 @@ VPS) — é ele que guarda o certificado do domínio e fala HTTPS com a internet
 resto do stack (`web`, `backend`, `db`, `worker`) vive dentro do compose de produção
 (projeto `sac-prod`) e fala HTTP em texto puro entre si, isolado na rede interna do
 Docker. Só o serviço `web` publica porta no host, e só no loopback:
-`127.0.0.1:8080` por padrão. O host é fixo em `127.0.0.1` no
+`127.0.0.1:52010` por padrão. O host é fixo em `127.0.0.1` no
 `docker-compose.prod.yml` — só a porta é configurável, por `SAC_WEB_PORT` no
 `.env.prod.example` — de propósito: quem expõe na internet é o proxy reverso do
 host, nunca o Docker direto. `backend` e `db` não publicam porta nenhuma — o único
@@ -92,7 +92,7 @@ pendentes sem confirmação e reconciliando objetos órfãos no bucket.
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend \
   uv run --frozen --no-dev python -m sac.infrastructure.provision_bucket \
-  --origem https://sac.b2pro.com.br
+  --origem https://solucionix.com.br
 
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend \
   uv run --frozen --no-dev python -m sac.infrastructure.provision_bucket --conferir
@@ -134,48 +134,35 @@ correspondente no banco daquele stack — inclusive anexos em uso. Ver
 
 ## Proxy reverso do host
 
-```nginx
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name sac.b2pro.com.br;
+O server block está versionado em **`ops/nginx/sac.conf`** — é a fonte de verdade, e
+não uma cópia deste documento. Instalar:
 
-    ssl_certificate     /etc/letsencrypt/live/sac.b2pro.com.br/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/sac.b2pro.com.br/privkey.pem;
-
-    add_header Strict-Transport-Security "max-age=31536000" always;
-
-    # O SSE precisa dos dois lados sem buffer: se este salto bufferizar, as
-    # notificacoes param de chegar mesmo com o container configurado certo.
-    location = /api/notificacoes/stream {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-        proxy_read_timeout 1h;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        # SOBRESCREVE o header, nao acrescenta. O limitador de login le o
-        # PRIMEIRO item de X-Forwarded-For (rate_limit.py:38): com
-        # $proxy_add_x_forwarded_for aqui, um cliente que manda
-        # "X-Forwarded-For: 1.2.3.4" viraria o primeiro item e falsificaria o
-        # proprio IP, escapando do limite de tentativas de login.
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```bash
+sudo cp ops/nginx/sac.conf /etc/nginx/sites-available/sac.conf
+sudo ln -s /etc/nginx/sites-available/sac.conf /etc/nginx/sites-enabled/sac.conf
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d solucionix.com.br
 ```
 
-**Ponto de maior consequência deste documento**: o `proxy_set_header X-Forwarded-For
-$remote_addr;` acima **sobrescreve** o header, ele não o acrescenta (o que
-`$proxy_add_x_forwarded_for` faria). Isso importa porque o limitador de tentativas de
+O arquivo escuta **apenas na porta 80** de propósito. O certbot acrescenta o bloco
+`443`, as diretivas `ssl_certificate` e o redirect `80 -> 443`, e recarrega o nginx.
+Entregar um bloco `443` apontando para certificados que ainda não existem faria o
+`nginx -t` falhar e o nginx se recusar a recarregar — o que derrubaria também os
+outros sites que esta máquina serve.
+
+**Pré-requisito do certbot:** o A record já precisa estar propagado
+(`dig +short solucionix.com.br` retorna o IP da VPS), senão o desafio HTTP-01 do
+Let's Encrypt falha.
+
+Se mudar `SAC_WEB_PORT` no `.env.prod`, mude também o `proxy_pass` em
+`ops/nginx/sac.conf` — são os dois lados da mesma porta, e nada valida que eles
+concordam.
+
+**Ponto de maior consequência deste documento**: a linha `proxy_set_header
+X-Forwarded-For $remote_addr;` de `ops/nginx/sac.conf` **sobrescreve** o header, ela
+não o acrescenta (o que `$proxy_add_x_forwarded_for` faria). Se você escrever o server
+block à mão em vez de usar o arquivo versionado, é esta linha que não pode sair errada.
+Isso importa porque o limitador de tentativas de
 login (`client_ip` em `backend/src/sac/interface/rate_limit.py`) lê apenas o
 **primeiro** item de `X-Forwarded-For` quando `SAC_TRUSTED_PROXY=true`:
 
@@ -232,6 +219,31 @@ super_admin. Some isso ao fato de que a publicação de porta do Docker entra po
 bloqueia essas portas — e é a pior exposição possível, a partir de um comando de
 uma linha.
 
+### Caminho recomendado: o script
+
+```bash
+git clone <repo> /opt/sac && cd /opt/sac
+./scripts/setup-prod.sh
+```
+
+O script cobre o primeiro deploy **e** os seguintes. Ele confere os pré-requisitos,
+cria o `.env.prod` com permissão 600, **gera** o `SAC_JWT_SECRET` e o
+`POSTGRES_PASSWORD` (você não precisa inventar nem guardar nenhum dos dois), pergunta
+apenas o que ele não pode saber (bucket e chaves do Wasabi, domínio), sobe o stack,
+espera o backend ficar saudável e cria o super admin se ainda não houver nenhum.
+
+**Rodar de novo é seguro, e é o comando de deploy contínuo.** Se o `.env.prod` já
+existe, o script não reescreve nenhum valor já preenchido — só completa chaves
+vazias. Isso não é conveniência, é necessidade: a imagem do Postgres usa
+`POSTGRES_PASSWORD` apenas no `initdb`, quando o diretório de dados está vazio; num
+volume que já existe ela é ignorada. Se um segundo deploy regerasse a senha, o banco
+continuaria com a antiga enquanto o `SAC_DATABASE_URL` passaria a usar a nova — o
+backend pararia de autenticar, o container ficaria `unhealthy` e a aplicação sairia do
+ar, com a senha antiga já sobrescrita no arquivo. Rotação de senha do banco é
+procedimento manual (ver "Rotação de segredos" abaixo).
+
+### Caminho manual
+
 ```bash
 git clone <repo> /opt/sac && cd /opt/sac
 cp .env.prod.example .env.prod && chmod 600 .env.prod
@@ -284,6 +296,38 @@ o IP do container antigo pela vida inteira do processo e a API ficava
 respondendo 502 até alguém recriar o `web` manualmente — para sempre, não só
 durante o deploy.
 
+Rodar `./scripts/setup-prod.sh` de novo faz exatamente esses dois comandos, mais a
+espera pelo healthcheck. Ele não regenera segredo nenhum.
+
+## Rotação de segredos
+
+Nenhuma das duas rotações abaixo pode ser feita apenas editando o `.env.prod`, e é por
+isso que o script de setup nunca mexe em valor já preenchido.
+
+**Senha do Postgres.** A imagem do Postgres só aplica `POSTGRES_PASSWORD` no `initdb`,
+com o diretório de dados vazio. Num volume existente ela é ignorada, então a troca
+tem de acontecer **dentro** do banco, e o `.env.prod` só depois:
+
+```bash
+# 1. trocar no banco
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T db \
+  psql -U sac -d sac -c "ALTER USER sac WITH PASSWORD 'NOVA-SENHA';"
+
+# 2. atualizar POSTGRES_PASSWORD no .env.prod (a mão)
+
+# 3. recriar backend e worker, que montam o DSN a partir dela
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d \
+  --force-recreate backend worker
+```
+
+Use uma senha **hexadecimal ou alfanumérica**: ela entra dentro de uma URL
+(`postgresql+asyncpg://sac:SENHA@db:5432/sac`), e caracteres como `/`, `@`, `+` ou `#`
+quebram o DSN de um jeito confuso de diagnosticar.
+
+**Segredo JWT.** Trocar `SAC_JWT_SECRET` no `.env.prod` e recriar `backend` invalida
+**todas** as sessões em aberto na hora — todo mundo é deslogado e precisa entrar de
+novo. Não há dano além disso, mas não faça em horário de uso.
+
 ## Smoke test pós-deploy
 
 Depois de qualquer deploy, confirmar cada afirmação abaixo (a Task 5 deste plano roda
@@ -292,11 +336,11 @@ deploy real):
 
 ```bash
 # 1. a SPA e servida
-curl -s -o /dev/null -w 'raiz: %{http_code}\n' http://127.0.0.1:8080/
+curl -s -o /dev/null -w 'raiz: %{http_code}\n' http://127.0.0.1:52010/
 # 2. fallback da SPA numa rota do react-router
-curl -s -o /dev/null -w 'deep link: %{http_code}\n' http://127.0.0.1:8080/tickets
+curl -s -o /dev/null -w 'deep link: %{http_code}\n' http://127.0.0.1:52010/tickets
 # 3. a API responde ATRAVES do nginx
-curl -s -w '\nhealth: %{http_code}\n' http://127.0.0.1:8080/api/health
+curl -s -w '\nhealth: %{http_code}\n' http://127.0.0.1:52010/api/health
 # 4. o backend nao esta exposto direto
 curl -s -o /dev/null -w 'backend direto: %{http_code}\n' --max-time 3 http://127.0.0.1:8000/api/health
 # 5. o banco nao esta exposto

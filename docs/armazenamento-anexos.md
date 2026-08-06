@@ -35,7 +35,7 @@ Aplicar com o script de provisionamento, que usa as mesmas variáveis `SAC_S3_*`
 
 ```bash
 cd backend
-python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br
+python -m sac.infrastructure.provision_bucket --origem https://solucionix.com.br
 python -m sac.infrastructure.provision_bucket --conferir   # mostra o que está no bucket
 ```
 
@@ -45,7 +45,7 @@ A política que ele aplica (`PutBucketCors`, também disponível no console do W
 {
   "CORSRules": [
     {
-      "AllowedOrigins": ["https://sac.b2pro.com.br"],
+      "AllowedOrigins": ["https://solucionix.com.br"],
       "AllowedMethods": ["PUT", "GET", "HEAD"],
       "AllowedHeaders": ["Content-Type"],
       "ExposeHeaders": ["ETag"],
@@ -82,7 +82,7 @@ Se um dia o upload migrar para **POST policy**, o `content-length-range` passa a
 
 Checklist do que **não** é verificável localmente (o MinIO é permissivo onde o Wasabi não é):
 
-1. **CORS do bucket** aplicado com a origem real do frontend: `python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br` (seção acima). Sem isso todo upload pelo navegador falha. Conferir depois com `--conferir`.
+1. **CORS do bucket** aplicado com a origem real do frontend: `python -m sac.infrastructure.provision_bucket --origem https://solucionix.com.br` (seção acima). Sem isso todo upload pelo navegador falha. Conferir depois com `--conferir`.
 2. **Bucket privado**: nenhum acesso público de leitura/escrita, nenhuma política anônima; credenciais com IAM policy restrita ao bucket/prefixo. Todo acesso é por URL assinada de TTL curto. A credencial precisa de permissão de `PutBucketCors` para o passo 1.
 3. **Objetos órfãos**: não é mais decisão pendente — a varredura periódica do worker (seção acima) apaga objetos sem linha correspondente no banco. Confirmar que o `worker` está de fato no ar em produção (`docker compose ... logs worker`) e que `SAC_RECONCILE_ORPHANS_HOURS` está com um valor sensato (padrão 24 h).
 4. `SAC_S3_PUBLIC_ENDPOINT_URL` apontando para o endpoint que o **navegador** alcança: a assinatura cobre o header `Host`, então trocar o host depois de assinar invalida a URL.
