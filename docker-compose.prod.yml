@@ -78,8 +78,10 @@ services:
     ports:
       # Apenas no loopback: quem expoe o servico na internet e o proxy reverso
       # do host, que termina TLS e aponta para ca. Publicar em 0.0.0.0 daria
-      # acesso HTTP sem TLS direto no IP da VPS.
-      - "${SAC_WEB_BIND:-127.0.0.1:8080}:80"
+      # acesso HTTP sem TLS direto no IP da VPS. So a porta e configuravel: o
+      # host fica sempre fixo em 127.0.0.1, para nao dar para escrever por
+      # engano um bind que publique na interface publica.
+      - "127.0.0.1:${SAC_WEB_PORT:-8080}:80"
 
 volumes:
   pgdata:

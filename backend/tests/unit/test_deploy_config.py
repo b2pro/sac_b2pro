@@ -128,3 +128,19 @@ def test_compose_de_prod_nao_monta_o_codigo_do_host() -> None:
     tem de rodar o que esta na imagem construida, nao o que esta no disco da
     VPS."""
     assert "./backend:/app" not in _conteudo_compose()
+
+
+def test_compose_de_prod_publica_a_porta_do_web_so_no_loopback() -> None:
+    """A porta publicada do `web` precisa comecar com `127.0.0.1:`: sem o host
+    fixo, um valor como `SAC_WEB_PORT=8080` (leitura natural do nome da
+    variavel) publica em 0.0.0.0 e expoe a aplicacao inteira em HTTP puro no
+    IP da VPS -- e a publicacao de porta do Docker entra por
+    DOCKER-USER/PREROUTING, entao um firewall do host nao bloqueia."""
+    linhas_de_porta = [
+        linha.strip()
+        for linha in _conteudo_compose().splitlines()
+        if linha.strip().endswith(':80"')
+    ]
+    assert linhas_de_porta, "linha de porta publicada do web nao encontrada"
+    for linha in linhas_de_porta:
+        assert linha.startswith('- "127.0.0.1:'), linha

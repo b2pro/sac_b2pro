@@ -28,9 +28,11 @@ VPS) — é ele que guarda o certificado do domínio e fala HTTPS com a internet
 resto do stack (`web`, `backend`, `db`, `worker`) vive dentro do compose de produção
 (projeto `sac-prod`) e fala HTTP em texto puro entre si, isolado na rede interna do
 Docker. Só o serviço `web` publica porta no host, e só no loopback:
-`127.0.0.1:8080` (`SAC_WEB_BIND`, default no `.env.prod.example`). `backend` e `db`
-não publicam porta nenhuma — o único jeito de alcançá-los de fora do host é através
-do `web`.
+`127.0.0.1:8080` por padrão. O host é fixo em `127.0.0.1` no
+`docker-compose.prod.yml` — só a porta é configurável, por `SAC_WEB_PORT` no
+`.env.prod.example` — de propósito: quem expõe na internet é o proxy reverso do
+host, nunca o Docker direto. `backend` e `db` não publicam porta nenhuma — o único
+jeito de alcançá-los de fora do host é através do `web`.
 
 Dentro do container `web`, o nginx serve os arquivos estáticos da SPA e faz proxy de
 `/api/` (e do stream de notificações) para `backend:8000`. O `worker` não atende
