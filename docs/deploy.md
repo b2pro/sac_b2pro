@@ -150,9 +150,45 @@ Entregar um bloco `443` apontando para certificados que ainda não existem faria
 `nginx -t` falhar e o nginx se recusar a recarregar — o que derrubaria também os
 outros sites que esta máquina serve.
 
-**Pré-requisito do certbot:** o A record já precisa estar propagado
-(`dig +short solucionix.com.br` retorna o IP da VPS), senão o desafio HTTP-01 do
-Let's Encrypt falha.
+**Pré-requisito do certbot:** o domínio já precisa resolver e chegar na VPS
+(`dig +short solucionix.com.br`), senão o desafio HTTP-01 do Let's Encrypt falha. Se o
+domínio estiver atrás da Cloudflare com proxy ligado, o `dig` devolve IPs anycast dela
+(`104.21.x.x`, `172.67.x.x`) e não o IP da VPS — isso é normal e o HTTP-01 ainda
+funciona, porque a Cloudflare repassa o desafio para a origem.
+
+**Depois que o certbot roda, o arquivo instalado deixa de ser igual ao do repo.** O
+certbot edita `/etc/nginx/sites-available/sac.conf` no lugar, acrescentando o bloco
+`443`, as diretivas `ssl_certificate` e o redirect. A partir daí, **nunca** copie
+`ops/nginx/sac.conf` por cima do arquivo instalado: o `cp` apagaria o bloco `443` e o
+HTTPS pararia — o nginx passaria a atender o domínio pelo `default_server`, que numa
+máquina com vários sites é o site de outro. Para aplicar mudança do repo depois do
+certbot, edite o arquivo instalado à mão, ou copie e rode o certbot de novo.
+
+### Atrás da Cloudflare: IP real do visitante
+
+Com o proxy da Cloudflare ligado, `$remote_addr` no nginx do host é o IP de uma borda
+da Cloudflare, não do visitante. Como o `X-Forwarded-For` é montado a partir dele e o
+limitador de login lê o primeiro item, o limite de tentativas passaria a ser contado
+**por borda da Cloudflare** em vez de por visitante: um teto quase global, que deixa de
+limitar o atacante individual. Nada dá erro; só protege menos.
+
+O `ops/nginx/sac.conf` já traz o `include` do snippet (com curinga, para que a ausência
+dele não derrube o nginx). Gerar o snippet na VPS, sempre a partir da fonte da
+Cloudflare, porque as faixas mudam:
+
+```bash
+sudo mkdir -p /etc/nginx/snippets
+{ curl -s https://www.cloudflare.com/ips-v4; curl -s https://www.cloudflare.com/ips-v6; } \
+  | sed 's|^|set_real_ip_from |; s|$|;|' \
+  | sudo tee /etc/nginx/snippets/cloudflare-realip.conf > /dev/null
+echo 'real_ip_header CF-Connecting-IP;' \
+  | sudo tee -a /etc/nginx/snippets/cloudflare-realip.conf > /dev/null
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Se o domínio sair de trás da Cloudflare, **apague o snippet**: confiar em
+`CF-Connecting-IP` sem a Cloudflare na frente permite que qualquer cliente mande esse
+header e forje o próprio IP — o oposto do que o snippet existe para fazer.
 
 Se mudar `SAC_WEB_PORT` no `.env.prod`, mude também o `proxy_pass` em
 `ops/nginx/sac.conf` — são os dois lados da mesma porta, e nada valida que eles
