@@ -67,12 +67,12 @@ services:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      # service_started, e nao service_healthy, de proposito: o nginx precisa
-      # que o nome `backend` RESOLVA no carregamento da config -- com nome
-      # literal em proxy_pass e sem diretiva resolver, ele se recusa a iniciar
-      # com "host not found in upstream" --, e para isso basta o container
-      # existir. Esperar por saude faria um backend doente derrubar tambem a
-      # pagina, em vez de a SPA subir e mostrar o erro vindo da API.
+      # service_started, e nao service_healthy, de proposito: nao se quer que
+      # um backend doente derrube tambem a SPA -- ela precisa subir e mostrar
+      # o erro vindo da API, em vez de ficar fora do ar junto. Nao e mais
+      # sobre resolucao de nome: o nginx usa a diretiva resolver (ver
+      # frontend/nginx.conf) e resolve `backend` a cada request, entao
+      # sobrevive a um backend recriado depois que o `web` ja subiu.
       backend:
         condition: service_started
     ports:

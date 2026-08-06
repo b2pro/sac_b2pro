@@ -246,7 +246,21 @@ sac.infrastructure.migrate all`, dentro de `backend/docker-entrypoint.prod.sh`),
 antes do uvicorn subir — nunca dentro do processo que atende requisição. Durante o
 `--build` do `web` (frontend), o serviço continua no ar servindo a imagem antiga; a
 troca só acontece no momento em que o container novo termina de subir e substitui o
-antigo. Não há janela em que o site fique fora do ar por causa do build do frontend.
+antigo. Não há janela em que a SPA (arquivos estáticos) fique fora do ar por causa
+do build do frontend.
+
+`docker compose up -d --build` recria só os serviços cuja imagem ou configuração
+mudou — o caso mais comum é mudar só o `backend`. Isso causa uma janela breve e
+esperada de indisponibilidade da **API** (não da SPA), do tamanho do próprio
+restart do container (migrations + boot do uvicorn + `start_period` do
+healthcheck); ela existia mesmo antes desta topologia. O que **não** deve mais
+acontecer é a janela ficar permanente: o `resolver` do `frontend/nginx.conf`
+resolve `backend` a cada request (TTL `valid=10s`), então tão logo o novo
+container suba com IP diferente na rede da bridge, as próximas chamadas de API já
+alcançam ele. Sem essa diretiva (como era antes desta correção), o nginx guardava
+o IP do container antigo pela vida inteira do processo e a API ficava
+respondendo 502 até alguém recriar o `web` manualmente — para sempre, não só
+durante o deploy.
 
 ## Smoke test pós-deploy
 
