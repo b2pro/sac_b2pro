@@ -186,10 +186,19 @@ faz esse limite valer alguma coisa.
 Se por algum motivo não for possível garantir essa sobrescrita no proxy do host,
 deixar `SAC_TRUSTED_PROXY=false` no `.env.prod` — o limitador passa a contar pelo IP
 da conexão TCP direta (o do proxy, não o do cliente), o que degrada o limite a um teto
-global de 30 logins/minuto para toda a aplicação (pior para uso legítimo, mas deixa de
-ser falsificável). **Nunca as duas coisas ao mesmo tempo**: `SAC_TRUSTED_PROXY=true`
-com o header sendo acrescentado em vez de sobrescrito é o pior dos casos — parece
-protegido e não protege nada.
+global de 30 logins/minuto para toda a aplicação com um único worker (pior para uso
+legítimo, mas deixa de ser falsificável). **Nunca as duas coisas ao mesmo tempo**:
+`SAC_TRUSTED_PROXY=true` com o header sendo acrescentado em vez de sobrescrito é o
+pior dos casos — parece protegido e não protege nada.
+
+**O teto real depende de `SAC_UVICORN_WORKERS`.** `SlidingWindowRateLimiter` guarda
+os contadores num dict em memória do processo
+(`backend/src/sac/interface/rate_limit.py`) — o deploy é de instância única, sem
+Redis nem outro store compartilhado. Com `--workers 2` (default) existem dois
+processos uvicorn, cada um com o próprio contador: o teto efetivo é o configurado
+multiplicado pelo número de workers, não o valor cru. Com o default de produção
+isso é 10 tentativas/minuto por IP+tenant e 60/minuto por IP (em vez de 5 e 30).
+Ver "Residuais conhecidos".
 
 Nota sobre versão do nginx: `http2 on;` como diretiva separada (como no bloco acima)
 exige nginx 1.25.1 ou mais novo. Em versões anteriores essa diretiva não existe e a
@@ -299,3 +308,8 @@ VPS falhar ou o volume for apagado por engano, o dump se perde junto.
   aplicação (scripts inline, origens de fonte/imagem, etc.). Fica como tarefa própria,
   com verificação no navegador depois de cada ajuste.
 - **Sem backup automatizado** — ver seção "Backup" acima.
+- **Limitador de login não é compartilhado entre workers.** `SlidingWindowRateLimiter`
+  guarda os contadores num dict em memória do processo — com `SAC_UVICORN_WORKERS=2`
+  existem dois contadores independentes, e o teto real é o dobro do configurado (ver
+  seção "Proxy reverso do host" acima). Um store compartilhado (Redis, por exemplo)
+  é a solução real e não existe hoje; o limite continua existindo, só não é exato.
