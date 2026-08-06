@@ -66,19 +66,17 @@ Risco aceito e consciente: uma **presigned URL de `put_object` não suporta `con
 
 - O que protege: a intenção valida o tamanho declarado (`validate_size`), a confirmação faz `HEAD` no objeto e **recusa** tamanho/tipo divergentes, o anexo não confirmado expira em 30 min e a URL é curta e emitida só para usuário autenticado com permissão no ticket.
 - O que não é evitado: o objeto grande **já foi gravado** e permanece no bucket, ocupando custo, mesmo com a confirmação recusada. Por isso `StoragePort.presigned_put` **não** recebe `max_bytes` — um parâmetro assim seria ignorado em silêncio e prometeria uma garantia inexistente.
-### Objetos órfãos: por que não existe regra de ciclo de vida hoje
+### Objetos órfãos: a varredura do worker resolve isso hoje
 
-Mitigar o objeto grande que já foi gravado pede expirar o que nunca foi confirmado — e **não há regra de bucket capaz disso com o layout de chaves atual**. As chaves nascem na posição final (`{tenant}/{ticket}/…`, `{tenant}/catalogo/produtos/…`) e a confirmação só muda uma linha no banco: nenhum atributo do objeto distingue confirmado de abandonado. Uma regra `Expiration: Days: N` sobre esses prefixos **apagaria anexos em uso** — é a armadilha a evitar, não a solução.
+O worker de produção roda uma reconciliação periódica que lista o bucket e apaga,
+tenant por tenant, todo objeto sem linha correspondente no banco: `reconcile_orphans_all` (chamada dentro de `run_forever`, em `backend/src/sac/infrastructure/worker.py:204`) usa `ReconcileOrphansUseCase` para isso. A opção 2 abaixo, antes listada como pendente, está implementada.
 
-O que o script aplica é apenas `AbortIncompleteMultipartUpload` (higiene de upload multipart interrompido). Como o upload do SAC é `PUT` simples, isso resolve pouco na prática, e é por isso que a regra vem separada e sem `Expiration`.
+- A margem de idade é `SAC_RECONCILE_ORPHANS_HOURS` (padrão 24 horas, com piso de 1 hora — `settings.py:42`): objeto mais novo que a margem nunca é apagado, porque pode ser um upload em voo (o PUT já gravou o objeto no bucket, a confirmação ainda não gravou a linha no banco).
+- Continua **não** existindo regra de ciclo de vida no bucket capaz de resolver isso: as chaves nascem na posição final (`{tenant}/{ticket}/…`, `{tenant}/catalogo/produtos/…`) e a confirmação só muda uma linha no banco — nenhum atributo do objeto distingue confirmado de abandonado. Uma regra `Expiration: Days: N` sobre esses prefixos apagaria anexos em uso; essa parte do documento permanece válida.
+- O que o script de provisionamento aplica no bucket continua sendo apenas `AbortIncompleteMultipartUpload` (higiene de upload multipart interrompido, não a mitigação de órfãos).
+- O prefixo de staging (opção 1) segue como **alternativa não implementada** — não mais como decisão pendente, já que a varredura no worker cobre o caso hoje.
 
-As duas saídas reais, ambas maiores que configuração de bucket e **pendentes de decisão**:
-
-1. **Prefixo de staging**: o PUT assinado grava em `{tenant}/staging/…` e a confirmação copia para a chave final. Aí sim `Expiration: Days: 1` sobre `staging/` é seguro e automático. Custa uma cópia server-side por anexo e uma mudança no fluxo de confirmação.
-2. **Varredura no worker**: um job periódico lista o bucket e apaga objeto que não tem anexo correspondente no banco. Não muda o fluxo de upload, mas é código novo com acesso destrutivo ao bucket, e precisa de margem de tempo para não apagar objeto de upload em andamento.
-
-Enquanto nenhuma das duas existir, o custo de um objeto abandonado permanece no bucket indefinidamente.
-- Se um dia o upload migrar para **POST policy**, o `content-length-range` passa a ser aplicado no próprio storage e este risco desaparece (mudança de fase, não de correção pontual).
+Se um dia o upload migrar para **POST policy**, o `content-length-range` passa a ser aplicado no próprio storage e o risco do objeto grande gravado sem confirmação (seção "Limite de tamanho" acima) desaparece — mudança de fase, não de correção pontual.
 
 ## Antes do primeiro deploy em produção
 
@@ -86,7 +84,7 @@ Checklist do que **não** é verificável localmente (o MinIO é permissivo onde
 
 1. **CORS do bucket** aplicado com a origem real do frontend: `python -m sac.infrastructure.provision_bucket --origem https://sac.b2pro.com.br` (seção acima). Sem isso todo upload pelo navegador falha. Conferir depois com `--conferir`.
 2. **Bucket privado**: nenhum acesso público de leitura/escrita, nenhuma política anônima; credenciais com IAM policy restrita ao bucket/prefixo. Todo acesso é por URL assinada de TTL curto. A credencial precisa de permissão de `PutBucketCors` para o passo 1.
-3. **Objetos órfãos**: decidir entre prefixo de staging e varredura no worker (seção acima). Não existe regra de bucket que resolva isso hoje, e aplicar `Expiration` nos prefixos reais apagaria anexos em uso.
+3. **Objetos órfãos**: não é mais decisão pendente — a varredura periódica do worker (seção acima) apaga objetos sem linha correspondente no banco. Confirmar que o `worker` está de fato no ar em produção (`docker compose ... logs worker`) e que `SAC_RECONCILE_ORPHANS_HOURS` está com um valor sensato (padrão 24 h).
 4. `SAC_S3_PUBLIC_ENDPOINT_URL` apontando para o endpoint que o **navegador** alcança: a assinatura cobre o header `Host`, então trocar o host depois de assinar invalida a URL.
 
 ## Previews (thumbnails)
