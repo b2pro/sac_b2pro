@@ -5,6 +5,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .env
+.env.prod
 node_modules/
 dist/
 flowhub/

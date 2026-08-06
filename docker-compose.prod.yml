@@ -1,0 +1,85 @@
+# Compose de PRODUCAO. Suba sempre com o --env-file, porque a interpolacao de
+# ${POSTGRES_PASSWORD} depende dele:
+#
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# Variavel de env_file NAO serve para interpolacao no proprio compose -- por isso
+# a senha do Postgres vem do --env-file e o SAC_DATABASE_URL e montado aqui, num
+# lugar so, em vez de duas copias que dessincronizam no primeiro rodizio de senha.
+#
+# O nome do projeto e sac-prod para que os volumes nao colidam com os do compose
+# de desenvolvimento se os dois rodarem na mesma maquina.
+name: sac-prod
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sac
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}
+      POSTGRES_DB: sac
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sac -d sac"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    command: ["sh", "docker-entrypoint.prod.sh"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      # Vence o que vier do env_file (environment tem precedencia). Nao defina
+      # SAC_DATABASE_URL no .env.prod: seria ignorado em silencio.
+      SAC_DATABASE_URL: postgresql+asyncpg://sac:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}@db:5432/sac
+    healthcheck:
+      # So fica saudavel depois que as migrations rodaram e o uvicorn subiu. O
+      # worker e o web dependem desta condicao.
+      test: ["CMD", "python3", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  worker:
+    build: ./backend
+    command: ["uv", "run", "--frozen", "--no-dev", "python", "-m", "sac.worker"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      SAC_DATABASE_URL: postgresql+asyncpg://sac:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}@db:5432/sac
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      # service_started, e nao service_healthy, de proposito: o nginx precisa
+      # que o nome `backend` RESOLVA no carregamento da config -- com nome
+      # literal em proxy_pass e sem diretiva resolver, ele se recusa a iniciar
+      # com "host not found in upstream" --, e para isso basta o container
+      # existir. Esperar por saude faria um backend doente derrubar tambem a
+      # pagina, em vez de a SPA subir e mostrar o erro vindo da API.
+      backend:
+        condition: service_started
+    ports:
+      # Apenas no loopback: quem expoe o servico na internet e o proxy reverso
+      # do host, que termina TLS e aponta para ca. Publicar em 0.0.0.0 daria
+      # acesso HTTP sem TLS direto no IP da VPS.
+      - "${SAC_WEB_BIND:-127.0.0.1:8080}:80"
+
+volumes:
+  pgdata:

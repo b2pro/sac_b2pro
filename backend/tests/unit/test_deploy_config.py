@@ -14,6 +14,8 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[3]
 ENTRYPOINT_PROD = RAIZ / "backend" / "docker-entrypoint.prod.sh"
 COMPOSE_PROD = RAIZ / "docker-compose.prod.yml"
+ENV_EXEMPLO = RAIZ / ".env.prod.example"
+GITIGNORE = RAIZ / ".gitignore"
 
 
 def _conteudo_prod() -> str:
@@ -55,3 +57,74 @@ def test_entrypoint_de_prod_roda_as_migrations() -> None:
     comentarios so torna esta assercao mais forte: um comentario que apenas
     cite o comando de migration deixa de bastar para o teste passar."""
     assert "sac.infrastructure.migrate all" in _sem_comentarios(_conteudo_prod())
+
+
+def _conteudo_compose() -> str:
+    return _sem_comentarios(COMPOSE_PROD.read_text(encoding="utf-8"))
+
+
+def test_compose_de_prod_existe() -> None:
+    assert COMPOSE_PROD.is_file()
+
+
+def test_compose_de_prod_nao_declara_ambiente_de_desenvolvimento() -> None:
+    """SAC_ENVIRONMENT=development faz ensure_boot_secrets liberar o boot com o
+    segredo publico do repositorio, e a aplicacao passa a assinar token
+    forjavel -- quem tem o segredo emite um access token com `sa: true` e vira
+    super_admin.
+
+    O compose de prod nao define SAC_ENVIRONMENT (vem do .env.prod), entao este
+    teste cobre apenas o caso de alguem inline-ar o valor errado aqui. O que
+    esta no .env.prod da VPS nenhum teste alcanca -- por isso o teste seguinte
+    trava o modelo, que e o arquivo de onde a copia sai.
+    """
+    conteudo = _conteudo_compose()
+    assert "SAC_ENVIRONMENT: development" not in conteudo
+    assert "SAC_ENVIRONMENT=development" not in conteudo
+
+
+def test_env_de_exemplo_declara_producao() -> None:
+    conteudo = _sem_comentarios(ENV_EXEMPLO.read_text(encoding="utf-8"))
+    assert "SAC_ENVIRONMENT=production" in conteudo
+    assert "SAC_ENVIRONMENT=development" not in conteudo
+
+
+def test_env_de_exemplo_nao_traz_segredo_preenchido() -> None:
+    """O modelo existe para ser copiado: valor real aqui vaza no git. Comparacao
+    por linha, e nao por substring com \\n, porque o arquivo pode ter CRLF."""
+    valores = {}
+    for linha in ENV_EXEMPLO.read_text(encoding="utf-8").splitlines():
+        limpa = linha.strip()
+        if limpa and not limpa.startswith("#") and "=" in limpa:
+            chave, _, valor = limpa.partition("=")
+            valores[chave.strip()] = valor.strip()
+    for chave in ("SAC_JWT_SECRET", "POSTGRES_PASSWORD", "SAC_S3_SECRET_KEY"):
+        assert chave in valores, f"{chave} deveria estar no modelo"
+        assert valores[chave] == "", f"{chave} deveria estar vazio no modelo"
+
+
+def test_gitignore_cobre_o_env_de_producao() -> None:
+    """A regra `.env` do .gitignore casa apenas com o nome exato: sem uma linha
+    propria, `.env.prod` -- que tem o segredo JWT e a senha do banco -- entra
+    num `git add .` sem aviso nenhum."""
+    linhas = GITIGNORE.read_text(encoding="utf-8").splitlines()
+    assert ".env.prod" in [linha.strip() for linha in linhas]
+
+
+def test_compose_de_prod_nao_publica_porta_do_banco() -> None:
+    """O Postgres nao pode ficar exposto na interface publica da VPS. Em prod o
+    unico acesso e pela rede interna do compose."""
+    assert "5432:5432" not in _conteudo_compose()
+
+
+def test_compose_de_prod_usa_o_entrypoint_de_prod() -> None:
+    conteudo = _conteudo_compose()
+    assert "docker-entrypoint.prod.sh" in conteudo
+    assert "docker-entrypoint.sh" not in conteudo.replace("docker-entrypoint.prod.sh", "")
+
+
+def test_compose_de_prod_nao_monta_o_codigo_do_host() -> None:
+    """Volume de codigo e recurso de desenvolvimento: em producao o container
+    tem de rodar o que esta na imagem construida, nao o que esta no disco da
+    VPS."""
+    assert "./backend:/app" not in _conteudo_compose()
