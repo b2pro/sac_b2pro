@@ -204,8 +204,15 @@ git commit -m "Adiciona entrypoint de producao do backend sem reload nem seed"
 
 - [ ] **Step 1: Escrever os testes que falham**
 
-Acrescentar a constante `ENV_EXEMPLO` e `GITIGNORE` junto das outras, no topo do
-arquivo (logo abaixo de `COMPOSE_PROD`):
+O modulo `backend/tests/unit/test_deploy_config.py` ja existe (Task 1) e ja traz os
+helpers `_conteudo_prod()` e `_sem_comentarios(conteudo)`. **Reuse `_sem_comentarios`
+nos testes novos, nao duplique a logica**: toda asserção de substring abaixo roda sobre
+as linhas executaveis, porque um comentario do compose ou do `.env` pode legitimamente
+citar o termo proibido para explicar que ele nao deve ser usado. Isso vale tanto para
+YAML quanto para `.env`: os dois comentam com `#`.
+
+Acrescentar as constantes junto das outras, no topo do arquivo (logo abaixo de
+`COMPOSE_PROD`):
 
 ```python
 ENV_EXEMPLO = RAIZ / ".env.prod.example"
@@ -215,6 +222,10 @@ GITIGNORE = RAIZ / ".gitignore"
 E acrescentar ao final de `backend/tests/unit/test_deploy_config.py`:
 
 ```python
+def _conteudo_compose() -> str:
+    return _sem_comentarios(COMPOSE_PROD.read_text(encoding="utf-8"))
+
+
 def test_compose_de_prod_existe() -> None:
     assert COMPOSE_PROD.is_file()
 
@@ -230,13 +241,13 @@ def test_compose_de_prod_nao_declara_ambiente_de_desenvolvimento() -> None:
     esta no .env.prod da VPS nenhum teste alcanca -- por isso o teste seguinte
     trava o modelo, que e o arquivo de onde a copia sai.
     """
-    conteudo = COMPOSE_PROD.read_text(encoding="utf-8")
+    conteudo = _conteudo_compose()
     assert "SAC_ENVIRONMENT: development" not in conteudo
     assert "SAC_ENVIRONMENT=development" not in conteudo
 
 
 def test_env_de_exemplo_declara_producao() -> None:
-    conteudo = ENV_EXEMPLO.read_text(encoding="utf-8")
+    conteudo = _sem_comentarios(ENV_EXEMPLO.read_text(encoding="utf-8"))
     assert "SAC_ENVIRONMENT=production" in conteudo
     assert "SAC_ENVIRONMENT=development" not in conteudo
 
@@ -266,12 +277,11 @@ def test_gitignore_cobre_o_env_de_producao() -> None:
 def test_compose_de_prod_nao_publica_porta_do_banco() -> None:
     """O Postgres nao pode ficar exposto na interface publica da VPS. Em prod o
     unico acesso e pela rede interna do compose."""
-    conteudo = COMPOSE_PROD.read_text(encoding="utf-8")
-    assert "5432:5432" not in conteudo
+    assert "5432:5432" not in _conteudo_compose()
 
 
 def test_compose_de_prod_usa_o_entrypoint_de_prod() -> None:
-    conteudo = COMPOSE_PROD.read_text(encoding="utf-8")
+    conteudo = _conteudo_compose()
     assert "docker-entrypoint.prod.sh" in conteudo
     assert "docker-entrypoint.sh" not in conteudo.replace("docker-entrypoint.prod.sh", "")
 
@@ -280,8 +290,7 @@ def test_compose_de_prod_nao_monta_o_codigo_do_host() -> None:
     """Volume de codigo e recurso de desenvolvimento: em producao o container
     tem de rodar o que esta na imagem construida, nao o que esta no disco da
     VPS."""
-    conteudo = COMPOSE_PROD.read_text(encoding="utf-8")
-    assert "./backend:/app" not in conteudo
+    assert "./backend:/app" not in _conteudo_compose()
 ```
 
 - [ ] **Step 2: Rodar os testes e confirmar que falham**
