@@ -16,6 +16,8 @@ ENTRYPOINT_PROD = RAIZ / "backend" / "docker-entrypoint.prod.sh"
 COMPOSE_PROD = RAIZ / "docker-compose.prod.yml"
 ENV_EXEMPLO = RAIZ / ".env.prod.example"
 GITIGNORE = RAIZ / ".gitignore"
+SCRIPTS_DE_OPERACAO = ("build.sh", "up.sh", "down.sh", "migrate.sh")
+DOWN = RAIZ / "down.sh"
 
 
 def _conteudo_prod() -> str:
@@ -144,3 +146,38 @@ def test_compose_de_prod_publica_a_porta_do_web_so_no_loopback() -> None:
     assert linhas_de_porta, "linha de porta publicada do web nao encontrada"
     for linha in linhas_de_porta:
         assert linha.startswith('- "127.0.0.1:'), linha
+
+
+def test_scripts_de_operacao_apontam_para_o_compose_de_producao() -> None:
+    """Os scripts do dia a dia rodam na VPS, onde o clone traz TAMBEM o compose de
+    desenvolvimento. Um deles que esqueca o `-f docker-compose.prod.yml` sobe o
+    compose de dev: Postgres em 5432 com senha `sac`, backend em 8000, tudo em
+    0.0.0.0, e SAC_ENVIRONMENT=development liberando o boot com o segredo publico
+    do repositorio. E o mesmo desastre que docs/deploy.md manda evitar, so que
+    disparado por um script que parece seguro.
+    """
+    for nome in SCRIPTS_DE_OPERACAO:
+        caminho = RAIZ / nome
+        assert caminho.is_file(), f"{nome} nao existe"
+        executavel = _sem_comentarios(caminho.read_text(encoding="utf-8"))
+        assert "-f docker-compose.prod.yml" in executavel, nome
+        assert "--env-file .env.prod" in executavel, nome
+
+
+def test_down_exige_confirmacao_antes_de_apagar_volume() -> None:
+    """`down --volumes` no compose de producao apaga o volume do Postgres: perde o
+    banco inteiro, sem backup automatico por tras (ver docs/deploy.md). Passar a
+    flag sem confirmacao e um caractere de distancia de `down` normal, entao o
+    script tem de pedir confirmacao explicita em vez de obedecer direto.
+    """
+    executavel = _sem_comentarios(DOWN.read_text(encoding="utf-8"))
+    assert "--volumes" in executavel, "down.sh nao reconhece a flag de volume"
+    assert "read" in executavel, "down.sh nao pede confirmacao"
+
+
+def test_down_recusa_apagar_volume_sem_terminal() -> None:
+    """Sem TTY nao ha como confirmar. Obedecer nesse caso transformaria um
+    `down.sh --volumes` dentro de qualquer automacao na perda do banco.
+    """
+    executavel = _sem_comentarios(DOWN.read_text(encoding="utf-8"))
+    assert "-t 0" in executavel, "down.sh nao verifica se ha terminal"

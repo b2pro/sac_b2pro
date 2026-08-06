@@ -278,6 +278,31 @@ backend pararia de autenticar, o container ficaria `unhealthy` e a aplicação s
 ar, com a senha antiga já sobrescrita no arquivo. Rotação de senha do banco é
 procedimento manual (ver "Rotação de segredos" abaixo).
 
+### Operação do dia a dia
+
+Depois do primeiro deploy, quatro scripts na raiz cobrem a rotina. Todos exigem o
+`.env.prod` e todos apontam para o compose de produção — nenhum deles pode subir o
+compose de desenvolvimento por acidente (há teste de guarda para isso em
+`backend/tests/unit/test_deploy_config.py`).
+
+| Comando | O que faz |
+|---|---|
+| `./build.sh` | constrói as imagens. Aceita nome de serviço (`./build.sh web`) e `--no-cache`. Nada é trocado aqui, só construído |
+| `./up.sh` | sobe a stack. Aceita nomes de serviço |
+| `./up.sh migrate` | sobe e, depois do backend ficar saudável, força as migrations |
+| `./down.sh` | para os containers. Os dados persistem, e `./up.sh` traz tudo de volta |
+| `./down.sh --volumes` | **apaga o banco.** Pede confirmação digitada e recusa sem terminal |
+| `./migrate.sh [public\|tenants\|all]` | aplica migrations no container que já está no ar |
+
+O deploy normal é `git pull`, `./build.sh`, `./up.sh`.
+
+**Sobre a flag `migrate`:** o entrypoint de produção já roda `migrate all` a cada boot
+do backend, então um `./build.sh` seguido de `./up.sh` aplica as migrations sozinho — a
+imagem muda, o compose recria o container, o entrypoint migra. A flag existe para o caso
+em que o backend **não** é recriado: `up -d` só recria serviço cuja imagem ou
+configuração mudou, então um `./up.sh` sem `./build.sh` antes sobe a imagem antiga e não
+aplica migration nenhuma. A flag força, sem depender dessa decisão do compose.
+
 ### Caminho manual
 
 ```bash
