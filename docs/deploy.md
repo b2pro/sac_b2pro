@@ -309,10 +309,11 @@ procedimento manual (ver "Rotação de segredos" abaixo).
 
 ### Operação do dia a dia
 
-Depois do primeiro deploy, quatro scripts na raiz cobrem a rotina. Todos exigem o
-`.env.prod` e todos apontam para o compose de produção — nenhum deles pode subir o
-compose de desenvolvimento por acidente (há teste de guarda para isso em
-`backend/tests/unit/test_deploy_config.py`).
+Depois do primeiro deploy, cinco scripts na raiz cobrem a rotina. Os quatro que
+mudam alguma coisa exigem o `.env.prod` e apontam para o compose de produção —
+nenhum deles pode subir o compose de desenvolvimento por acidente (há teste de
+guarda para isso em `backend/tests/unit/test_deploy_config.py`). O quinto,
+`./status.sh`, é somente leitura e por isso pode olhar as duas stacks.
 
 | Comando | O que faz |
 |---|---|
@@ -322,6 +323,14 @@ compose de desenvolvimento por acidente (há teste de guarda para isso em
 | `./down.sh` | para os containers. Os dados persistem, e `./up.sh` traz tudo de volta |
 | `./down.sh --volumes` | **apaga o banco.** Pede confirmação digitada e recusa sem terminal |
 | `./migrate.sh [public\|tenants\|all]` | aplica migrations no container que já está no ar |
+| `./status.sh` | mostra o estado de tudo: containers, HTTP, exposição de porta, revisão das migrations e worker. Sai com 1 se algo está errado, então serve de checagem em cron |
+| `./status.sh --dev` | o mesmo, contra a stack de desenvolvimento |
+
+O `status.sh` responde o que o `docker compose ps` não responde: um container em
+loop de reinício aparece como `Up`, um backend saudável pode não ter migrado, e um
+schema de tenant pode ter ficado numa revisão atrás dos outros — cada uma dessas
+vira uma linha com veredito. Vale rodar depois de todo deploy, antes do smoke test
+manual.
 
 O deploy normal é `git pull`, `./build.sh`, `./up.sh`.
 

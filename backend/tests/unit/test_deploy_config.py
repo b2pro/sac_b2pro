@@ -18,6 +18,7 @@ ENV_EXEMPLO = RAIZ / ".env.prod.example"
 GITIGNORE = RAIZ / ".gitignore"
 SCRIPTS_DE_OPERACAO = ("build.sh", "up.sh", "down.sh", "migrate.sh")
 DOWN = RAIZ / "down.sh"
+STATUS = RAIZ / "status.sh"
 
 
 def _conteudo_prod() -> str:
@@ -162,6 +163,22 @@ def test_scripts_de_operacao_apontam_para_o_compose_de_producao() -> None:
         executavel = _sem_comentarios(caminho.read_text(encoding="utf-8"))
         assert "-f docker-compose.prod.yml" in executavel, nome
         assert "--env-file .env.prod" in executavel, nome
+
+
+def test_status_e_somente_leitura() -> None:
+    """`status.sh` e o unico script da raiz que pode olhar o compose de
+    desenvolvimento (com `--dev`), e por isso fica de fora da guarda acima. O que
+    torna isso seguro nao e a intencao de quem escreveu, e nao poder mexer em
+    nada: ele so consulta. Se um dia alguem lhe der um `up`, um `restart` ou um
+    `build`, o script passa a ser capaz de subir a stack de dev na VPS -- que e
+    exatamente o desastre que a guarda acima existe para impedir.
+    """
+    executavel = _sem_comentarios(STATUS.read_text(encoding="utf-8"))
+    assert "-f docker-compose.prod.yml" in executavel, "status.sh nao olha a stack de producao"
+    for verbo in (" up ", " down ", " start ", " stop ", " restart ", " build ", " rm "):
+        assert verbo not in f" {executavel} ".replace("\n", " "), (
+            f"status.sh ganhou um comando que muda estado: {verbo.strip()}"
+        )
 
 
 def test_down_exige_confirmacao_antes_de_apagar_volume() -> None:
