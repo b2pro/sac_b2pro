@@ -226,6 +226,9 @@ export async function ensureCatalogoBase(request: APIRequestContext): Promise<vo
   }
   await catalogId(request, "canais", "SAC")
   await anyCatalogId(request, "defeitos", "Danificado")
+  // o dialog de finalizar ticket exige tipo de solucao: sem nenhum cadastrado o
+  // select abre vazio e o teste trava no clique da opcao.
+  await anyCatalogId(request, "solucoes", "Troca pelo mesmo item")
   await productId(request, PRODUTO_TICKET.busca, PRODUTO_TICKET.novo)
   await productId(request, PRODUTO_ITEM.busca, PRODUTO_ITEM.novo)
 }

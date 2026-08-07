@@ -28,6 +28,12 @@ services:
       SAC_DATABASE_URL: postgresql+asyncpg://sac:sac@db:5432/sac
       SAC_SEED_ADMIN_EMAIL: ${SAC_SEED_ADMIN_EMAIL:-admin@b2pro.com}
       SAC_SEED_ADMIN_PASSWORD: ${SAC_SEED_ADMIN_PASSWORD:-admin-dev-12345}
+      # O default (5 por minuto por IP+tenant) e trava de forca bruta e faz
+      # sentido em producao, mas em dev a suite e2e autentica quatro usuarios,
+      # entra de novo pelo formulario e ainda passa pelo globalSetup -- tudo do
+      # mesmo IP, no mesmo minuto. Sem isto, um teste falha por 429 e parece
+      # defeito da tela. Vale so aqui: producao usa docker-compose.prod.yml.
+      SAC_LOGIN_RATE_IP_TENANT: "50"
       WATCHFILES_FORCE_POLLING: "true"
       SAC_S3_ENDPOINT_URL: http://minio:9000
       SAC_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
