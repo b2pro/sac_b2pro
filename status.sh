@@ -97,12 +97,22 @@ titulo "HTTP"
 
 codigo() { curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1" 2>/dev/null; }
 
-# `docker compose port` devolve o endereco de escuta, que para uma porta aberta
-# em todas as interfaces vem como 0.0.0.0 (ou [::]). Isso e valido para escutar e
-# invalido para conectar: curl em 0.0.0.0 nao vai a lugar nenhum.
-alcancavel() { printf '%s' "$1" | sed -e 's/^0\.0\.0\.0:/127.0.0.1:/' -e 's/^\[::\]:/127.0.0.1:/'; }
+# Endereco onde da para bater com curl, ou vazio se o servico nao publica a porta.
+#
+# Duas armadilhas do `docker compose port`, ambas com codigo de saida 0: quando a
+# porta NAO esta publicada ele imprime `invalid IP:0`, e quando esta aberta em
+# todas as interfaces ele devolve 0.0.0.0 (ou [::]), que serve para escutar e nao
+# para conectar. As duas passam por um teste de string vazia.
+endereco() {
+  local bruto
+  bruto=$("${DC[@]}" port "$1" "$2" 2>/dev/null)
+  case "$bruto" in
+    "" | *invalid* | *:0) return 0 ;;
+  esac
+  printf '%s' "$bruto" | sed -e 's/^0\.0\.0\.0:/127.0.0.1:/' -e 's/^\[::\]:/127.0.0.1:/'
+}
 
-web_addr=$(alcancavel "$("${DC[@]}" port web 80 2>/dev/null)")
+web_addr=$(endereco web 80)
 if [ -n "$web_addr" ]; then
   base="http://$web_addr"
   # A SPA e a API atravessam o mesmo nginx: se o deep link cair e a raiz nao, o
@@ -118,7 +128,7 @@ if [ -n "$web_addr" ]; then
     fi
   done
 else
-  api_addr=$(alcancavel "$("${DC[@]}" port backend 8000 2>/dev/null)")
+  api_addr=$(endereco backend 8000)
   if [ -n "$api_addr" ]; then
     resposta=$(codigo "http://$api_addr/api/health")
     if [ "$resposta" = "200" ]; then
@@ -137,10 +147,19 @@ fi
 # Vite e os testes de integracao alcancarem ele.
 if [ "$modo" = "prod" ]; then
   titulo "Exposicao"
-  for par in "backend:8000" "db:5432"; do
-    servico="${par%%:*}"
-    porta="${par#*:}"
-    publicado=$("${DC[@]}" port "$servico" "$porta" 2>/dev/null)
+  # Aqui a pergunta nao e "onde conecto", e "existe alguma publicacao?" -- e para
+  # essa o `docker compose port` nao serve nem com a limpeza acima: ele responde
+  # sobre uma porta que voce escolheu perguntar. Quem sabe o que esta publicado,
+  # em qualquer porta, e o proprio container.
+  for servico in backend db; do
+    cid=$("${DC[@]}" ps -q "$servico" 2>/dev/null)
+    if [ -z "$cid" ]; then
+      nota "$servico fora do ar: nada publicado, e a falha ja foi contada acima"
+      continue
+    fi
+    publicado=$(docker inspect --format \
+      '{{range $porta, $binds := .NetworkSettings.Ports}}{{range $binds}}{{$porta}} em {{.HostIp}}:{{.HostPort}} {{end}}{{end}}' \
+      "$cid" 2>/dev/null)
     if [ -z "$publicado" ]; then
       ok "$servico nao esta publicado no host"
     else
