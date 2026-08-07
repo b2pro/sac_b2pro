@@ -13,7 +13,7 @@ TENANT_SLUG_RE = re.compile(r"^[a-z0-9_]{2,40}$")
 def validate_slug(slug: str) -> str:
     if not TENANT_SLUG_RE.fullmatch(slug):
         raise ValidationError(
-            "slug invalido: use 2 a 40 caracteres entre a-z, 0-9 e _",
+            "slug inválido: use 2 a 40 caracteres entre a-z, 0-9 e _",
             details={"slug": slug},
         )
     return slug

@@ -32,7 +32,7 @@ async def request_validation_error_handler(
         status_code=422,
         content={
             "code": "validation_error",
-            "message": "dados invalidos",
+            "message": "dados inválidos",
             "details": {"errors": jsonable_encoder(exc.errors())},
         },
     )

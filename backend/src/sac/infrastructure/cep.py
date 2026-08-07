@@ -17,7 +17,7 @@ class ViaCepGateway:
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as exc:
-            raise CepUnavailableError("servico de CEP indisponivel") from exc
+            raise CepUnavailableError("serviço de CEP indisponível") from exc
         if data.get("erro"):
             return None
         return CepAddress(

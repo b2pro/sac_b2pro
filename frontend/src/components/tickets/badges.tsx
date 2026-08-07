@@ -69,7 +69,7 @@ function relativeDue(dueAt: string): string {
   const diffMs = new Date(dueAt).getTime() - Date.now()
   const hours = Math.round(Math.abs(diffMs) / 3_600_000)
   const spec = hours >= 48 ? `${Math.round(hours / 24)}d` : `${hours}h`
-  return diffMs >= 0 ? `em ${spec}` : `ha ${spec}`
+  return diffMs >= 0 ? `em ${spec}` : `há ${spec}`
 }
 
 function slaTitle(sla: SlaState, dueAt: string): string {

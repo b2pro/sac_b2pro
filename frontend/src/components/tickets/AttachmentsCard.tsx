@@ -74,7 +74,7 @@ function AttachmentPreview({
     return (
       <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
         <ImageOff size={20} strokeWidth={1.5} />
-        preview indisponivel
+        preview indisponível
       </span>
     )
   }
@@ -140,7 +140,7 @@ function AttachmentTile({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={`Acoes do anexo ${attachment.filename}`}
+              aria-label={`Ações do anexo ${attachment.filename}`}
             >
               <MoreVertical size={16} strokeWidth={1.5} />
             </Button>
@@ -374,7 +374,7 @@ export function AttachmentsCard({
             ) : (
               <span>Arraste arquivos aqui ou clique para selecionar</span>
             )}
-            <span className="text-xs">Imagens, PDF ou video — ate 50 MB cada</span>
+            <span className="text-xs">Imagens, PDF ou vídeo — até 50 MB cada</span>
             <input
               ref={inputRef}
               type="file"

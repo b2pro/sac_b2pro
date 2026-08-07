@@ -83,7 +83,7 @@ async def _attachment_of_ticket(
 ) -> TicketAttachment:
     anexo = await attachments.get(attachment_id)
     if anexo is None or anexo.ticket_id != ticket_id or anexo.deleted_at is not None:
-        raise NotFoundError("anexo nao encontrado")
+        raise NotFoundError("anexo não encontrado")
     return anexo
 
 
@@ -124,7 +124,7 @@ class RequestUploadUseCase:
     ) -> UploadIntent:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         if is_closed(ticket):
-            raise ConflictError("ticket encerrado nao aceita anexos")
+            raise ConflictError("ticket encerrado não aceita anexos")
         kind = kind_for(data.content_type)
         validate_size(data.size_bytes)
         if await self._attachments.count_active(ticket.id) >= self._max_per_ticket:
@@ -194,7 +194,7 @@ class ConfirmUploadUseCase:
     ) -> AttachmentView:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         if is_closed(ticket):
-            raise ConflictError("ticket encerrado nao aceita anexos")
+            raise ConflictError("ticket encerrado não aceita anexos")
         anexo = await _attachment_of_ticket(self._attachments, ticket.id, attachment_id)
         # Intencao expirada nunca volta a viver. _attachment_of_ticket so barra
         # deleted_at, e a expiracao nao marca deleted_at (apenas
@@ -205,16 +205,16 @@ class ConfirmUploadUseCase:
         # URL assinada do upload dura ttl_seconds (300s por padrao), muito menos
         # que a janela de expiracao.
         if anexo.status is AttachmentStatus.EXPIRADO:
-            raise ConflictError("intencao de upload expirada")
+            raise ConflictError("intenção de upload expirada")
 
         head = self._storage.head(anexo.object_key)
         if head is None:
             raise ValidationError(
-                "objeto nao encontrado no storage", details={"field": "object_key"}
+                "objeto não encontrado no storage", details={"field": "object_key"}
             )
         if head.size_bytes < 1 or head.size_bytes > self._max_bytes:
             raise ValidationError(
-                "tamanho real do objeto invalido", details={"field": "size_bytes"}
+                "tamanho real do objeto inválido", details={"field": "size_bytes"}
             )
         if head.content_type != anexo.content_type:
             raise ValidationError(
@@ -321,12 +321,12 @@ class DeleteAttachmentUseCase:
     async def execute(self, actor: TicketActor, ticket_id: UUID, attachment_id: UUID) -> None:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         if is_closed(ticket):
-            raise ConflictError("ticket encerrado nao aceita alteracao de anexos")
+            raise ConflictError("ticket encerrado não aceita alteração de anexos")
         anexo = await _attachment_of_ticket(self._attachments, ticket.id, attachment_id)
         if anexo.author_user_id != actor.user_id and not has_permission(
             actor.role, Permission.DECIDIR_TICKET
         ):
-            raise PermissionDeniedError("sem permissao para excluir anexo de outro autor")
+            raise PermissionDeniedError("sem permissão para excluir anexo de outro autor")
         anexo.deleted_at = datetime.now(UTC)
         await self._attachments.update(anexo)
         _delete_object_keys(self._storage, anexo)
@@ -370,7 +370,7 @@ class DiscardIntentUseCase:
         # Mais restrito que a exclusao, que admin e supervisor podem fazer em
         # anexo alheio: descartar intencao e desfazer o proprio upload.
         if anexo.author_user_id != actor.user_id:
-            raise PermissionDeniedError("sem permissao para descartar intencao de outro autor")
+            raise PermissionDeniedError("sem permissão para descartar intenção de outro autor")
         if anexo.status is AttachmentStatus.DISPONIVEL:
             return IntentDiscardResult.DISPONIVEL
         if anexo.status is AttachmentStatus.PENDENTE:

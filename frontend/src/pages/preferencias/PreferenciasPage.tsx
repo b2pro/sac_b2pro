@@ -134,7 +134,7 @@ export default function PreferenciasPage() {
     // serializar, resposta atrasada de um PUT antigo sobrescreveria um mais novo.
     onSuccess: (saved) => {
       queryClient.setQueryData<Preferences>(PREFERENCES_KEY, saved)
-      toast.success("Preferencias salvas")
+      toast.success("Preferências salvas")
     },
     onError: (error, _next, context) => {
       toast.error(errorMessage(error))
@@ -172,9 +172,9 @@ export default function PreferenciasPage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-accent-foreground">Preferencias</h1>
+        <h1 className="text-xl font-bold text-accent-foreground">Preferências</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Valem para a sua conta em qualquer navegador que voce usar
+          Valem para a sua conta em qualquer navegador que você usar
         </p>
       </div>
 
@@ -190,8 +190,8 @@ export default function PreferenciasPage() {
           mantem o formulario no ar — o toast de erro do PUT ja avisou. */}
       {isLoadingError && (
         <EmptyState
-          title="Nao foi possivel carregar as preferencias"
-          description="Recarregue a pagina para tentar de novo."
+          title="Não foi possível carregar as preferências"
+          description="Recarregue a página para tentar de novo."
         />
       )}
 
@@ -245,7 +245,7 @@ export default function PreferenciasPage() {
 
           <section className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-4 py-3">
-              <h2 className="text-[13.5px] font-semibold text-accent-foreground">Notificacoes</h2>
+              <h2 className="text-[13.5px] font-semibold text-accent-foreground">Notificações</h2>
               <p className="mt-0.5 text-[12.5px] text-muted-foreground">
                 Como avisar quando algo acontece nos seus tickets.
               </p>
@@ -254,14 +254,14 @@ export default function PreferenciasPage() {
               <ToggleRow
                 id="pref-notify-toast"
                 label="Aviso na tela"
-                description="Mostra um cartao no canto quando chega uma notificacao."
+                description="Mostra um cartão no canto quando chega uma notificação."
                 checked={preferences.notify_toast}
                 onCheckedChange={(value) => update({ notify_toast: value })}
               />
               <ToggleRow
                 id="pref-notify-sound"
                 label="Som"
-                description="Toca um bipe curto quando chega uma notificacao."
+                description="Toca um bipe curto quando chega uma notificação."
                 checked={preferences.notify_sound}
                 onCheckedChange={(value) => update({ notify_sound: value })}
               />

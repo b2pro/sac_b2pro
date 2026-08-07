@@ -12,9 +12,9 @@ export type QuickFilterKey =
 const CHIPS: { key: QuickFilterKey; label: string; counterKey: keyof TicketCounters }[] = [
   { key: "todos", label: "Todos", counterKey: "todos" },
   { key: "abertos", label: "Abertos", counterKey: "abertos" },
-  { key: "aguardando_analise", label: "Aguardando analise", counterKey: "aguardando_analise" },
+  { key: "aguardando_analise", label: "Aguardando análise", counterKey: "aguardando_analise" },
   { key: "atrasados", label: "Atrasados", counterKey: "atrasados" },
-  { key: "nao_lidos", label: "Nao lidos", counterKey: "nao_lidos" },
+  { key: "nao_lidos", label: "Não lidos", counterKey: "nao_lidos" },
   { key: "meus", label: "Meus tickets", counterKey: "meus" },
 ]
 

@@ -111,7 +111,7 @@ export default function TicketDetailPage() {
   }
 
   if (!data) {
-    return <p className="text-sm text-muted-foreground">Ticket nao encontrado.</p>
+    return <p className="text-sm text-muted-foreground">Ticket não encontrado.</p>
   }
 
   const { ticket, customer, attendant_name, supervisor_name, comments, timeline } = data
@@ -165,7 +165,7 @@ export default function TicketDetailPage() {
           <SlaBadge sla={ticket.sla} dueAt={ticket.due_at} />
         </div>
         <p className="text-sm text-muted-foreground">
-          {brandName ?? "Marca nao identificada"} · Aberto em {formatDateTime(ticket.opened_at)}
+          {brandName ?? "Marca não identificada"} · Aberto em {formatDateTime(ticket.opened_at)}
         </p>
       </div>
 
@@ -173,7 +173,7 @@ export default function TicketDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Informacoes gerais</CardTitle>
+              <CardTitle>Informações gerais</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -202,7 +202,7 @@ export default function TicketDetailPage() {
               </dl>
               <div className="border-t border-border pt-4">
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Descricao
+                  Descrição
                 </p>
                 <p className="mt-1 text-sm whitespace-pre-wrap text-foreground">
                   {ticket.description || "-"}
@@ -211,7 +211,7 @@ export default function TicketDetailPage() {
               {ticket.decision_notes && (
                 <div className="border-t border-border pt-4">
                   <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Notas de decisao
+                    Notas de decisão
                   </p>
                   <p className="mt-1 text-sm whitespace-pre-wrap text-foreground">
                     {ticket.decision_notes}
@@ -271,7 +271,7 @@ export default function TicketDetailPage() {
                       to={`/tickets?customer_id=${customer.id}`}
                       className="text-sm text-primary-text hover:underline"
                     >
-                      Ver historico
+                      Ver histórico
                     </Link>
                   </div>
                 </dl>
@@ -313,11 +313,11 @@ export default function TicketDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Comentarios internos</CardTitle>
+              <CardTitle>Comentários internos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {comments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum comentario ainda.</p>
+                <p className="text-sm text-muted-foreground">Nenhum comentário ainda.</p>
               ) : (
                 <div className="flex flex-col gap-4">
                   {comments.map((comment) => {
@@ -398,7 +398,7 @@ export default function TicketDetailPage() {
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     onKeyDown={onTextareaKeyDown}
-                    placeholder="Escreva um comentario interno..."
+                    placeholder="Escreva um comentário interno..."
                     rows={3}
                   />
                   <Button
@@ -442,7 +442,7 @@ export default function TicketDetailPage() {
                   )}
                 </dl>
               ) : (
-                <p className="text-sm text-muted-foreground">Nao registrada.</p>
+                <p className="text-sm text-muted-foreground">Não registrada.</p>
               )}
             </CardContent>
           </Card>

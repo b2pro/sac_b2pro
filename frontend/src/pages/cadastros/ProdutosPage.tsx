@@ -120,7 +120,7 @@ function CreateProductForm({
         <Input id="segment" name="segment" />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="description">Descricao</Label>
+        <Label htmlFor="description">Descrição</Label>
         <Input id="description" name="description" />
       </div>
       <div className="flex flex-col gap-2">
@@ -458,7 +458,7 @@ export default function ProdutosPage() {
               <TableHead>SKU</TableHead>
               <TableHead>Segmento</TableHead>
               <TableHead>Status</TableHead>
-              {podeGerenciar && <TableHead className="w-40 text-right">Acoes</TableHead>}
+              {podeGerenciar && <TableHead className="w-40 text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -522,7 +522,7 @@ export default function ProdutosPage() {
             Anterior
           </Button>
           <span>
-            Pagina {page} de {data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1}
+            Página {page} de {data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1}
           </span>
           <Button
             variant="ghost"
@@ -530,7 +530,7 @@ export default function ProdutosPage() {
             disabled={!data || page >= Math.ceil(data.total / data.per_page)}
             onClick={() => setPage((p) => p + 1)}
           >
-            Proxima
+            Próxima
           </Button>
         </div>
       </div>
@@ -574,7 +574,7 @@ export default function ProdutosPage() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="edit-description">Descricao</Label>
+                <Label htmlFor="edit-description">Descrição</Label>
                 <Input
                   id="edit-description"
                   name="description"
@@ -631,7 +631,7 @@ export default function ProdutosPage() {
                           </p>
                         ) : semPreviewAinda ? (
                           <p className="text-xs text-muted-foreground">
-                            {previewEmpacou ? "Preview indisponivel." : "Gerando preview..."}
+                            {previewEmpacou ? "Preview indisponível." : "Gerando preview..."}
                           </p>
                         ) : null}
                         {editingLive.photo_key && (

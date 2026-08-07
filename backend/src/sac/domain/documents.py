@@ -76,12 +76,12 @@ def validate_document(value: str) -> str:
     if len(digits) == 14 and is_valid_cnpj(digits):
         return digits
     raise ValidationError(
-        "documento invalido: informe um CPF ou CNPJ valido", details={"document": value}
+        "documento inválido: informe um CPF ou CNPJ válido", details={"document": value}
     )
 
 
 def validate_state(value: str) -> str:
     state = value.strip().upper()
     if state not in BR_STATES:
-        raise ValidationError(f"UF invalida: {value}")
+        raise ValidationError(f"UF inválida: {value}")
     return state

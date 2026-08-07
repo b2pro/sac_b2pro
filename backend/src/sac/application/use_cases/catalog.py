@@ -15,7 +15,7 @@ class CatalogItemInput:
 def _clean_name(value: str) -> str:
     name = value.strip()
     if not name:
-        raise ValidationError("nome obrigatorio")
+        raise ValidationError("nome obrigatório")
     return name
 
 
@@ -43,7 +43,7 @@ class CreateCatalogItemUseCase:
     async def execute(self, data: CatalogItemInput) -> CatalogItem:
         name = _clean_name(data.name)
         if await self._repo.get_by_name(name) is not None:
-            raise ConflictError("nome ja cadastrado")
+            raise ConflictError("nome já cadastrado")
         item = CatalogItem(id=uuid4(), name=name, description=_clean_description(data.description))
         await self._repo.add(item)
         return item
@@ -56,11 +56,11 @@ class UpdateCatalogItemUseCase:
     async def execute(self, item_id: UUID, data: CatalogItemInput) -> CatalogItem:
         item = await self._repo.get(item_id)
         if item is None:
-            raise NotFoundError("registro nao encontrado")
+            raise NotFoundError("registro não encontrado")
         name = _clean_name(data.name)
         existing = await self._repo.get_by_name(name)
         if existing is not None and existing.id != item_id:
-            raise ConflictError("nome ja cadastrado")
+            raise ConflictError("nome já cadastrado")
         item.name = name
         item.description = _clean_description(data.description)
         await self._repo.update(item)
@@ -74,7 +74,7 @@ class SetCatalogItemActiveUseCase:
     async def execute(self, item_id: UUID, active: bool) -> CatalogItem:
         item = await self._repo.get(item_id)
         if item is None:
-            raise NotFoundError("registro nao encontrado")
+            raise NotFoundError("registro não encontrado")
         item.active = active
         await self._repo.update(item)
         return item

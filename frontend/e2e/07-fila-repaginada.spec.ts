@@ -12,7 +12,7 @@ test.describe("Fila de tickets repaginada", () => {
     await expect(card).toBeVisible()
 
     await page
-      .getByPlaceholder("Buscar por no, cliente, produto ou pedido")
+      .getByPlaceholder("Buscar por nº, cliente, produto ou pedido")
       .fill(String(ticket.number))
     // a busca e debounced em 400ms: espera a URL refletir o termo antes de
     // olhar a lista, em vez de assertar o resultado na hora
@@ -37,7 +37,7 @@ test.describe("Fila de tickets repaginada", () => {
     await login(page, request, "admin")
     await page.getByRole("link", { name: "Tickets" }).click()
     await expect(page.getByText(/tickets ativos/)).toBeVisible()
-    await expect(page.getByRole("button", { name: /Nao lidos/ })).toBeVisible()
+    await expect(page.getByRole("button", { name: /Não lidos/ })).toBeVisible()
   })
 
   test("chip Meus tickets filtra por atendente", async ({ page, request }) => {
@@ -69,7 +69,7 @@ test.describe("Fila de tickets repaginada", () => {
     await expect(ticketCard(page, lido.number)).toBeVisible()
     await expect(ticketCard(page, naoLido.number)).toBeVisible()
 
-    const chipNaoLidos = page.getByRole("button", { name: /Nao lidos/ })
+    const chipNaoLidos = page.getByRole("button", { name: /Não lidos/ })
     await chipNaoLidos.click()
     await expect(page).toHaveURL(/unread=1/)
     await expect(chipNaoLidos).toHaveAttribute("aria-pressed", "true")
@@ -94,9 +94,9 @@ test.describe("Fila de tickets repaginada", () => {
     for (const nome of [
       /^Todos/,
       /Abertos/,
-      /Aguardando analise/,
+      /Aguardando análise/,
       /Atrasados/,
-      /Nao lidos/,
+      /Não lidos/,
       /Meus tickets/,
     ]) {
       await expect(page.getByRole("button", { name: nome })).toHaveAttribute(
@@ -115,7 +115,7 @@ test.describe("Fila de tickets repaginada", () => {
 
     await login(page, request, "admin")
     await page.goto(`/tickets/${doCliente.id}`)
-    await page.getByRole("link", { name: "Ver historico" }).click()
+    await page.getByRole("link", { name: "Ver histórico" }).click()
 
     await expect(page).toHaveURL(/customer_id=/)
     // ancora no container da pill: os cards tambem renderizam "Cliente E2E",

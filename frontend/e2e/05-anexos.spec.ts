@@ -50,7 +50,7 @@ test("anexa imagem pelo dropzone, aguarda o preview assincrono e remove", async 
   const tile = page.locator('button[title="defeito.png"]')
   await expect(tile.locator("img")).toBeVisible({ timeout: 45_000 })
 
-  await page.getByRole("button", { name: "Acoes do anexo defeito.png" }).click()
+  await page.getByRole("button", { name: "Ações do anexo defeito.png" }).click()
   await page.getByRole("menuitem", { name: "Remover" }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Remover" }).click()
   await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
@@ -77,7 +77,7 @@ test("recusa tipo invalido e arquivo acima do limite no dropzone", async ({ page
     mimeType: "text/plain",
     buffer: Buffer.from("conteudo de teste"),
   })
-  await expect(page.getByText(/relatorio\.txt: tipo nao aceito/)).toBeVisible()
+  await expect(page.getByText(/relatorio\.txt: tipo não aceito/)).toBeVisible()
   await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
 
   // acima de 50 MB: tipo valido, tamanho que estoura o limite
@@ -109,7 +109,7 @@ test("remover anexo aparece so para o autor ou quem decide", async ({ browser, r
     try {
       await login(page, request, quem)
       await page.goto(`/tickets/${ticket.id}`)
-      await page.getByRole("button", { name: "Acoes do anexo defeito.png" }).click()
+      await page.getByRole("button", { name: "Ações do anexo defeito.png" }).click()
       await expect(page.getByRole("menuitem", { name: "Baixar original" })).toBeVisible()
       await expect(page.getByRole("menuitem", { name: "Remover" })).toHaveCount(itensRemover)
     } finally {

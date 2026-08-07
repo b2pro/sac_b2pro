@@ -48,7 +48,7 @@ async def test_login_com_senha_errada_retorna_401_padronizado(
     assert response.status_code == 401
     body = response.json()
     assert body["code"] == "auth_error"
-    assert body["message"] == "credenciais invalidas"
+    assert body["message"] == "credenciais inválidas"
 
 
 async def test_rate_limit_no_login(client: AsyncClient, session: AsyncSession) -> None:

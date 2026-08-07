@@ -76,7 +76,7 @@ class S3Storage:
                 )
             )
         except (BotoCoreError, ClientError) as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
     def presigned_get(self, key: str, ttl_seconds: int) -> str:
         try:
@@ -88,7 +88,7 @@ class S3Storage:
                 )
             )
         except (BotoCoreError, ClientError) as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
     def head(self, key: str) -> ObjectHead | None:
         try:
@@ -97,9 +97,9 @@ class S3Storage:
             code = str(exc.response.get("Error", {}).get("Code", ""))
             if code in _NOT_FOUND_CODES:
                 return None
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
         except BotoCoreError as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
         return ObjectHead(
             content_type=str(res.get("ContentType", "")),
             size_bytes=int(res.get("ContentLength", 0)),
@@ -111,14 +111,14 @@ class S3Storage:
                 Bucket=self._bucket, Key=key, Body=data, ContentType=content_type
             )
         except (BotoCoreError, ClientError) as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
     def get_bytes(self, key: str) -> bytes:
         try:
             res = self._internal.get_object(Bucket=self._bucket, Key=key)
             return bytes(res["Body"].read())
         except (BotoCoreError, ClientError) as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
     def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
         """Todas as chaves sob o prefixo, com o last_modified que o proprio
@@ -136,7 +136,7 @@ class S3Storage:
                 for obj in page.get("Contents", [])
             ]
         except (BotoCoreError, ClientError) as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
     def delete(self, key: str) -> None:
         # Idempotente por design: apagar uma chave que nao existe nao e erro.
@@ -149,9 +149,9 @@ class S3Storage:
             code = str(exc.response.get("Error", {}).get("Code", ""))
             if code in _NOT_FOUND_CODES:
                 return
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
         except BotoCoreError as exc:
-            raise StorageUnavailableError("storage indisponivel") from exc
+            raise StorageUnavailableError("storage indisponível") from exc
 
 
 def build_storage(settings: Settings) -> S3Storage:

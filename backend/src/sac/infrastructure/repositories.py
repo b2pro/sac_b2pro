@@ -74,7 +74,7 @@ class SqlUserRepository:
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise ConflictError("email ja cadastrado") from exc
+            raise ConflictError("email já cadastrado") from exc
 
     async def list_all(self) -> list[User]:
         result = await self._session.scalars(
@@ -85,7 +85,7 @@ class SqlUserRepository:
     async def update(self, user: User) -> None:
         m = await self._session.get(UserModel, user.id)
         if m is None:
-            raise NotFoundError("usuario nao encontrado")
+            raise NotFoundError("usuário não encontrado")
         m.name = user.name
         m.email = user.email
         m.password_hash = user.password_hash
@@ -96,7 +96,7 @@ class SqlUserRepository:
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise ConflictError("email ja cadastrado") from exc
+            raise ConflictError("email já cadastrado") from exc
 
 
 class SqlTenantRepository:
@@ -127,7 +127,7 @@ class SqlTenantRepository:
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise ConflictError("slug ja cadastrado") from exc
+            raise ConflictError("slug já cadastrado") from exc
 
     async def list_all(self) -> list[Tenant]:
         result = await self._session.scalars(
@@ -138,7 +138,7 @@ class SqlTenantRepository:
     async def update(self, tenant: Tenant) -> None:
         m = await self._session.get(TenantModel, tenant.id)
         if m is None:
-            raise NotFoundError("tenant nao encontrado")
+            raise NotFoundError("tenant não encontrado")
         m.name = tenant.name
         m.status = tenant.status.value
         m.modules = dict(tenant.modules)
@@ -166,12 +166,12 @@ class SqlUserTenantRepository:
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise ConflictError("vinculo ja existe") from exc
+            raise ConflictError("vínculo já existe") from exc
 
     async def update(self, link: UserTenant) -> None:
         m = await self._session.get(UserTenantModel, (link.user_id, link.tenant_id))
         if m is None:
-            raise NotFoundError("vinculo nao encontrado")
+            raise NotFoundError("vínculo não encontrado")
         m.role = link.role.value
         m.active = link.active
         await self._session.flush()
@@ -179,7 +179,7 @@ class SqlUserTenantRepository:
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None:
         m = await self._session.get(UserTenantModel, (user_id, tenant_id))
         if m is None:
-            raise NotFoundError("vinculo nao encontrado")
+            raise NotFoundError("vínculo não encontrado")
         await self._session.delete(m)
         await self._session.flush()
 

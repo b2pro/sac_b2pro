@@ -84,7 +84,7 @@ async def test_notifica_atribuido_e_comentaristas_excluindo_ator() -> None:
         ticket=ticket,
         type_=NotificationType.COMENTARIO,
         title="Nova atividade",
-        snippet="Novo comentario",
+        snippet="Novo comentário",
     )
 
     # Assert
@@ -160,7 +160,7 @@ async def test_destinatarios_deduplicados() -> None:
         actor=actor,
         ticket=ticket,
         type_=NotificationType.COMENTARIO,
-        title="Novo comentario",
+        title="Novo comentário",
     )
 
     # Assert
@@ -197,8 +197,8 @@ async def test_snippet_e_titulo_propagados() -> None:
 
     actor = TicketActor(user_id=actor_c, role=Role.ATENDENTE)
 
-    title = "Reatribuido"
-    snippet = "Voce foi atribuido ao ticket"
+    title = "Reatribuído"
+    snippet = "Você foi atribuído ao ticket"
 
     # Act
     await fanout.notify(
@@ -256,7 +256,7 @@ async def test_only_recipient_enderaca_ignorando_atendente_e_comentaristas() -> 
         actor=actor,
         ticket=ticket,
         type_=NotificationType.ATRIBUICAO,
-        title="Ticket atribuido a voce",
+        title="Ticket atribuído a você",
         only_recipient=destinatario_d,
     )
 
@@ -286,7 +286,7 @@ async def test_only_recipient_igual_ao_ator_nao_notifica() -> None:
         actor=actor,
         ticket=ticket,
         type_=NotificationType.ATRIBUICAO,
-        title="Ticket atribuido a voce",
+        title="Ticket atribuído a você",
         only_recipient=actor_id,
     )
 

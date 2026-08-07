@@ -2,7 +2,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.application.ports_reporting import DashboardData, MediaFilters, ReportFilters
@@ -36,35 +35,23 @@ NOW = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
 
 
 async def seed_catalog(ts: AsyncSession) -> dict[str, UUID]:
-    # provisionamento do tenant ja cadastra as marcas/defeitos/solucoes/canais
-    # padrao (seed_tenant_defaults); reaproveita esses registros em vez de
-    # duplicar, o que violaria a unicidade de nome em cada tabela de catalogo.
-    brand_a = (await ts.scalars(select(BrandModel.id).where(BrandModel.name == "KODI"))).one()
-    brand_b = (await ts.scalars(select(BrandModel.id).where(BrandModel.name == "STALEKS"))).one()
-    defect = (
-        await ts.scalars(select(DefectTypeModel.id).where(DefectTypeModel.name == "Oxidacao"))
-    ).one()
-    defect2 = (
-        await ts.scalars(select(DefectTypeModel.id).where(DefectTypeModel.name == "Danificado"))
-    ).one()
-    solution = (
-        await ts.scalars(
-            select(SolutionTypeModel.id).where(SolutionTypeModel.name == "Troca pelo mesmo item")
-        )
-    ).one()
-    solution2 = (
-        await ts.scalars(
-            select(SolutionTypeModel.id).where(SolutionTypeModel.name == "Troca por outro item")
-        )
-    ).one()
-    channel_a = (
-        await ts.scalars(select(PurchaseChannelModel.id).where(PurchaseChannelModel.name == "SAC"))
-    ).one()
-    channel_b = (
-        await ts.scalars(
-            select(PurchaseChannelModel.id).where(PurchaseChannelModel.name == "Site KODI")
-        )
-    ).one()
+    # O provisionamento nao semeia catalogo nenhum (ver tenant_seeds). O helper de
+    # teste deixa uma entrada neutra em cada um, mas as assercoes daqui olham nome
+    # ("Oxidação x3; Danificado x1"), entao estes registros sao cadastrados aqui.
+    marca_a = BrandModel(id=uuid4(), name="KODI")
+    marca_b = BrandModel(id=uuid4(), name="STALEKS")
+    defeito = DefectTypeModel(id=uuid4(), name="Oxidação")
+    defeito2 = DefectTypeModel(id=uuid4(), name="Danificado")
+    solucao = SolutionTypeModel(id=uuid4(), name="Troca pelo mesmo item")
+    solucao2 = SolutionTypeModel(id=uuid4(), name="Troca por outro item")
+    canal_a = PurchaseChannelModel(id=uuid4(), name="SAC")
+    canal_b = PurchaseChannelModel(id=uuid4(), name="Site KODI")
+    ts.add_all([marca_a, marca_b, defeito, defeito2, solucao, solucao2, canal_a, canal_b])
+    await ts.flush()
+    brand_a, brand_b = marca_a.id, marca_b.id
+    defect, defect2 = defeito.id, defeito2.id
+    solution, solution2 = solucao.id, solucao2.id
+    channel_a, channel_b = canal_a.id, canal_b.id
     product = ProductModel(id=uuid4(), name="Alicate", sku="PLN-10-7")
     product2 = ProductModel(id=uuid4(), name="Esmalte", sku="ESM-1")
     customer = CustomerModel(id=uuid4(), name="Cliente Rep", document="52998224725")
@@ -322,7 +309,7 @@ async def test_ordem_dos_itens_segue_a_insercao_mesmo_apos_edicao(
 
     rows = await repo.export_rows(ReportFilters(), page=1, per_page=10)
     assert rows[0].products == "Alicate x3; Esmalte x1"
-    assert rows[0].defects == "Oxidacao x3; Danificado x1"
+    assert rows[0].defects == "Oxidação x3; Danificado x1"
 
 
 def make_attachment(

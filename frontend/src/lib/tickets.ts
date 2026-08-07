@@ -18,7 +18,7 @@ export type SlaState = "no_prazo" | "vence_em_breve" | "atrasado" | "encerrado"
 export const STATUS_LABELS: Record<TicketStatus, string> = {
   aberto: "Aberto",
   aguardando_cliente: "Aguardando cliente",
-  aguardando_analise: "Aguardando analise",
+  aguardando_analise: "Aguardando análise",
   aprovado: "Aprovado",
   aguardando_envio_reverso: "Aguardando envio reverso",
   produto_recebido: "Produto recebido",
@@ -53,7 +53,7 @@ export const STATUS_ACCENT_VARS: Record<TicketStatus, string> = {
 
 export const PRIORITY_LABELS: Record<TicketPriority, string> = {
   baixa: "Baixa",
-  media: "Media",
+  media: "Média",
   alta: "Alta",
   urgente: "Urgente",
 }
@@ -372,7 +372,7 @@ export function primaryActionFor(
   switch (ticket.status) {
     case "aberto":
       return canEditTicket(role, owner, ticket.status) || canOperate(role, owner)
-        ? { action: "enviar_analise", label: "Enviar para analise" }
+        ? { action: "enviar_analise", label: "Enviar para análise" }
         : null
     case "aguardando_cliente":
       return canEditTicket(role, owner, ticket.status)

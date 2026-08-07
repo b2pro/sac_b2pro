@@ -118,7 +118,7 @@ export async function apiRaw(
     session = await tryRefresh()
     if (!session) {
       window.location.assign("/login")
-      throw new ApiError(401, "auth_error", "sessao expirada")
+      throw new ApiError(401, "auth_error", "sessão expirada")
     }
     res = await doFetch(session.accessToken)
   }

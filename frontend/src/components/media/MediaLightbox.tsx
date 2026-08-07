@@ -19,7 +19,7 @@ export type LightboxItem = {
 const KIND_LABELS: Record<LightboxItem["kind"], string> = {
   imagem: "Imagem",
   pdf: "PDF",
-  video: "Video",
+  video: "Vídeo",
 }
 
 function MediaPane({ item }: { item: LightboxItem }) {

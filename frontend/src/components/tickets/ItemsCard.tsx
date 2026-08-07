@@ -185,7 +185,7 @@ export function ItemsCard({
                   <TableHead>Produto</TableHead>
                   <TableHead>Defeito</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
-                  {canEdit && <TableHead className="text-right">Acoes</TableHead>}
+                  {canEdit && <TableHead className="text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -334,7 +334,7 @@ export function ItemsCard({
             <DialogTitle>Remover item</DialogTitle>
             <DialogDescription>
               {target
-                ? `Remover "${target.product_name}" deste ticket? Esta acao nao pode ser desfeita.`
+                ? `Remover "${target.product_name}" deste ticket? Esta ação não pode ser desfeita.`
                 : ""}
             </DialogDescription>
           </DialogHeader>

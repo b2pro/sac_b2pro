@@ -52,8 +52,8 @@ class ChartLoadBoundary extends Component<{ children: ReactNode }, { hasError: b
       return (
         <div className={cn(CHART_FALLBACK_HEIGHT, "flex items-center justify-center")}>
           <EmptyState
-            title="Nao foi possivel carregar o grafico"
-            description="Atualize a pagina para tentar novamente."
+            title="Não foi possível carregar o gráfico"
+            description="Atualize a página para tentar novamente."
           />
         </div>
       )
@@ -77,11 +77,11 @@ const KPI_ORDER = [
 const KPI_LABELS: Record<(typeof KPI_ORDER)[number], string> = {
   total: "Total",
   abertos: "Abertos",
-  aguardando_analise: "Aguardando analise",
+  aguardando_analise: "Aguardando análise",
   atrasados: "Atrasados (SLA)",
-  aprovados_no_mes: "Aprovados no mes",
-  declinados_no_mes: "Declinados no mes",
-  finalizados_no_mes: "Finalizados no mes",
+  aprovados_no_mes: "Aprovados no mês",
+  declinados_no_mes: "Declinados no mês",
+  finalizados_no_mes: "Finalizados no mês",
 }
 
 // Textos do "title" (tooltip nativo) de cada KpiCard, do mockup Dashboard.dc.html.
@@ -90,14 +90,14 @@ const KPI_LABELS: Record<(typeof KPI_ORDER)[number], string> = {
 const KPI_TOOLTIPS: Record<(typeof KPI_ORDER)[number], string> = {
   total: "Ver todos os tickets",
   abertos: "Tickets com status Aberto",
-  aguardando_analise: "Tickets aguardando analise",
+  aguardando_analise: "Tickets aguardando análise",
   atrasados: "Tickets com SLA vencido",
-  aprovados_no_mes: "Aprovados no mes atual",
-  declinados_no_mes: "Declinados no mes atual",
-  finalizados_no_mes: "Finalizados no mes atual",
+  aprovados_no_mes: "Aprovados no mês atual",
+  declinados_no_mes: "Declinados no mês atual",
+  finalizados_no_mes: "Finalizados no mês atual",
 }
 
-const RECENT_COLUMNS = ["No", "Cliente", "Produto", "Status", "SLA", "Ultima atividade"]
+const RECENT_COLUMNS = ["Nº", "Cliente", "Produto", "Status", "SLA", "Última atividade"]
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "erro inesperado"
@@ -137,7 +137,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-bold text-accent-foreground">Dashboard</h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Visao geral de trocas e defeitos do tenant
+            Visão geral de trocas e defeitos do tenant
           </p>
         </div>
         <Select
@@ -181,7 +181,7 @@ export default function DashboardPage() {
 
       {!isLoading && error && (
         <EmptyState
-          title="Nao foi possivel carregar o dashboard"
+          title="Não foi possível carregar o dashboard"
           description={errorMessage(error)}
         />
       )}
@@ -244,7 +244,7 @@ export default function DashboardPage() {
               <section className="rounded-md border border-border bg-card">
                 <div className="border-b border-border px-4 py-3.5">
                   <h2 className="text-[13.5px] font-semibold text-accent-foreground">
-                    Distribuicao por status
+                    Distribuição por status
                   </h2>
                 </div>
                 <div className="px-4 pt-3.5 pb-2.5">
@@ -292,11 +292,11 @@ export default function DashboardPage() {
             <div className="flex-[1_1_300px] flex min-w-0 flex-col gap-4">
               <AvgResolutionStat
                 hours={data.avg_resolution_hours}
-                caption="da abertura a finalizacao, no recorte atual"
+                caption="da abertura à finalização, no recorte atual"
               />
               <RankingList title="Top 5 produtos" rows={data.products} />
               <RankingList title="Top 5 defeitos" rows={data.defects} />
-              <RankingList title="Top 5 solucoes" rows={data.solutions} />
+              <RankingList title="Top 5 soluções" rows={data.solutions} />
             </div>
           </div>
         </>

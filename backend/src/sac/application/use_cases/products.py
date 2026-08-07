@@ -51,10 +51,10 @@ def _clean(value: str | None) -> str | None:
 def _normalize(data: ProductInput) -> tuple[str, str, str | None, str | None]:
     name = data.name.strip()
     if not name:
-        raise ValidationError("nome obrigatorio")
+        raise ValidationError("nome obrigatório")
     sku = data.sku.strip()
     if not sku:
-        raise ValidationError("SKU obrigatorio")
+        raise ValidationError("SKU obrigatório")
     return name, sku, _clean(data.segment), _clean(data.description)
 
 
@@ -89,7 +89,7 @@ class GetProductUseCase:
     async def execute(self, product_id: UUID) -> ProductView:
         product = await self._repo.get(product_id)
         if product is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         return _photo_view_of(product, self._storage, self._ttl)
 
 
@@ -100,7 +100,7 @@ class CreateProductUseCase:
     async def execute(self, data: ProductInput) -> Product:
         name, sku, segment, description = _normalize(data)
         if await self._repo.get_by_sku(sku) is not None:
-            raise ConflictError("SKU ja cadastrado")
+            raise ConflictError("SKU já cadastrado")
         product = Product(id=uuid4(), name=name, sku=sku, segment=segment, description=description)
         await self._repo.add(product)
         return product
@@ -113,11 +113,11 @@ class UpdateProductUseCase:
     async def execute(self, product_id: UUID, data: ProductInput) -> Product:
         product = await self._repo.get(product_id)
         if product is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         name, sku, segment, description = _normalize(data)
         existing = await self._repo.get_by_sku(sku)
         if existing is not None and existing.id != product_id:
-            raise ConflictError("SKU ja cadastrado")
+            raise ConflictError("SKU já cadastrado")
         product.name = name
         product.sku = sku
         product.segment = segment
@@ -133,7 +133,7 @@ class SetProductActiveUseCase:
     async def execute(self, product_id: UUID, active: bool) -> Product:
         product = await self._repo.get(product_id)
         if product is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         product.active = active
         await self._repo.update(product)
         return product

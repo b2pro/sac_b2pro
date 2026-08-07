@@ -10,8 +10,8 @@ class LookupCepUseCase:
     async def execute(self, cep: str) -> CepAddress:
         digits = normalize_digits(cep)
         if len(digits) != 8:
-            raise ValidationError("CEP invalido: use 8 digitos")
+            raise ValidationError("CEP inválido: use 8 dígitos")
         result = await self._gateway.lookup(digits)
         if result is None:
-            raise NotFoundError("CEP nao encontrado")
+            raise NotFoundError("CEP não encontrado")
         return result

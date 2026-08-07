@@ -16,7 +16,7 @@ test("ticket parcial e completado pelo detalhe e segue para analise", async ({ p
   await selectOption(page, "marca", "STALEKS")
   await selectOption(page, "prioridade", /Baixa/)
   await expect(
-    page.getByText("Voce pode salvar parcialmente e completar depois", { exact: false }),
+    page.getByText("Você pode salvar parcialmente e completar depois", { exact: false }),
   ).toBeVisible()
   await page.getByRole("button", { name: "Criar ticket" }).click()
   await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: 20_000 })
@@ -25,7 +25,7 @@ test("ticket parcial e completado pelo detalhe e segue para analise", async ({ p
   await expect(page.getByText("Nenhum item registrado.")).toBeVisible()
 
   // --- enviar para analise falha por incompletude ---
-  await page.getByRole("button", { name: "Enviar para analise" }).click()
+  await page.getByRole("button", { name: "Enviar para análise" }).click()
   await expect(page.getByText(/incompleto/i).first()).toBeVisible()
   await expect(page.getByText("Aberto").first()).toBeVisible()
 
@@ -40,7 +40,7 @@ test("ticket parcial e completado pelo detalhe e segue para analise", async ({ p
   await expect(page.getByRole("cell", { name: "3", exact: true })).toBeVisible()
 
   // --- vincular cliente e preencher descricao pelo dialog Editar dados ---
-  await page.getByRole("button", { name: "Mais acoes do ticket" }).click()
+  await page.getByRole("button", { name: "Mais ações do ticket" }).click()
   await page.getByRole("menuitem", { name: "Editar dados" }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog).toContainText("Editar dados do ticket")
@@ -52,8 +52,8 @@ test("ticket parcial e completado pelo detalhe e segue para analise", async ({ p
   await expect(page.getByText("Marcos Vinculo", { exact: true })).toBeVisible()
 
   // --- agora o envio para analise passa ---
-  await page.getByRole("button", { name: "Enviar para analise" }).click()
-  await expect(page.getByText("Aguardando analise").first()).toBeVisible()
+  await page.getByRole("button", { name: "Enviar para análise" }).click()
+  await expect(page.getByText("Aguardando análise").first()).toBeVisible()
 })
 
 test("itens ficam somente leitura fora de estado editavel", async ({ page, request }) => {
@@ -64,8 +64,8 @@ test("itens ficam somente leitura fora de estado editavel", async ({ page, reque
   await expect(page.getByRole("button", { name: "Adicionar item" })).toBeVisible()
 
   // aprovado: card de itens perde as acoes de edicao
-  await page.getByRole("button", { name: "Enviar para analise" }).click()
-  await expect(page.getByText("Aguardando analise").first()).toBeVisible()
+  await page.getByRole("button", { name: "Enviar para análise" }).click()
+  await expect(page.getByText("Aguardando análise").first()).toBeVisible()
   await page.getByRole("button", { name: "Aprovar", exact: true }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Confirmar" }).click()
   await expect(page.getByText("Aprovado").first()).toBeVisible()

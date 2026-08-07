@@ -47,7 +47,7 @@ export function Header() {
               sidebar de operacao, e vale tambem para quem navega sem tenant. */}
           <DropdownMenuItem onSelect={() => navigate("/preferencias")}>
             <SlidersHorizontal size={16} strokeWidth={1.5} />
-            Preferencias
+            Preferências
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onLogout}>

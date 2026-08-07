@@ -54,14 +54,14 @@ const FILTER_KEYS = [
 ] as const
 
 const RESULT_COLUMNS = [
-  "No",
+  "Nº",
   "Cliente",
   "Produto",
   "Status",
   "Prioridade",
   "SLA",
   "Atendente",
-  "Ultima atividade",
+  "Última atividade",
 ]
 
 type Draft = {
@@ -261,7 +261,7 @@ export default function RelatoriosPage() {
 
   if (deParam) chips.push({ key: "de", label: `De: ${formatDateBR(isoToDateInput(deParam))}` })
   if (ateParam)
-    chips.push({ key: "ate", label: `Ate: ${formatDateBR(isoEndExclusiveToDateInput(ateParam))}` })
+    chips.push({ key: "ate", label: `Até: ${formatDateBR(isoEndExclusiveToDateInput(ateParam))}` })
   if (brandIdParam)
     chips.push({
       key: "brand_id",
@@ -286,7 +286,7 @@ export default function RelatoriosPage() {
   if (solutionIdParam)
     chips.push({
       key: "solution_type_id",
-      label: `Solucao: ${catalogName(solutionsAll, solutionIdParam, "Solucao selecionada")}`,
+      label: `Solução: ${catalogName(solutionsAll, solutionIdParam, "Solução selecionada")}`,
     })
   if (channelIdParam)
     chips.push({
@@ -303,9 +303,9 @@ export default function RelatoriosPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-accent-foreground">Relatorios</h1>
+        <h1 className="text-xl font-bold text-accent-foreground">Relatórios</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Recorte de tickets por periodo, marca, status e catalogo
+          Recorte de tickets por período, marca, status e catálogo
         </p>
       </div>
 
@@ -323,7 +323,7 @@ export default function RelatoriosPage() {
         }
       >
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="relatorios-de">Periodo — de</Label>
+          <Label htmlFor="relatorios-de">Período — de</Label>
           <Input
             id="relatorios-de"
             type="date"
@@ -334,7 +334,7 @@ export default function RelatoriosPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="relatorios-ate">Periodo — ate</Label>
+          <Label htmlFor="relatorios-ate">Período — até</Label>
           <Input
             id="relatorios-ate"
             type="date"
@@ -443,10 +443,10 @@ export default function RelatoriosPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="relatorios-solucao">Solucao</Label>
+          <Label htmlFor="relatorios-solucao">Solução</Label>
           <AutocompleteField
             id="relatorios-solucao"
-            placeholder="Buscar solucao"
+            placeholder="Buscar solução"
             value={draft.solutionQuery}
             onValueChange={(value) => patchDraft({ solutionQuery: value, solutionTypeId: "" })}
             onSelect={(option) =>
@@ -482,7 +482,7 @@ export default function RelatoriosPage() {
       {isInicial && (
         <EmptyState
           title="Nenhum filtro aplicado"
-          description="Defina um periodo ou outro criterio acima e clique em Filtrar para gerar o relatorio."
+          description="Defina um período ou outro critério acima e clique em Filtrar para gerar o relatório."
         />
       )}
 
@@ -504,7 +504,7 @@ export default function RelatoriosPage() {
 
       {isErro && (
         <EmptyState
-          title="Nao foi possivel carregar o relatorio"
+          title="Não foi possível carregar o relatório"
           description={errorMessage(error)}
         />
       )}
@@ -512,7 +512,7 @@ export default function RelatoriosPage() {
       {isSemResultado && (
         <EmptyState
           title="Nenhum ticket para este filtro"
-          description="Amplie o periodo ou remova um dos criterios ativos."
+          description="Amplie o período ou remova um dos critérios ativos."
         />
       )}
 
@@ -523,7 +523,7 @@ export default function RelatoriosPage() {
             <KpiCard label="Finalizados" value={data.kpis.finalized} caption="do recorte atual" />
             <KpiCard label="Declinados" value={data.kpis.declined} caption="do recorte atual" />
             <KpiCard
-              label="Tempo medio de resolucao"
+              label="Tempo médio de resolução"
               value={formatAvgResolutionHours(data.kpis.avg_resolution_hours)}
               caption="do recorte atual"
               mono={data.kpis.avg_resolution_hours !== null && data.kpis.avg_resolution_hours > 0}
@@ -533,7 +533,7 @@ export default function RelatoriosPage() {
           <div className="mb-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
             <RankingList title="Top 5 produtos" rows={data.products} />
             <RankingList title="Top 5 defeitos" rows={data.defects} />
-            <RankingList title="Top 5 solucoes" rows={data.solutions} />
+            <RankingList title="Top 5 soluções" rows={data.solutions} />
           </div>
 
           <section className="rounded-md border border-border bg-card">

@@ -114,7 +114,7 @@ test("descarte sem resposta nao reenvia as cegas", async ({ page, request }) => 
 
   await page.getByRole("button", { name: "Tentar de novo" }).click()
 
-  await expect(page.getByText("servidor nao respondeu; tente de novo")).toBeVisible({
+  await expect(page.getByText("servidor não respondeu; tente de novo")).toBeVisible({
     timeout: 20_000,
   })
   expect(descartesPerdidos).toBe(1)

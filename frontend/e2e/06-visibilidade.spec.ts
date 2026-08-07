@@ -10,8 +10,8 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
     await page.getByRole("link", { name: "Dashboard" }).click()
     await expect(page).toHaveURL(/\/dashboard$/)
     await expect(page.getByText("Total", { exact: true })).toBeVisible()
-    await expect(page.getByText("Tempo medio de resolucao")).toBeVisible()
-    await expect(page.getByText("Distribuicao por status")).toBeVisible()
+    await expect(page.getByText("Tempo médio de resolução")).toBeVisible()
+    await expect(page.getByText("Distribuição por status")).toBeVisible()
 
     await page.getByRole("link", { name: /Abertos/ }).click()
     await expect(page).toHaveURL(/\/tickets\?.*status=aberto/)
@@ -32,13 +32,13 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
       return route.continue()
     })
 
-    await page.getByRole("link", { name: "Relatorios" }).click()
+    await page.getByRole("link", { name: "Relatórios" }).click()
     await expect(page).toHaveURL(/\/relatorios$/)
     // estado inicial: nada consultado ate filtrar
     await expect(page.getByText("Nenhum filtro aplicado")).toBeVisible()
     expect(reportRequests).toBe(0)
 
-    await page.getByLabel("Periodo — de").fill("2026-01-01")
+    await page.getByLabel("Período — de").fill("2026-01-01")
     await page.getByRole("button", { name: "Filtrar" }).click()
     const row = page.getByRole("row").filter({ hasText: `#${ticket.number}` })
     await expect(row).toBeVisible()
@@ -59,7 +59,7 @@ test.describe("Visibilidade: dashboard, relatorios e midias", () => {
     await apiUploadAttachment(request, "admin", ticket.id, "e2e/fixtures/defeito.png")
     await login(page, request, "admin")
 
-    await page.getByRole("link", { name: "Midias" }).click()
+    await page.getByRole("link", { name: "Mídias" }).click()
     await expect(page).toHaveURL(/\/midias$/)
 
     // aria-label do MediaTile carrega o filename e o numero do ticket: como

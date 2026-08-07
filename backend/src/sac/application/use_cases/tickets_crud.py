@@ -89,7 +89,7 @@ class UpdateTicketInput:
 
 def _validate_quantity(quantity: int) -> None:
     if quantity < 1:
-        raise ValidationError("quantidade minima e 1", details={"field": "quantity"})
+        raise ValidationError("quantidade mínima é 1", details={"field": "quantity"})
 
 
 async def _resolve_customer_id(
@@ -98,7 +98,7 @@ async def _resolve_customer_id(
     customer_id: UUID | None,
 ) -> UUID | None:
     if inline is not None and customer_id is not None:
-        raise ValidationError("informe cliente inline ou customer_id, nao ambos")
+        raise ValidationError("informe cliente inline ou customer_id, não ambos")
     if inline is not None:
         document = validate_document(inline.document)
         existing = await customers.get_by_document(document)
@@ -109,7 +109,7 @@ async def _resolve_customer_id(
         return created.id
     if customer_id is not None:
         if await customers.get(customer_id) is None:
-            raise ValidationError("cliente nao encontrado", details={"field": "customer_id"})
+            raise ValidationError("cliente não encontrado", details={"field": "customer_id"})
         return customer_id
     return None
 
@@ -214,7 +214,7 @@ class CreateTicketUseCase:
                     id=uuid4(),
                     ticket_id=ticket.id,
                     type=TimelineEventType.ATRIBUICAO,
-                    title="Ticket atribuido",
+                    title="Ticket atribuído",
                     new_value=str(ticket.attendant_user_id),
                     author_user_id=actor.user_id,
                 )
@@ -223,7 +223,7 @@ class CreateTicketUseCase:
                 actor,
                 ticket,
                 NotificationType.ATRIBUICAO,
-                f"Ticket #{ticket.number} atribuido a voce",
+                f"Ticket #{ticket.number} atribuído a você",
                 only_recipient=ticket.attendant_user_id,
             )
         await self._reads.mark_read(ticket.id, actor.user_id, now)
@@ -249,13 +249,13 @@ class UpdateTicketUseCase:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         ensure_can_edit(actor, ticket)
         if data.customer_id is not None and await self._customers.get(data.customer_id) is None:
-            raise ValidationError("cliente nao encontrado", details={"field": "customer_id"})
+            raise ValidationError("cliente não encontrado", details={"field": "customer_id"})
         old_attendant = ticket.attendant_user_id
         new_attendant = data.attendant_user_id
         reassigned = False
         if new_attendant != old_attendant:
             if not has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
-                raise PermissionDeniedError("sem permissao para reatribuir o ticket")
+                raise PermissionDeniedError("sem permissão para reatribuir o ticket")
             ticket.attendant_user_id = new_attendant
             reassigned = True
         old_priority = ticket.priority
@@ -309,7 +309,7 @@ class UpdateTicketUseCase:
                 actor,
                 ticket,
                 NotificationType.ATRIBUICAO,
-                f"Ticket #{ticket.number} atribuido a voce",
+                f"Ticket #{ticket.number} atribuído a você",
                 only_recipient=ticket.attendant_user_id,
             )
         return ticket
@@ -370,7 +370,7 @@ class UpdateTicketItemUseCase:
         _validate_quantity(data.quantity)
         item = await self._items.get(item_id)
         if item is None or item.ticket_id != ticket.id:
-            raise NotFoundError("item nao encontrado")
+            raise NotFoundError("item não encontrado")
         item.product_id = data.product_id
         item.defect_type_id = data.defect_type_id
         item.quantity = data.quantity
@@ -402,7 +402,7 @@ class RemoveTicketItemUseCase:
         ensure_can_edit(actor, ticket)
         item = await self._items.get(item_id)
         if item is None or item.ticket_id != ticket.id:
-            raise NotFoundError("item nao encontrado")
+            raise NotFoundError("item não encontrado")
         await self._items.remove(item.id)
         await _record_item_event(
             self._tickets,
@@ -436,14 +436,14 @@ class AddCommentUseCase:
     ) -> TicketComment:
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         if is_closed(ticket):
-            raise ConflictError("ticket encerrado nao aceita comentarios")
+            raise ConflictError("ticket encerrado não aceita comentários")
         text = body.strip()
         if not text:
-            raise ValidationError("comentario vazio")
+            raise ValidationError("comentário vazio")
         if reply_to_id is not None:
             parent = await self._comments.get(reply_to_id)
             if parent is None or parent.ticket_id != ticket.id:
-                raise ValidationError("comentario respondido nao pertence a este ticket")
+                raise ValidationError("comentário respondido não pertence a este ticket")
         comment = TicketComment(
             id=uuid4(),
             ticket_id=ticket.id,
@@ -460,7 +460,7 @@ class AddCommentUseCase:
             actor,
             ticket,
             NotificationType.COMENTARIO,
-            f"Novo comentario no ticket #{ticket.number}",
+            f"Novo comentário no ticket #{ticket.number}",
             snippet=text[:200],
         )
         return comment

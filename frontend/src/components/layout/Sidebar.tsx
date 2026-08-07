@@ -29,18 +29,18 @@ export function Sidebar() {
       label: "Plataforma",
       items: [
         { to: "/plataforma/tenants", label: "Tenants", icon: Building2 },
-        { to: "/plataforma/usuarios", label: "Usuarios", icon: Users },
+        { to: "/plataforma/usuarios", label: "Usuários", icon: Users },
       ],
     })
   }
   if (session?.tenantSlug) {
     groups.push({
-      label: "Operacao",
+      label: "Operação",
       items: [
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { to: "/tickets", label: "Tickets", icon: Ticket },
-        { to: "/relatorios", label: "Relatorios", icon: FileBarChart },
-        { to: "/midias", label: "Midias", icon: Images },
+        { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
+        { to: "/midias", label: "Mídias", icon: Images },
       ],
     })
     groups.push({
@@ -49,7 +49,7 @@ export function Sidebar() {
         { to: "/cadastros/marcas", label: "Marcas", icon: Tags },
         { to: "/cadastros/produtos", label: "Produtos", icon: Package },
         { to: "/cadastros/defeitos", label: "Defeitos", icon: Wrench },
-        { to: "/cadastros/solucoes", label: "Solucoes", icon: ClipboardCheck },
+        { to: "/cadastros/solucoes", label: "Soluções", icon: ClipboardCheck },
         { to: "/cadastros/canais", label: "Canais", icon: Store },
         { to: "/cadastros/clientes", label: "Clientes", icon: Contact },
       ],
@@ -60,7 +60,7 @@ export function Sidebar() {
   // (GERENCIAR_USUARIOS). Com um item so o grupo ja diz do que se trata.
   if (session?.tenantSlug && session.role === "admin") {
     groups.push({
-      label: "Administracao",
+      label: "Administração",
       items: [{ to: "/membros", label: "Membros", icon: UserCog }],
     })
   }

@@ -237,7 +237,7 @@ export function ActionPanel({
 
   const submitMutation = useMutation({
     mutationFn: () => submitTicket(ticket.id),
-    onSuccess: onImmediateSuccess("Enviado para analise"),
+    onSuccess: onImmediateSuccess("Enviado para análise"),
     onError: onMutationError,
   })
   const resumeMutation = useMutation({
@@ -264,7 +264,7 @@ export function ActionPanel({
     mutationFn: () => markUnread(ticket.id),
     // Sem onChanged() de proposito: refazer o GET do detalhe marca o ticket como
     // lido novamente no servidor, anulando a acao. A lista recarrega ao voltar.
-    onSuccess: () => toast.success("Marcado como nao lido"),
+    onSuccess: () => toast.success("Marcado como não lido"),
     onError: onMutationError,
   })
 
@@ -357,7 +357,7 @@ export function ActionPanel({
   function onSubmitDeclinar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!declineReason.trim()) {
-      setDeclineReasonError("Informe o motivo do declinio")
+      setDeclineReasonError("Informe o motivo do declínio")
       return
     }
     setDeclineReasonError(null)
@@ -367,7 +367,7 @@ export function ActionPanel({
   function onSubmitFinalizar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!solutionTypeId) {
-      setSolutionTypeError("Selecione a solucao aplicada")
+      setSolutionTypeError("Selecione a solução aplicada")
       return
     }
     setSolutionTypeError(null)
@@ -377,7 +377,7 @@ export function ActionPanel({
   function onSubmitReverso(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!reverseCode.trim()) {
-      setReverseCodeError("Informe o codigo reverso")
+      setReverseCodeError("Informe o código reverso")
       return
     }
     setReverseCodeError(null)
@@ -387,7 +387,7 @@ export function ActionPanel({
   function onSubmitGarantia(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!warrantyOrderCode.trim()) {
-      setWarrantyOrderCodeError("Informe o codigo do pedido de garantia")
+      setWarrantyOrderCodeError("Informe o código do pedido de garantia")
       return
     }
     setWarrantyOrderCodeError(null)
@@ -406,7 +406,7 @@ export function ActionPanel({
   function renderActionArea() {
     if (ticket.status === "aguardando_analise") {
       if (!canDecide(role)) {
-        return <p className="text-sm text-muted-foreground">Aguardando decisao do supervisor.</p>
+        return <p className="text-sm text-muted-foreground">Aguardando decisão do supervisor.</p>
       }
       return (
         <div className="flex gap-2">
@@ -435,7 +435,7 @@ export function ActionPanel({
         {hasMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Mais acoes do ticket">
+              <Button variant="ghost" size="icon-sm" aria-label="Mais ações do ticket">
                 <MoreVertical size={20} strokeWidth={1.5} />
               </Button>
             </DropdownMenuTrigger>
@@ -477,7 +477,7 @@ export function ActionPanel({
                   disabled={markUnreadMutation.isPending}
                   onClick={() => markUnreadMutation.mutate()}
                 >
-                  Marcar como nao lido
+                  Marcar como não lido
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -494,7 +494,7 @@ export function ActionPanel({
           <DialogHeader>
             <DialogTitle>Aprovar ticket</DialogTitle>
             <DialogDescription>
-              Notas sao opcionais e ficam registradas no historico.
+              Notas são opcionais e ficam registradas no histórico.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -565,7 +565,7 @@ export function ActionPanel({
           <DialogHeader>
             <DialogTitle>Cancelar ticket</DialogTitle>
             <DialogDescription>
-              Esta acao encerra o ticket e nao pode ser desfeita. Informe um motivo, se desejar.
+              Esta ação encerra o ticket e não pode ser desfeita. Informe um motivo, se desejar.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -601,11 +601,11 @@ export function ActionPanel({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Finalizar ticket</DialogTitle>
-            <DialogDescription>Selecione a solucao aplicada.</DialogDescription>
+            <DialogDescription>Selecione a solução aplicada.</DialogDescription>
           </DialogHeader>
           <form onSubmit={onSubmitFinalizar} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="finalizar-solucao">Solucao</Label>
+              <Label htmlFor="finalizar-solucao">Solução</Label>
               <Select
                 value={solutionTypeId}
                 onValueChange={(value) => {
@@ -655,11 +655,11 @@ export function ActionPanel({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar reverso</DialogTitle>
-            <DialogDescription>Informe o codigo de rastreio do envio reverso.</DialogDescription>
+            <DialogDescription>Informe o código de rastreio do envio reverso.</DialogDescription>
           </DialogHeader>
           <form onSubmit={onSubmitReverso} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="reverso-code">Codigo</Label>
+              <Label htmlFor="reverso-code">Código</Label>
               <Input
                 id="reverso-code"
                 className="font-mono"
@@ -760,11 +760,11 @@ export function ActionPanel({
               />
               {customerNotFound ? (
                 <p className="text-xs text-muted-foreground">
-                  Cliente nao encontrado —{" "}
+                  Cliente não encontrado —{" "}
                   <Link to="/cadastros/clientes" className="text-primary-text hover:underline">
                     cadastre em Cadastros &gt; Clientes
                   </Link>
-                  . O vinculo atual foi mantido.
+                  . O vínculo atual foi mantido.
                 </p>
               ) : (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -797,7 +797,7 @@ export function ActionPanel({
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={CHANNEL_NONE}>Nao informado</SelectItem>
+                    <SelectItem value={CHANNEL_NONE}>Não informado</SelectItem>
                     {(channels ?? []).map((channel) => (
                       <SelectItem key={channel.id} value={channel.id}>
                         {channel.name}
@@ -849,7 +849,7 @@ export function ActionPanel({
 
             {canDecide(role) && (
               <div className="flex flex-col gap-2">
-                <Label htmlFor="editar-atendente">Atendente responsavel</Label>
+                <Label htmlFor="editar-atendente">Atendente responsável</Label>
                 <AttendantSelect
                   id="editar-atendente"
                   value={editAttendantId}
@@ -881,7 +881,7 @@ export function ActionPanel({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="editar-descricao">Descricao</Label>
+              <Label htmlFor="editar-descricao">Descrição</Label>
               <Textarea
                 id="editar-descricao"
                 value={editDescription}
@@ -940,7 +940,7 @@ export function ReversesCard({
       </CardHeader>
       <CardContent>
         {reverses.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum codigo reverso.</p>
+          <p className="text-sm text-muted-foreground">Nenhum código reverso.</p>
         ) : (
           <ul className="space-y-3 text-sm">
             {reverses.map((reverse) => (
@@ -974,7 +974,7 @@ export function ReversesCard({
             <DialogTitle>Remover reverso</DialogTitle>
             <DialogDescription>
               {toRemove
-                ? `Remover o codigo ${toRemove.code}? Esta acao nao pode ser desfeita.`
+                ? `Remover o código ${toRemove.code}? Esta ação não pode ser desfeita.`
                 : ""}
             </DialogDescription>
           </DialogHeader>

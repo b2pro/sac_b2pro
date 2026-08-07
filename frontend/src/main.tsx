@@ -70,7 +70,7 @@ const router = createBrowserRouter([
               },
               {
                 path: "/cadastros/solucoes",
-                element: <CatalogPage title="Solucoes" path="solucoes" />,
+                element: <CatalogPage title="Soluções" path="solucoes" />,
               },
               {
                 path: "/cadastros/canais",

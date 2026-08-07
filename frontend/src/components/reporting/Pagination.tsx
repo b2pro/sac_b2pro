@@ -26,7 +26,7 @@ export function Pagination({
         <button
           type="button"
           disabled={page <= 1}
-          aria-label="Pagina anterior"
+          aria-label="Página anterior"
           onClick={() => onPage(page - 1)}
           className="flex size-[30px] items-center justify-center rounded-md border border-border text-foreground enabled:hover:border-foreground disabled:cursor-default disabled:text-muted-foreground/60"
         >
@@ -38,7 +38,7 @@ export function Pagination({
         <button
           type="button"
           disabled={page >= totalPages}
-          aria-label="Proxima pagina"
+          aria-label="Próxima página"
           onClick={() => onPage(page + 1)}
           className="flex size-[30px] items-center justify-center rounded-md border border-border text-foreground enabled:hover:border-foreground disabled:cursor-default disabled:text-muted-foreground/60"
         >

@@ -22,7 +22,7 @@ const CANCELADO = "upload cancelado"
 /** Validacao no client antes de subir. Recusa no ato o que o servidor recusaria
  *  de qualquer forma — o servidor continua sendo a autoridade final. */
 export function validarArquivo(arquivo: File): string | null {
-  if (kindOf(arquivo) === null) return `${arquivo.name}: tipo nao aceito`
+  if (kindOf(arquivo) === null) return `${arquivo.name}: tipo não aceito`
   if (arquivo.size > MAX_UPLOAD_BYTES) return `${arquivo.name}: acima de 50 MB`
   return null
 }
@@ -211,7 +211,7 @@ export function useUploadQueue(ticketId: string, onUploaded: () => void) {
           // e a proxima tentativa recomeca pelo descarte. Nao ha custo real em
           // esperar: com a API sem responder, o reenvio tambem nao completaria.
           retentando.current.delete(id)
-          atualizar(id, { status: "erro", erro: "servidor nao respondeu; tente de novo" })
+          atualizar(id, { status: "erro", erro: "servidor não respondeu; tente de novo" })
         })
     },
     [ticketId, atualizar, processar, remover, onUploaded, reenfileirar],

@@ -70,17 +70,17 @@ class SqlCatalogRepository:
                 deleted_at=item.deleted_at,
             )
         )
-        await _flush_or_conflict(self._session, "nome ja cadastrado")
+        await _flush_or_conflict(self._session, "nome já cadastrado")
 
     async def update(self, item: CatalogItem) -> None:
         m = await self._session.get(self._model, item.id)
         if m is None:
-            raise NotFoundError("registro nao encontrado")
+            raise NotFoundError("registro não encontrado")
         m.name = item.name
         m.description = item.description
         m.active = item.active
         m.deleted_at = item.deleted_at
-        await _flush_or_conflict(self._session, "nome ja cadastrado")
+        await _flush_or_conflict(self._session, "nome já cadastrado")
 
 
 async def _flush_or_conflict(session: AsyncSession, message: str) -> None:
@@ -176,12 +176,12 @@ class SqlCustomerRepository:
                 deleted_at=customer.deleted_at,
             )
         )
-        await _flush_or_conflict(self._session, "documento ja cadastrado")
+        await _flush_or_conflict(self._session, "documento já cadastrado")
 
     async def update(self, customer: Customer) -> None:
         m = await self._session.get(CustomerModel, customer.id)
         if m is None:
-            raise NotFoundError("cliente nao encontrado")
+            raise NotFoundError("cliente não encontrado")
         m.name = customer.name
         m.document = customer.document
         m.phone = customer.phone
@@ -195,7 +195,7 @@ class SqlCustomerRepository:
         m.state = customer.state
         m.active = customer.active
         m.deleted_at = customer.deleted_at
-        await _flush_or_conflict(self._session, "documento ja cadastrado")
+        await _flush_or_conflict(self._session, "documento já cadastrado")
 
 
 def _product_entity(m: ProductModel) -> Product:
@@ -264,12 +264,12 @@ class SqlProductRepository:
                 deleted_at=product.deleted_at,
             )
         )
-        await _flush_or_conflict(self._session, "SKU ja cadastrado")
+        await _flush_or_conflict(self._session, "SKU já cadastrado")
 
     async def update(self, product: Product) -> None:
         m = await self._session.get(ProductModel, product.id)
         if m is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         m.name = product.name
         m.sku = product.sku
         m.segment = product.segment
@@ -278,4 +278,4 @@ class SqlProductRepository:
         m.photo_preview_key = product.photo_preview_key
         m.active = product.active
         m.deleted_at = product.deleted_at
-        await _flush_or_conflict(self._session, "SKU ja cadastrado")
+        await _flush_or_conflict(self._session, "SKU já cadastrado")

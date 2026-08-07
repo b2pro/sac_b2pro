@@ -183,8 +183,8 @@ export default function TenantsPage() {
               <TableHead>Slug</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Modulos</TableHead>
-              <TableHead className="w-16 text-right">Acoes</TableHead>
+              <TableHead>Módulos</TableHead>
+              <TableHead className="w-16 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -219,7 +219,7 @@ export default function TenantsPage() {
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon-sm">
                           <MoreHorizontal size={16} strokeWidth={1.5} />
-                          <span className="sr-only">Acoes de {tenant.name}</span>
+                          <span className="sr-only">Ações de {tenant.name}</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -234,11 +234,11 @@ export default function TenantsPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => setModulesTenant(tenant)}>
                           <SlidersHorizontal size={16} strokeWidth={1.5} />
-                          Modulos
+                          Módulos
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setLinksTenant(tenant)}>
                           <Link2 size={16} strokeWidth={1.5} />
-                          Vinculos
+                          Vínculos
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -253,7 +253,7 @@ export default function TenantsPage() {
       <Dialog open={modulesTenant != null} onOpenChange={(open) => !open && setModulesTenant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Modulos de {modulesTenant?.name}</DialogTitle>
+            <DialogTitle>Módulos de {modulesTenant?.name}</DialogTitle>
           </DialogHeader>
           {modulesTenant && (
             <ModulesForm
@@ -268,7 +268,7 @@ export default function TenantsPage() {
       <Dialog open={linksTenant != null} onOpenChange={(open) => !open && setLinksTenant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Vinculos de {linksTenant?.name}</DialogTitle>
+            <DialogTitle>Vínculos de {linksTenant?.name}</DialogTitle>
           </DialogHeader>
           {linksTenant && <LinksDialogContent tenant={linksTenant} />}
         </DialogContent>
@@ -345,9 +345,9 @@ function LinksDialogContent({ tenant }: { tenant: Tenant }) {
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-1">
         {isLoading ? (
-          <li className="text-sm text-muted-foreground">Carregando vinculos...</li>
+          <li className="text-sm text-muted-foreground">Carregando vínculos...</li>
         ) : (links ?? []).length === 0 ? (
-          <li className="text-sm text-muted-foreground">Nenhum vinculo para este tenant</li>
+          <li className="text-sm text-muted-foreground">Nenhum vínculo para este tenant</li>
         ) : (
           (links ?? []).map((link) => (
             <li
@@ -373,7 +373,7 @@ function LinksDialogContent({ tenant }: { tenant: Tenant }) {
       </ul>
       <div className="flex items-end gap-2">
         <div className="flex flex-1 flex-col gap-2">
-          <Label>Usuario</Label>
+          <Label>Usuário</Label>
           <Select value={userId} onValueChange={setUserId}>
             <SelectTrigger>
               <SelectValue placeholder="selecione" />

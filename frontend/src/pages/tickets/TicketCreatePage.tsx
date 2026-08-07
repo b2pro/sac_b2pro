@@ -203,7 +203,7 @@ export default function TicketCreatePage() {
         state: address.state || current.state,
       }))
     } catch {
-      toast.message("CEP nao localizado, preencha o endereco manualmente")
+      toast.message("CEP não localizado, preencha o endereço manualmente")
     } finally {
       setCepLoading(false)
     }
@@ -244,7 +244,7 @@ export default function TicketCreatePage() {
 
     const trimmedEmail = customerFields.email.trim()
     if (trimmedEmail && !isValidEmail(trimmedEmail)) {
-      setCustomerEmailError("Informe um email valido, com @ e dominio (ex.: nome@empresa.com)")
+      setCustomerEmailError("Informe um email válido, com @ e domínio (ex.: nome@empresa.com)")
       hasError = true
     } else {
       setCustomerEmailError(null)
@@ -264,7 +264,7 @@ export default function TicketCreatePage() {
 
     if (channelQuery.trim() && !channelId) {
       toast.message(
-        "Canal nao selecionado — escolha uma sugestao da lista; o ticket sera criado sem canal.",
+        "Canal não selecionado — escolha uma sugestão da lista; o ticket será criado sem canal.",
       )
     }
 
@@ -318,7 +318,7 @@ export default function TicketCreatePage() {
           Voltar para tickets
         </Link>
         <p className="text-sm text-muted-foreground">
-          Voce nao tem permissao para criar tickets.
+          Você não tem permissão para criar tickets.
         </p>
       </div>
     )
@@ -336,8 +336,8 @@ export default function TicketCreatePage() {
         </Link>
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Novo ticket</h1>
         <p className="text-sm text-muted-foreground">
-          Voce pode salvar parcialmente e completar depois; o envio para analise exige cliente,
-          item e descricao.
+          Você pode salvar parcialmente e completar depois; o envio para análise exige cliente,
+          item e descrição.
         </p>
       </div>
 
@@ -352,7 +352,7 @@ export default function TicketCreatePage() {
           {linkedCustomerId && (
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
               <CircleCheck size={16} strokeWidth={1.5} className="shrink-0 text-muted-foreground" />
-              Cliente ja cadastrado — dados carregados; alteracoes atualizam o cadastro.
+              Cliente já cadastrado — dados carregados; alterações atualizam o cadastro.
             </div>
           )}
 
@@ -428,7 +428,7 @@ export default function TicketCreatePage() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="cliente-numero">Numero</Label>
+              <Label htmlFor="cliente-numero">Número</Label>
               <Input
                 id="cliente-numero"
                 value={customerFields.number}
@@ -612,7 +612,7 @@ export default function TicketCreatePage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="descricao">Descricao</Label>
+            <Label htmlFor="descricao">Descrição</Label>
             <Textarea
               id="descricao"
               rows={4}

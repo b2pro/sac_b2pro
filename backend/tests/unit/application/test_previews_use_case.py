@@ -304,7 +304,7 @@ async def test_imagem_invalida_falha_definitivamente_sem_esperar_cinco_tentativa
     anexo, job = await env.anexo_com_job()
 
     def gerador_recusa_a_imagem(data: bytes) -> tuple[bytes, bytes]:
-        raise ValidationError("arquivo nao e uma imagem valida")
+        raise ValidationError("arquivo não é uma imagem válida")
 
     processou = await env.use_case(generate=gerador_recusa_a_imagem).execute(datetime.now(UTC))
     assert processou is True

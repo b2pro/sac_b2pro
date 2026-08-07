@@ -45,7 +45,7 @@ export function TicketRow({
         <Link
           to={to}
           onKeyDown={onLinkKeyDown}
-          aria-label={`Abrir ticket numero ${item.number}`}
+          aria-label={`Abrir ticket número ${item.number}`}
           className="block whitespace-nowrap px-2.5 py-2 pl-3.5 font-mono font-semibold text-primary-text outline-none"
         >
           #{item.number}

@@ -326,7 +326,7 @@ export function GlobalSearch() {
       >
         <DialogTitle className="sr-only">Busca global</DialogTitle>
         <DialogDescription className="sr-only">
-          Busque tickets, clientes e produtos por numero, nome, documento ou SKU.
+          Busque tickets, clientes e produtos por número, nome, documento ou SKU.
         </DialogDescription>
         <div className="flex items-center gap-2 border-b border-border px-3">
           <input
@@ -340,7 +340,7 @@ export function GlobalSearch() {
             aria-activedescendant={entries.length > 0 ? optionId(active) : undefined}
             aria-label="Termo de busca"
             autoComplete="off"
-            placeholder="Numero do ticket, cliente, produto"
+            placeholder="Número do ticket, cliente, produto"
             className="h-11 flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
           <kbd className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
@@ -357,7 +357,7 @@ export function GlobalSearch() {
               <div className="px-3 py-6">
                 <p className="text-sm">Digite ao menos 2 caracteres</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Numero do ticket, nome ou documento do cliente, nome ou SKU do produto.
+                  Número do ticket, nome ou documento do cliente, nome ou SKU do produto.
                 </p>
               </div>
             ) : null}
@@ -365,7 +365,7 @@ export function GlobalSearch() {
               <p className="px-3 py-6 text-sm text-muted-foreground">Buscando...</p>
             ) : null}
             {mostrarErro ? (
-              <p className="px-3 py-6 text-sm text-destructive">Nao foi possivel buscar agora.</p>
+              <p className="px-3 py-6 text-sm text-destructive">Não foi possível buscar agora.</p>
             ) : null}
             {semResultados ? (
               <p className="px-3 py-6 text-sm">Nenhum resultado para este termo.</p>

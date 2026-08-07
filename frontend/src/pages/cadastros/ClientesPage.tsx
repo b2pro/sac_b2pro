@@ -149,7 +149,7 @@ function ClienteForm({
     if (!values.name.trim()) next.name = "Informe o nome"
     if (!values.document.trim()) next.document = "Informe o documento"
     if (values.email.trim() && !isValidEmail(values.email.trim())) {
-      next.email = "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+      next.email = "Informe um email válido, com @ e domínio (ex.: nome@empresa.com)"
     }
     setErrors(next)
     return Object.keys(next).length === 0
@@ -176,7 +176,7 @@ function ClienteForm({
         state: address.state || current.state,
       }))
     } catch {
-      toast.message("CEP nao localizado, preencha o endereco manualmente")
+      toast.message("CEP não localizado, preencha o endereço manualmente")
     } finally {
       setCepLoading(false)
     }
@@ -257,7 +257,7 @@ function ClienteForm({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor={fieldId("number")}>Numero</Label>
+          <Label htmlFor={fieldId("number")}>Número</Label>
           <Input
             id={fieldId("number")}
             name="number"
@@ -453,7 +453,7 @@ export default function ClientesPage() {
               <TableHead>Telefone</TableHead>
               <TableHead>Cidade/UF</TableHead>
               <TableHead>Status</TableHead>
-              {podeGerenciar && <TableHead className="w-40 text-right">Acoes</TableHead>}
+              {podeGerenciar && <TableHead className="w-40 text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -515,7 +515,7 @@ export default function ClientesPage() {
             Anterior
           </Button>
           <span>
-            Pagina {page} de {data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1}
+            Página {page} de {data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1}
           </span>
           <Button
             variant="ghost"
@@ -523,7 +523,7 @@ export default function ClientesPage() {
             disabled={!data || page >= Math.ceil(data.total / data.per_page)}
             onClick={() => setPage((p) => p + 1)}
           >
-            Proxima
+            Próxima
           </Button>
         </div>
       </div>

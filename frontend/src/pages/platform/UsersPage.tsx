@@ -66,7 +66,7 @@ function CreateUserForm({
     const nextEmailError = !email
       ? "Informe o email"
       : !isValidEmail(email)
-        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        ? "Informe um email válido, com @ e domínio (ex.: nome@empresa.com)"
         : null
     const nextPasswordError = !password
       ? "Informe a senha"
@@ -187,7 +187,7 @@ export default function UsersPage() {
     onSuccess: () => {
       invalidate()
       onCreateOpenChange(false)
-      toast.success("Usuario criado")
+      toast.success("Usuário criado")
     },
     onError: (error) => toast.error(errorMessage(error)),
   })
@@ -227,18 +227,18 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <UsersIcon size={20} strokeWidth={1.5} className="text-muted-foreground" />
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Usuarios</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Usuários</h1>
         </div>
         <Dialog open={createOpen} onOpenChange={onCreateOpenChange}>
           <DialogTrigger asChild>
             <Button>
               <Plus size={20} strokeWidth={1.5} />
-              Novo usuario
+              Novo usuário
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Novo usuario</DialogTitle>
+              <DialogTitle>Novo usuário</DialogTitle>
             </DialogHeader>
             <CreateUserForm
               isSuperAdmin={isSuperAdmin}
@@ -258,20 +258,20 @@ export default function UsersPage() {
               <TableHead>Email</TableHead>
               <TableHead>Perfil</TableHead>
               <TableHead>Ativo</TableHead>
-              <TableHead className="w-40 text-right">Acoes</TableHead>
+              <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  Carregando usuarios...
+                  Carregando usuários...
                 </TableCell>
               </TableRow>
             ) : (users ?? []).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  Nenhum usuario cadastrado
+                  Nenhum usuário cadastrado
                 </TableCell>
               </TableRow>
             ) : (

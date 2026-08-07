@@ -51,7 +51,7 @@ _BACKOFF_MINUTES = (1, 2, 4, 8, 16)
 def _entry(content_type: str) -> tuple[AttachmentKind, str]:
     entry = ALLOWED_CONTENT_TYPES.get(content_type.strip().lower())
     if entry is None:
-        raise ValidationError("tipo de arquivo nao aceito", details={"field": "content_type"})
+        raise ValidationError("tipo de arquivo não aceito", details={"field": "content_type"})
     return entry
 
 
@@ -65,7 +65,7 @@ def extension_for(content_type: str) -> str:
 
 def validate_size(size_bytes: int) -> None:
     if size_bytes < 1 or size_bytes > MAX_ATTACHMENT_BYTES:
-        raise ValidationError("tamanho de arquivo invalido", details={"field": "size_bytes"})
+        raise ValidationError("tamanho de arquivo inválido", details={"field": "size_bytes"})
 
 
 def build_object_key(tenant_slug: str, ticket_id: UUID, content_type: str, uid: UUID) -> str:

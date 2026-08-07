@@ -26,7 +26,7 @@ test.describe("Preferencias e membros", () => {
     try {
       await login(page, request, "viewer")
       await page.goto("/preferencias")
-      await expect(page.getByRole("heading", { name: "Preferencias" })).toBeVisible()
+      await expect(page.getByRole("heading", { name: "Preferências" })).toBeVisible()
       await expect(page.locator("html")).not.toHaveClass(/dark/)
 
       await page.getByRole("radio", { name: "Escuro" }).click()
@@ -34,7 +34,7 @@ test.describe("Preferencias e membros", () => {
       // espera o PUT confirmar antes de recarregar: sem isto, o reload poderia
       // acontecer antes do servidor gravar e o teste "provaria" persistencia
       // que na verdade nao aconteceu ainda.
-      await expect(page.getByText("Preferencias salvas")).toBeVisible()
+      await expect(page.getByText("Preferências salvas")).toBeVisible()
 
       await page.reload()
       await expect(page.locator("html")).toHaveClass(/dark/)

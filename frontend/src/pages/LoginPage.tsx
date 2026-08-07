@@ -31,7 +31,7 @@ export default function LoginPage() {
     const nextEmailError = !trimmedEmail
       ? "Informe o email"
       : !isValidEmail(trimmedEmail)
-        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        ? "Informe um email válido, com @ e domínio (ex.: nome@empresa.com)"
         : null
     const nextPasswordError = !password ? "Informe a senha" : null
     setEmailError(nextEmailError)
@@ -64,12 +64,12 @@ export default function LoginPage() {
         <Card className="w-full rounded-md border-border shadow-none">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-foreground">Entrar</CardTitle>
-            <CardDescription>Informe o slug da organizacao e suas credenciais.</CardDescription>
+            <CardDescription>Informe o slug da organização e suas credenciais.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="tenant">Organizacao (slug)</Label>
+                <Label htmlFor="tenant">Organização (slug)</Label>
                 <Input
                   id="tenant"
                   className="font-mono"
@@ -118,7 +118,7 @@ export default function LoginPage() {
                   onCheckedChange={(checked) => setRemember(checked === true)}
                 />
                 <Label htmlFor="remember" className="font-normal text-muted-foreground">
-                  Manter sessao neste dispositivo
+                  Manter sessão neste dispositivo
                 </Label>
               </div>
               <Button type="submit" disabled={loading} className="mt-1">

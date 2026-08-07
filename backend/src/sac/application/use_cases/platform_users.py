@@ -36,7 +36,7 @@ class CreateUserUseCase:
         validate_password(data.password)
         email = data.email.strip().lower()
         if await self._users.get_by_email(email) is not None:
-            raise ConflictError("email ja cadastrado")
+            raise ConflictError("email já cadastrado")
         user = User(
             id=uuid4(),
             name=data.name,
@@ -63,7 +63,7 @@ class SetUserActiveUseCase:
     async def execute(self, user_id: UUID, active: bool) -> User:
         user = await self._users.get_by_id(user_id)
         if user is None:
-            raise NotFoundError("usuario nao encontrado")
+            raise NotFoundError("usuário não encontrado")
         user.active = active
         await self._users.update(user)
         return user
@@ -78,7 +78,7 @@ class ResetPasswordUseCase:
         validate_password(new_password)
         user = await self._users.get_by_id(user_id)
         if user is None:
-            raise NotFoundError("usuario nao encontrado")
+            raise NotFoundError("usuário não encontrado")
         # change_password (e nao atribuir password_hash direto) porque a troca tem
         # de incrementar a versao de credencial: e o que invalida os refresh tokens
         # ja emitidos. Este use case e o unico ponto de troca de senha do sistema --
@@ -100,9 +100,9 @@ class LinkUserToTenantUseCase:
 
     async def execute(self, user_id: UUID, tenant_id: UUID, role: Role) -> UserTenant:
         if await self._users.get_by_id(user_id) is None:
-            raise NotFoundError("usuario nao encontrado")
+            raise NotFoundError("usuário não encontrado")
         if await self._tenants.get_by_id(tenant_id) is None:
-            raise NotFoundError("tenant nao encontrado")
+            raise NotFoundError("tenant não encontrado")
         link = UserTenant(user_id=user_id, tenant_id=tenant_id, role=role)
         await self._links.add(link)
         return link

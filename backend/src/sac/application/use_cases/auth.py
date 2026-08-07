@@ -11,8 +11,8 @@ from sac.domain.entities import TenantStatus, User
 from sac.domain.errors import AuthError
 from sac.domain.permissions import Role
 
-_LOGIN_FAILED = "credenciais invalidas"
-_SESSION_INVALID = "sessao invalida"
+_LOGIN_FAILED = "credenciais inválidas"
+_SESSION_INVALID = "sessão inválida"
 _LOGIN_TENANT_STATUSES = (TenantStatus.ATIVA, TenantStatus.TESTE)
 
 

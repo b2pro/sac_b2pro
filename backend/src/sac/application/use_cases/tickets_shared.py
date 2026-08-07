@@ -27,7 +27,7 @@ def restrict_to_own(actor: TicketActor) -> UUID | None:
     if has_permission(actor.role, Permission.VER_TODOS_TICKETS):
         return None
     if not has_permission(actor.role, Permission.VER_PROPRIOS_TICKETS):
-        raise PermissionDeniedError("sem permissao para listar tickets")
+        raise PermissionDeniedError("sem permissão para listar tickets")
     return actor.user_id
 
 
@@ -36,7 +36,7 @@ async def get_ticket_or_404(
 ) -> Ticket:
     ticket = await tickets.get(ticket_id)
     if ticket is None or ticket.deleted_at is not None:
-        raise NotFoundError("ticket nao encontrado")
+        raise NotFoundError("ticket não encontrado")
     if has_permission(actor.role, Permission.VER_TODOS_TICKETS):
         return ticket
     if (
@@ -44,13 +44,13 @@ async def get_ticket_or_404(
         and ticket.attendant_user_id == actor.user_id
     ):
         return ticket
-    raise NotFoundError("ticket nao encontrado")
+    raise NotFoundError("ticket não encontrado")
 
 
 def ensure_can_edit(actor: TicketActor, ticket: Ticket) -> None:
     if ticket.status not in EDITABLE_STATUSES:
         raise ConflictError(
-            "ticket nao pode ser editado neste estado", details={"status": ticket.status}
+            "ticket não pode ser editado neste estado", details={"status": ticket.status}
         )
     if has_permission(actor.role, Permission.EDITAR_QUALQUER_TICKET):
         return
@@ -59,7 +59,7 @@ def ensure_can_edit(actor: TicketActor, ticket: Ticket) -> None:
         and ticket.attendant_user_id == actor.user_id
     ):
         return
-    raise PermissionDeniedError("sem permissao para editar este ticket")
+    raise PermissionDeniedError("sem permissão para editar este ticket")
 
 
 def ensure_can_operate(actor: TicketActor, ticket: Ticket) -> None:
@@ -70,7 +70,7 @@ def ensure_can_operate(actor: TicketActor, ticket: Ticket) -> None:
         and ticket.attendant_user_id == actor.user_id
     ):
         return
-    raise PermissionDeniedError("sem permissao para operar este ticket")
+    raise PermissionDeniedError("sem permissão para operar este ticket")
 
 
 def touch(ticket: Ticket, now: datetime) -> None:

@@ -14,7 +14,7 @@ test("criacao completa pela UI e fluxo ate finalizado", async ({ page }) => {
 
   // --- Cliente novo (documento inexistente) ---
   await page.locator("#documento").fill(formatCpf(cpf))
-  await expect(page.getByText("Cliente ja cadastrado", { exact: false })).toHaveCount(0)
+  await expect(page.getByText("Cliente já cadastrado", { exact: false })).toHaveCount(0)
   await page.locator("#cliente-nome").fill("Joana Prado")
   await page.locator("#cliente-telefone").fill("11987654321")
   await page.locator("#cliente-email").fill("joana.prado@example.com")
@@ -64,8 +64,8 @@ test("criacao completa pela UI e fluxo ate finalizado", async ({ page }) => {
   await expect(page.getByText("Nenhum anexo neste ticket.")).toBeVisible()
 
   // --- Fluxo: aberto -> aguardando_analise ---
-  await page.getByRole("button", { name: "Enviar para analise" }).click()
-  await expect(page.getByText("Aguardando analise").first()).toBeVisible()
+  await page.getByRole("button", { name: "Enviar para análise" }).click()
+  await expect(page.getByText("Aguardando análise").first()).toBeVisible()
 
   // --- aguardando_analise -> aprovado (dialog com notas) ---
   await expect(page.getByRole("button", { name: "Declinar" })).toBeVisible()
@@ -96,11 +96,11 @@ test("criacao completa pela UI e fluxo ate finalizado", async ({ page }) => {
   await expect(page.getByText("Finalizado").first()).toBeVisible()
 
   // encerrado: chat vira somente leitura e a timeline registrou as transicoes
-  await expect(page.getByPlaceholder("Escreva um comentario interno...")).toHaveCount(0)
+  await expect(page.getByPlaceholder("Escreva um comentário interno...")).toHaveCount(0)
   await expect(page.getByText("Ticket encerrado", { exact: false })).toBeVisible()
   const conteudo = page.locator("main")
   await expect(conteudo.getByText("Ticket finalizado")).toBeVisible()
-  await expect(conteudo.getByText("Codigo reverso registrado")).toBeVisible()
+  await expect(conteudo.getByText("Código reverso registrado")).toBeVisible()
   await expect(conteudo.getByText("Ticket aprovado")).toBeVisible()
   await expect(conteudo.getByText("Ticket criado")).toBeVisible()
 })

@@ -14,7 +14,7 @@ export function AvgResolutionStat({
   const hasValue = hours !== null && hours > 0
   return (
     <section className="rounded-md border border-border bg-card p-[14px_16px]">
-      <div className="text-xs text-muted-foreground">Tempo medio de resolucao</div>
+      <div className="text-xs text-muted-foreground">Tempo médio de resolução</div>
       <div
         className={cn(
           "mt-1.5 text-accent-foreground",

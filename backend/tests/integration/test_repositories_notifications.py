@@ -26,7 +26,7 @@ def _notification(
         "ticket_id": ticket_id,
         "ticket_number": ticket_number,
         "type": NotificationType.ATRIBUICAO,
-        "title": "Ticket atribuido",
+        "title": "Ticket atribuído",
     }
     base.update(overrides)
     return Notification(**base)  # type: ignore[arg-type]

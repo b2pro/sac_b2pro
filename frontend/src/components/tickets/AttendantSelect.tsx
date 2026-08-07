@@ -62,7 +62,7 @@ export function AttendantSelect({
           <SelectItem value={value}>{currentName ?? "Atendente atual"}</SelectItem>
           <SelectItem value={CARREGANDO} disabled>
             {isError
-              ? "Nao foi possivel carregar a lista de atendentes"
+              ? "Não foi possível carregar a lista de atendentes"
               : "Carregando lista de atendentes..."}
           </SelectItem>
         </SelectContent>

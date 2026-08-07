@@ -52,7 +52,7 @@ VALID_TRANSITIONS: dict[TicketStatus, frozenset[TicketStatus]] = {
 def ensure_transition(current: TicketStatus, target: TicketStatus) -> None:
     if target not in VALID_TRANSITIONS[current]:
         raise InvalidTransitionError(
-            f"transicao invalida: {current} -> {target}",
+            f"transição inválida: {current} -> {target}",
             details={"de": current, "para": target},
         )
 

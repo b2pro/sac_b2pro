@@ -1,9 +1,15 @@
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.domain.entities import Tenant, TenantStatus, User, UserTenant
 from sac.domain.permissions import Role
+from sac.infrastructure.models_tenant import (
+    BrandModel,
+    DefectTypeModel,
+    PurchaseChannelModel,
+    SolutionTypeModel,
+)
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories import (
     SqlTenantRepository,
@@ -52,11 +58,39 @@ async def seed_tenant(
     return tenant
 
 
+async def seed_catalogo_minimo(engine: AsyncEngine, schema: str) -> None:
+    """Uma entrada em cada catalogo, para o tenant conseguir abrir ticket.
+
+    O provisionamento de producao nao semeia catalogo nenhum (ver
+    sac.infrastructure.tenant_seeds): marca, defeito, solucao e canal descrevem a
+    operacao de quem contratou. A maioria dos testes so precisa de "uma marca
+    qualquer" e pega a primeira que encontra, entao o catalogo de teste nasce
+    aqui. Quem depende de um nome especifico cadastra o seu -- estes nomes sao
+    neutros de proposito, para nao colidir.
+    """
+    factory = async_sessionmaker(
+        engine.execution_options(schema_translate_map={"tenant": schema}),
+        expire_on_commit=False,
+    )
+    async with factory() as ts:
+        ts.add_all(
+            [
+                BrandModel(id=uuid4(), name="Marca Teste"),
+                DefectTypeModel(id=uuid4(), name="Defeito Teste"),
+                SolutionTypeModel(id=uuid4(), name="Solucao Teste"),
+                PurchaseChannelModel(id=uuid4(), name="Canal Teste"),
+            ]
+        )
+        await ts.commit()
+
+
 async def seed_provisioned_tenant(
-    session: AsyncSession, engine: AsyncEngine, *, slug: str
+    session: AsyncSession, engine: AsyncEngine, *, slug: str, catalogo: bool = True
 ) -> Tenant:
     tenant = await seed_tenant(session, slug=slug)
     await AlembicTenantProvisioner(engine).provision(tenant.schema_name)
+    if catalogo:
+        await seed_catalogo_minimo(engine, tenant.schema_name)
     return tenant
 
 

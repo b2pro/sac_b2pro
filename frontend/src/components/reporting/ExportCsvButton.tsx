@@ -12,7 +12,7 @@ export function ExportCsvButton({ onExport }: { onExport: () => Promise<void> })
     try {
       await onExport()
     } catch {
-      toast.error("Falha ao exportar o relatorio")
+      toast.error("Falha ao exportar o relatório")
     } finally {
       setPending(false)
     }

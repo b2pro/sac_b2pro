@@ -22,8 +22,8 @@ from sac.domain.permissions import Role
 # se o alvo existe como super_admin (finge que nao ha usuario nenhum) nem
 # consegue mexer no proprio vinculo (perderia o proprio acesso ou criaria um
 # tenant sem admin).
-_ALVO_NAO_ENCONTRADO = "usuario nao encontrado"
-_PROPRIO_VINCULO = "nao e possivel alterar o proprio vinculo"
+_ALVO_NAO_ENCONTRADO = "usuário não encontrado"
+_PROPRIO_VINCULO = "não é possível alterar o próprio vínculo"
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ class CreateMemberUseCase:
         # Validar sempre torna a diferenca de status uma consequencia do
         # corpo enviado, nao do estado do banco.
         if not data.name or not data.password:
-            raise ValidationError("nome e senha sao obrigatorios")
+            raise ValidationError("nome e senha são obrigatórios")
         validate_password(data.password)
 
         email = data.email.strip().lower()
@@ -98,7 +98,7 @@ class CreateMemberUseCase:
             raise NotFoundError(_ALVO_NAO_ENCONTRADO)
 
         if await self._links.get(user.id, tenant_id) is not None:
-            raise ConflictError("email ja vinculado a este tenant")
+            raise ConflictError("email já vinculado a este tenant")
 
         link = await LinkUserToTenantUseCase(self._users, self._tenants, self._links).execute(
             user.id, tenant_id, data.role
@@ -190,7 +190,7 @@ class ResetMemberPasswordUseCase:
         # entao nao ha nada novo para esconder aqui.
         if await _linked_a_outro_tenant(self._links, user_id, tenant_id):
             raise ConflictError(
-                "nao e possivel alterar a senha de um usuario vinculado a outro tenant"
+                "não é possível alterar a senha de um usuário vinculado a outro tenant"
             )
         # reusa a validacao de tamanho minimo e o hash de platform_users: nao
         # duplicar essa regra aqui.

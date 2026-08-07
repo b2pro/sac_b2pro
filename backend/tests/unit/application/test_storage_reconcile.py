@@ -141,7 +141,7 @@ async def test_falha_ao_ler_as_chaves_conhecidas_nao_apaga_nada() -> None:
 async def test_falha_ao_listar_o_bucket_propaga_sem_apagar() -> None:
     class ListaQuebrada(FakeStorage):
         def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
-            raise StorageUnavailableError("storage indisponivel")
+            raise StorageUnavailableError("storage indisponível")
 
     storage = ListaQuebrada()
 

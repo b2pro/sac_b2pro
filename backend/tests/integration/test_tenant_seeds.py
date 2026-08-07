@@ -1,6 +1,8 @@
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sac.domain.catalog import CatalogKind
+from sac.infrastructure.models_tenant import SlaPolicyModel
 from sac.infrastructure.provisioning import AlembicTenantProvisioner
 from sac.infrastructure.repositories_cadastros import SqlCatalogRepository
 from sac.infrastructure.seed_tenant import run as seed_tenant_run
@@ -15,21 +17,26 @@ def _factory(engine: AsyncEngine, schema: str) -> async_sessionmaker:
     )
 
 
-async def test_provisionamento_semeia_defaults(engine: AsyncEngine) -> None:
+async def test_provisionamento_nao_semeia_catalogo(engine: AsyncEngine) -> None:
     await AlembicTenantProvisioner(engine).provision("t_seed")
 
     async with _factory(engine, "t_seed")() as session:
-        brands = SqlCatalogRepository(session, CatalogKind.BRAND)
-        assert await brands.get_by_name("KODI") is not None
-        assert await brands.get_by_name("STALEKS") is not None
+        # Os quatro catalogos descrevem a operacao de quem contratou. O tenant
+        # nasce vazio, pronto para o setup: nada de KODI, STALEKS, defeito de
+        # ferramenta ou loja propria vindo de brinde.
+        for kind in CatalogKind:
+            itens = await SqlCatalogRepository(session, kind).list(None, None)
+            assert itens == [], f"catalogo {kind} nao deveria vir semeado"
 
-        defects = await SqlCatalogRepository(session, CatalogKind.DEFECT_TYPE).list(None, None)
-        assert {"Danificado", "Oxidacao", "Mau uso"} <= {d.name for d in defects}
 
-        channels = await SqlCatalogRepository(session, CatalogKind.PURCHASE_CHANNEL).list(
-            None, None
-        )
-        assert "Mercado Livre" in {c.name for c in channels}
+async def test_provisionamento_semeia_politica_de_sla(engine: AsyncEngine) -> None:
+    # O SLA nao cita marca: so traduz prioridade em horas, e sem ele o tenant nao
+    # calcula prazo. Por isso continua no provisionamento.
+    await AlembicTenantProvisioner(engine).provision("t_sla")
+
+    async with _factory(engine, "t_sla")() as session:
+        prioridades = set((await session.scalars(select(SlaPolicyModel.priority))).all())
+        assert prioridades == {"urgente", "alta", "media", "baixa"}
 
 
 async def test_seed_e_idempotente(engine: AsyncEngine) -> None:

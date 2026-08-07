@@ -289,7 +289,7 @@ async def get_current_tenant_id(
     # vem sempre do slug do token, nunca de parametro de rota ou corpo.
     tenant = await SqlTenantRepository(session).get_by_slug(slug)
     if tenant is None:
-        raise AuthError("tenant nao encontrado")
+        raise AuthError("tenant não encontrado")
     return tenant.id
 
 
@@ -376,7 +376,7 @@ def require_permission(permission: Permission) -> IdentityDependency:
         identity: TokenPayload = Depends(get_current_identity),
     ) -> TokenPayload:
         if identity.role is None or not has_permission(identity.role, permission):
-            raise PermissionDeniedError("permissao insuficiente")
+            raise PermissionDeniedError("permissão insuficiente")
         return identity
 
     return dependency
@@ -387,7 +387,7 @@ def require_any_permission(*permissions: Permission) -> IdentityDependency:
         identity: TokenPayload = Depends(get_current_identity),
     ) -> TokenPayload:
         if identity.role is None or not any(has_permission(identity.role, p) for p in permissions):
-            raise PermissionDeniedError("permissao insuficiente")
+            raise PermissionDeniedError("permissão insuficiente")
         return identity
 
     return dependency
@@ -399,10 +399,10 @@ def require_module(module: str) -> IdentityDependency:
         session: AsyncSession = Depends(get_session),
     ) -> TokenPayload:
         if identity.tenant_slug is None:
-            raise PermissionDeniedError("modulo indisponivel fora de um tenant")
+            raise PermissionDeniedError("módulo indisponível fora de um tenant")
         tenant = await SqlTenantRepository(session).get_by_slug(identity.tenant_slug)
         if tenant is None or not tenant.modules.get(module, False):
-            raise PermissionDeniedError(f"modulo nao habilitado: {module}")
+            raise PermissionDeniedError(f"módulo não habilitado: {module}")
         return identity
 
     return dependency

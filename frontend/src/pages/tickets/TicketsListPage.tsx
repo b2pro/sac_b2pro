@@ -34,8 +34,8 @@ const ALL = "all"
 type SortField = "last_activity_at" | "number" | "opened_at" | "due_at"
 
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
-  { value: "last_activity_at", label: "Ultima atividade" },
-  { value: "number", label: "Numero" },
+  { value: "last_activity_at", label: "Última atividade" },
+  { value: "number", label: "Número" },
   { value: "opened_at", label: "Abertura" },
   { value: "due_at", label: "Prazo SLA" },
 ]
@@ -219,7 +219,7 @@ export default function TicketsListPage() {
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Buscar por no, cliente, produto ou pedido"
+              placeholder="Buscar por nº, cliente, produto ou pedido"
               className="h-8 w-[250px] pl-8"
             />
           </div>

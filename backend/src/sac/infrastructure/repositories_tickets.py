@@ -62,12 +62,12 @@ _FK_FIELDS: dict[str, str] = {
     "fk_ticket_attachments_ticket_id": "ticket_id",
 }
 _UNIQUE_CONSTRAINTS: dict[str, str] = {
-    "uq_tickets_number": "numero de ticket ja utilizado",
-    "uq_sla_policies_priority": "prioridade de SLA ja cadastrada",
+    "uq_tickets_number": "número de ticket já utilizado",
+    "uq_sla_policies_priority": "prioridade de SLA já cadastrada",
 }
 _CHECK_CONSTRAINTS: dict[str, str] = {
-    "ck_ticket_items_quantity": "quantidade minima e 1",
-    "ck_ticket_attachments_size": "tamanho de anexo invalido",
+    "ck_ticket_items_quantity": "quantidade mínima é 1",
+    "ck_ticket_attachments_size": "tamanho de anexo inválido",
 }
 
 
@@ -209,7 +209,7 @@ class SqlTicketRepository:
     async def update(self, ticket: Ticket) -> None:
         m = await self._session.get(TicketModel, ticket.id)
         if m is None:
-            raise NotFoundError("ticket nao encontrado")
+            raise NotFoundError("ticket não encontrado")
         m.status = str(ticket.status)
         m.priority = str(ticket.priority)
         for field in _TICKET_FIELDS:
@@ -449,7 +449,7 @@ class SqlTicketItemRepository:
     async def update(self, item: TicketItem) -> None:
         m = await self._session.get(TicketItemModel, item.id)
         if m is None:
-            raise NotFoundError("item nao encontrado")
+            raise NotFoundError("item não encontrado")
         m.product_id = item.product_id
         m.defect_type_id = item.defect_type_id
         m.quantity = item.quantity

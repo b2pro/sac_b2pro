@@ -30,7 +30,7 @@ class UpdateUserPreferencesUseCase:
         # case) nao passa por ali -- precisa do mesmo contrato de erro do
         # dominio, entao valida de novo aqui.
         if theme not in VALID_THEMES:
-            raise ValidationError("tema invalido", details={"field": "theme", "value": theme})
+            raise ValidationError("tema inválido", details={"field": "theme", "value": theme})
         prefs = UserPreferences(
             user_id=user_id, theme=theme, notify_toast=notify_toast, notify_sound=notify_sound
         )

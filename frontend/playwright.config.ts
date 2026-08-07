@@ -9,6 +9,10 @@ const baseURL = `http://localhost:${porta}`
 
 export default defineConfig({
   testDir: "./e2e",
+  // Cadastra marca, defeito, canal e produto que os specs esperam encontrar: o
+  // backend nao semeia catalogo em tenant novo, e os specs 02 e 03 escolhem
+  // esses nomes direto na UI, antes de qualquer helper.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,

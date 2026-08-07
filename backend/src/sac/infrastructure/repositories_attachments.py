@@ -98,7 +98,7 @@ class SqlAttachmentRepository:
     async def update(self, attachment: TicketAttachment) -> None:
         m = await self._session.get(TicketAttachmentModel, attachment.id)
         if m is None:
-            raise NotFoundError("anexo nao encontrado")
+            raise NotFoundError("anexo não encontrado")
         m.status = str(attachment.status)
         m.preview_status = str(attachment.preview_status)
         m.preview_key = attachment.preview_key
@@ -210,7 +210,7 @@ class SqlProductPhotoRepository:
     ) -> None:
         m = await self._session.get(ProductModel, product_id)
         if m is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         m.photo_key = photo_key
         m.photo_preview_key = preview_key
         await self._session.flush()

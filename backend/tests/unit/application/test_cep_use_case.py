@@ -18,7 +18,7 @@ class StubGateway:
     async def lookup(self, cep: str) -> CepAddress | None:
         self.chamado_com = cep
         if self._unavailable:
-            raise CepUnavailableError("servico de CEP indisponivel")
+            raise CepUnavailableError("serviço de CEP indisponível")
         return self._result
 
 

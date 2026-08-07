@@ -51,10 +51,10 @@ class RequestProductPhotoUploadUseCase:
 
     async def execute(self, product_id: UUID, data: PhotoIntentInput) -> PhotoIntent:
         if await self._products.get(product_id) is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         if kind_for(data.content_type) is not AttachmentKind.IMAGEM:
             raise ValidationError(
-                "foto de catalogo aceita apenas imagem", details={"field": "content_type"}
+                "foto de catálogo aceita apenas imagem", details={"field": "content_type"}
             )
         validate_size(data.size_bytes)
         object_key = build_product_photo_key(
@@ -86,23 +86,23 @@ class ConfirmProductPhotoUseCase:
 
     async def execute(self, product_id: UUID, object_key: str) -> None:
         if await self._products.get(product_id) is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         # a chave vem do client, entao precisa pertencer ao prefixo deste produto
         if not object_key.startswith(_prefix_for(self._tenant_slug, product_id)):
             raise ValidationError(
-                "chave de objeto nao pertence a este produto",
+                "chave de objeto não pertence a este produto",
                 details={"field": "object_key"},
             )
         head = self._storage.head(object_key)
         if head is None:
             raise ValidationError(
-                "objeto nao encontrado no storage", details={"field": "object_key"}
+                "objeto não encontrado no storage", details={"field": "object_key"}
             )
         if kind_for(head.content_type) is not AttachmentKind.IMAGEM:
-            raise ValidationError("objeto nao e imagem", details={"field": "content_type"})
+            raise ValidationError("objeto não é imagem", details={"field": "content_type"})
         if head.size_bytes < 1 or head.size_bytes > self._max_bytes:
             raise ValidationError(
-                "tamanho real do objeto invalido", details={"field": "size_bytes"}
+                "tamanho real do objeto inválido", details={"field": "size_bytes"}
             )
         await self._photos.set_photo(product_id, object_key, None)
         await self._jobs.add(
@@ -126,5 +126,5 @@ class DeleteProductPhotoUseCase:
 
     async def execute(self, product_id: UUID) -> None:
         if await self._products.get(product_id) is None:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         await self._photos.set_photo(product_id, None, None)

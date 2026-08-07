@@ -38,7 +38,7 @@ const KIND_VALUES: MediaKindFilter[] = ["imagem", "pdf", "video"]
 const KIND_LABELS: Record<MediaKindFilter, string> = {
   imagem: "Imagem",
   pdf: "PDF",
-  video: "Video",
+  video: "Vídeo",
 }
 const STATUS_VALUES = Object.keys(STATUS_LABELS) as TicketStatus[]
 
@@ -141,9 +141,9 @@ export default function MidiasPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-accent-foreground">Midias</h1>
+        <h1 className="text-xl font-bold text-accent-foreground">Mídias</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Todos os anexos de tickets do tenant — fotos, notas fiscais e videos
+          Todos os anexos de tickets do tenant — fotos, notas fiscais e vídeos
         </p>
       </div>
 
@@ -257,10 +257,10 @@ export default function MidiasPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="midias-solucao">Solucao</Label>
+          <Label htmlFor="midias-solucao">Solução</Label>
           <AutocompleteField
             id="midias-solucao"
-            placeholder="Buscar solucao"
+            placeholder="Buscar solução"
             value={solutionQuery}
             onValueChange={(value) => {
               setSolutionQuery(value)
@@ -279,7 +279,7 @@ export default function MidiasPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="midias-de">Periodo — de</Label>
+          <Label htmlFor="midias-de">Período — de</Label>
           <Input
             id="midias-de"
             type="date"
@@ -290,7 +290,7 @@ export default function MidiasPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="midias-ate">Periodo — ate</Label>
+          <Label htmlFor="midias-ate">Período — até</Label>
           <Input
             id="midias-ate"
             type="date"
@@ -314,7 +314,7 @@ export default function MidiasPage() {
 
       {isErro && (
         <EmptyState
-          title="Nao foi possivel carregar os anexos"
+          title="Não foi possível carregar os anexos"
           description={errorMessage(error)}
         />
       )}
@@ -322,7 +322,7 @@ export default function MidiasPage() {
       {isVazio && (
         <EmptyState
           title="Nenhum anexo para este filtro"
-          description="Ajuste os criterios de filtro acima para ver outros anexos."
+          description="Ajuste os critérios de filtro acima para ver outros anexos."
         />
       )}
 

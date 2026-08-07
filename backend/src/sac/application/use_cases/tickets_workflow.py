@@ -79,11 +79,11 @@ class SubmitTicketUseCase(_TransitionUseCase):
         ensure_transition(ticket.status, TicketStatus.AGUARDANDO_ANALISE)
         missing = missing_for_analysis(ticket, await self._items.count(ticket.id))
         if missing:
-            raise ValidationError("ticket incompleto para analise", details={"faltando": missing})
+            raise ValidationError("ticket incompleto para análise", details={"faltando": missing})
         now = datetime.now(UTC)
         ticket.submitted_at = now
         await self._apply(
-            actor, ticket, TicketStatus.AGUARDANDO_ANALISE, "Ticket enviado para analise", now
+            actor, ticket, TicketStatus.AGUARDANDO_ANALISE, "Ticket enviado para análise", now
         )
         return ticket
 
@@ -104,7 +104,7 @@ class ApproveTicketUseCase(_TransitionUseCase):
 class DeclineTicketUseCase(_TransitionUseCase):
     async def execute(self, actor: TicketActor, ticket_id: UUID, reason: str) -> Ticket:
         if not reason.strip():
-            raise ValidationError("motivo do declinio e obrigatorio")
+            raise ValidationError("motivo do declínio é obrigatório")
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         now = datetime.now(UTC)
         ticket.declined_at = now
@@ -184,10 +184,10 @@ class RegisterReverseUseCase(_TransitionUseCase):
         ensure_can_operate(actor, ticket)
         cleaned = code.strip()
         if not cleaned:
-            raise ValidationError("codigo reverso e obrigatorio")
+            raise ValidationError("código reverso é obrigatório")
         if ticket.status not in REVERSE_ALLOWED_STATUSES:
             raise InvalidTransitionError(
-                "codigo reverso nao permitido neste estado",
+                "código reverso não permitido neste estado",
                 details={"status": ticket.status},
             )
         now = datetime.now(UTC)
@@ -208,7 +208,7 @@ class RegisterReverseUseCase(_TransitionUseCase):
                 id=uuid4(),
                 ticket_id=ticket.id,
                 type=TimelineEventType.REVERSO_REGISTRADO,
-                title="Codigo reverso registrado",
+                title="Código reverso registrado",
                 new_value=cleaned,
                 author_user_id=actor.user_id,
             )
@@ -234,12 +234,12 @@ class DeleteReverseUseCase(_TransitionUseCase):
         ensure_can_operate(actor, ticket)
         if ticket.status not in REVERSE_DELETE_ALLOWED_STATUSES:
             raise InvalidTransitionError(
-                "exclusao de reverso nao permitida neste estado",
+                "exclusão de reverso não permitida neste estado",
                 details={"status": ticket.status},
             )
         reverse = await self._reverses.get(reverse_id)
         if reverse is None or reverse.ticket_id != ticket.id:
-            raise NotFoundError("codigo reverso nao encontrado")
+            raise NotFoundError("código reverso não encontrado")
         await self._reverses.remove(reverse.id)
         now = datetime.now(UTC)
         await self._timeline.add(
@@ -247,7 +247,7 @@ class DeleteReverseUseCase(_TransitionUseCase):
                 id=uuid4(),
                 ticket_id=ticket.id,
                 type=TimelineEventType.REVERSO_EXCLUIDO,
-                title="Codigo reverso excluido",
+                title="Código reverso excluído",
                 old_value=reverse.code,
                 author_user_id=actor.user_id,
             )
@@ -303,10 +303,10 @@ class SetWarrantyUseCase(_TransitionUseCase):
         ticket = await get_ticket_or_404(self._tickets, actor, ticket_id)
         ensure_can_operate(actor, ticket)
         if is_closed(ticket):
-            raise ConflictError("ticket encerrado nao aceita garantia")
+            raise ConflictError("ticket encerrado não aceita garantia")
         cleaned = order_code.strip()
         if not cleaned:
-            raise ValidationError("codigo do pedido de garantia e obrigatorio")
+            raise ValidationError("código do pedido de garantia é obrigatório")
         ticket.warranty_order_code = cleaned
         ticket.warranty_tracking_code = (
             tracking_code.strip() if tracking_code and tracking_code.strip() else None

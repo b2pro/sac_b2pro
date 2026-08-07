@@ -385,7 +385,7 @@ async def test_criacao_com_atendente_de_terceiro_gera_timeline_e_notificacao() -
     notif = notifications.notifications[0]
     assert notif.user_id == terceiro
     assert notif.type is NotificationType.ATRIBUICAO
-    assert notif.title == f"Ticket #{ticket.number} atribuido a voce"
+    assert notif.title == f"Ticket #{ticket.number} atribuído a você"
     assert notif.actor_user_id == ADMIN.user_id
     assert len(publisher.publish_calls) == 1
 
@@ -454,7 +454,7 @@ async def test_update_troca_atendente_com_permissao_notifica_novo_atendente() ->
     notif = notifications.notifications[0]
     assert notif.user_id == novo_atendente
     assert notif.type is NotificationType.ATRIBUICAO
-    assert notif.title == f"Ticket #{ticket.number} atribuido a voce"
+    assert notif.title == f"Ticket #{ticket.number} atribuído a você"
     assert notif.actor_user_id == ADMIN.user_id
     assert len(publisher.publish_calls) == 1
 
@@ -576,7 +576,7 @@ async def test_comentario_notifica_atendente_e_comentaristas_anteriores_com_snip
     assert recipients == {ADMIN.user_id, comentarista_anterior}
     for notif in notifications.notifications:
         assert notif.type is NotificationType.COMENTARIO
-        assert notif.title == f"Novo comentario no ticket #{ticket.number}"
+        assert notif.title == f"Novo comentário no ticket #{ticket.number}"
         assert notif.snippet == corpo.strip()[:200]
         assert notif.actor_user_id == autor.user_id
     assert len(publisher.publish_calls) == 1

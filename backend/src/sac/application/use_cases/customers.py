@@ -53,14 +53,14 @@ def _clean(value: str | None) -> str | None:
 def _normalize(data: CustomerInput) -> _NormalizedCustomer:
     name = data.name.strip()
     if not name:
-        raise ValidationError("nome obrigatorio")
+        raise ValidationError("nome obrigatório")
     document = validate_document(data.document)
     phone = normalize_digits(data.phone) or None if data.phone else None
     cep = None
     if _clean(data.cep):
         cep = normalize_digits(data.cep or "")
         if len(cep) != 8:
-            raise ValidationError("CEP invalido: use 8 digitos")
+            raise ValidationError("CEP inválido: use 8 dígitos")
     cleaned_state = _clean(data.state)
     state = validate_state(cleaned_state) if cleaned_state else None
     return _NormalizedCustomer(
@@ -100,7 +100,7 @@ class CreateCustomerUseCase:
     async def execute(self, data: CustomerInput) -> Customer:
         normalized = _normalize(data)
         if await self._repo.get_by_document(normalized.document) is not None:
-            raise ConflictError("documento ja cadastrado")
+            raise ConflictError("documento já cadastrado")
         customer = Customer(
             id=uuid4(),
             name=normalized.name,
@@ -126,11 +126,11 @@ class UpdateCustomerUseCase:
     async def execute(self, customer_id: UUID, data: CustomerInput) -> Customer:
         customer = await self._repo.get(customer_id)
         if customer is None:
-            raise NotFoundError("cliente nao encontrado")
+            raise NotFoundError("cliente não encontrado")
         normalized = _normalize(data)
         existing = await self._repo.get_by_document(normalized.document)
         if existing is not None and existing.id != customer_id:
-            raise ConflictError("documento ja cadastrado")
+            raise ConflictError("documento já cadastrado")
         customer.name = normalized.name
         customer.document = normalized.document
         customer.phone = normalized.phone
@@ -153,7 +153,7 @@ class SetCustomerActiveUseCase:
     async def execute(self, customer_id: UUID, active: bool) -> Customer:
         customer = await self._repo.get(customer_id)
         if customer is None:
-            raise NotFoundError("cliente nao encontrado")
+            raise NotFoundError("cliente não encontrado")
         customer.active = active
         await self._repo.update(customer)
         return customer

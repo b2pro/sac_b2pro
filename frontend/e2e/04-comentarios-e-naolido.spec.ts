@@ -8,7 +8,7 @@ test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page
   // --- supervisor comenta no ticket do admin ---
   await login(page, request, "supervisor")
   await page.goto(`/tickets/${ticket.id}`)
-  const composer = page.getByPlaceholder("Escreva um comentario interno...")
+  const composer = page.getByPlaceholder("Escreva um comentário interno...")
   await composer.fill("Preciso da nota fiscal para seguir com a analise.")
   await page.getByRole("button", { name: "Enviar", exact: true }).click()
   await expect(page.getByText("Preciso da nota fiscal para seguir com a analise.")).toBeVisible()
@@ -20,7 +20,7 @@ test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page
   await login(page, request, "admin")
   await page.goto("/tickets")
   await expect(
-    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade não lida" }),
   ).toBeVisible()
 
   // --- abrir o detalhe marca como lido ---
@@ -28,23 +28,23 @@ test("comentario com resposta e ciclo de nao lido entre usuarios", async ({ page
   await expect(page.getByText("Preciso da nota fiscal para seguir com a analise.")).toBeVisible()
   await page.goto("/tickets")
   await expect(
-    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade não lida" }),
   ).toHaveCount(0)
 
   // --- responder citando o comentario do supervisor ---
   await page.goto(`/tickets/${ticket.id}`)
   await page.getByRole("button", { name: "Responder" }).first().click()
-  await page.getByPlaceholder("Escreva um comentario interno...").fill("Nota fiscal anexada no pedido.")
+  await page.getByPlaceholder("Escreva um comentário interno...").fill("Nota fiscal anexada no pedido.")
   await page.getByRole("button", { name: "Enviar", exact: true }).click()
   await expect(page.getByText("Nota fiscal anexada no pedido.")).toBeVisible()
   await expect(page.getByText("Dora Supervisora").first()).toBeVisible()
 
   // --- marcar como nao lido de novo pelo menu ---
-  await page.getByRole("button", { name: "Mais acoes do ticket" }).click()
-  await page.getByRole("menuitem", { name: "Marcar como nao lido" }).click()
+  await page.getByRole("button", { name: "Mais ações do ticket" }).click()
+  await page.getByRole("menuitem", { name: "Marcar como não lido" }).click()
   await page.goto("/tickets")
   await expect(
-    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade nao lida" }),
+    ticketCard(page, ticket.number).getByRole("img", { name: "Atividade não lida" }),
   ).toBeVisible()
 })
 
@@ -53,8 +53,8 @@ test("declinar exige motivo e encerra o ticket", async ({ page, request }) => {
 
   await login(page, request, "admin")
   await page.goto(`/tickets/${ticket.id}`)
-  await page.getByRole("button", { name: "Enviar para analise" }).click()
-  await expect(page.getByText("Aguardando analise").first()).toBeVisible()
+  await page.getByRole("button", { name: "Enviar para análise" }).click()
+  await expect(page.getByText("Aguardando análise").first()).toBeVisible()
 
   await page.getByRole("button", { name: "Declinar" }).click()
   const dialog = page.getByRole("dialog")

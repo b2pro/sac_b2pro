@@ -23,8 +23,8 @@ export function TicketQueueCard({ item }: { item: TicketListItem }) {
         <span
           className={cn("size-2 shrink-0 rounded-full", item.unread ? "bg-primary" : "bg-transparent")}
           role={item.unread ? "img" : undefined}
-          title={item.unread ? "Atividade nao lida" : undefined}
-          aria-label={item.unread ? "Atividade nao lida" : undefined}
+          title={item.unread ? "Atividade não lida" : undefined}
+          aria-label={item.unread ? "Atividade não lida" : undefined}
         />
         <span className="font-mono text-[13.5px] font-semibold whitespace-nowrap text-primary-text">
           #{item.number}
@@ -35,7 +35,7 @@ export function TicketQueueCard({ item }: { item: TicketListItem }) {
             item.customer_name ? "text-accent-foreground" : "text-muted-foreground",
           )}
         >
-          {item.customer_name ?? "Cliente nao informado"}
+          {item.customer_name ?? "Cliente não informado"}
         </span>
         <StatusBadge status={item.status} />
         <PriorityBadge priority={item.priority} />

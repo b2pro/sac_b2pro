@@ -30,7 +30,7 @@ class InMemoryUserRepository:
 
     async def add(self, user: User) -> None:
         if await self.get_by_email(user.email):
-            raise ConflictError("email ja cadastrado")
+            raise ConflictError("email já cadastrado")
         self.items[user.id] = replace(user)
 
     async def list_all(self) -> list[User]:
@@ -40,7 +40,7 @@ class InMemoryUserRepository:
 
     async def update(self, user: User) -> None:
         if user.id not in self.items:
-            raise NotFoundError("usuario nao encontrado")
+            raise NotFoundError("usuário não encontrado")
         self.items[user.id] = replace(user)
 
 
@@ -59,7 +59,7 @@ class InMemoryTenantRepository:
 
     async def add(self, tenant: Tenant) -> None:
         if await self.get_by_slug(tenant.slug):
-            raise ConflictError("slug ja cadastrado")
+            raise ConflictError("slug já cadastrado")
         self.items[tenant.id] = tenant
 
     async def list_all(self) -> list[Tenant]:
@@ -69,7 +69,7 @@ class InMemoryTenantRepository:
 
     async def update(self, tenant: Tenant) -> None:
         if tenant.id not in self.items:
-            raise NotFoundError("tenant nao encontrado")
+            raise NotFoundError("tenant não encontrado")
         self.items[tenant.id] = tenant
 
 
@@ -89,18 +89,18 @@ class InMemoryUserTenantRepository:
     async def add(self, link: UserTenant) -> None:
         key = (link.user_id, link.tenant_id)
         if key in self.items:
-            raise ConflictError("vinculo ja existe")
+            raise ConflictError("vínculo já existe")
         self.items[key] = replace(link)
 
     async def update(self, link: UserTenant) -> None:
         key = (link.user_id, link.tenant_id)
         if key not in self.items:
-            raise NotFoundError("vinculo nao encontrado")
+            raise NotFoundError("vínculo não encontrado")
         self.items[key] = replace(link)
 
     async def remove(self, user_id: UUID, tenant_id: UUID) -> None:
         if (user_id, tenant_id) not in self.items:
-            raise NotFoundError("vinculo nao encontrado")
+            raise NotFoundError("vínculo não encontrado")
         del self.items[(user_id, tenant_id)]
 
     async def list_for_tenant(self, tenant_id: UUID) -> list[UserTenant]:
@@ -141,12 +141,12 @@ class InMemoryCatalogRepository:
 
     async def add(self, item: CatalogItem) -> None:
         if await self.get_by_name(item.name):
-            raise ConflictError("nome ja cadastrado")
+            raise ConflictError("nome já cadastrado")
         self.items[item.id] = item
 
     async def update(self, item: CatalogItem) -> None:
         if item.id not in self.items:
-            raise NotFoundError("registro nao encontrado")
+            raise NotFoundError("registro não encontrado")
         self.items[item.id] = item
 
 
@@ -179,12 +179,12 @@ class InMemoryCustomerRepository:
 
     async def add(self, customer: Customer) -> None:
         if await self.get_by_document(customer.document):
-            raise ConflictError("documento ja cadastrado")
+            raise ConflictError("documento já cadastrado")
         self.items[customer.id] = customer
 
     async def update(self, customer: Customer) -> None:
         if customer.id not in self.items:
-            raise NotFoundError("cliente nao encontrado")
+            raise NotFoundError("cliente não encontrado")
         self.items[customer.id] = customer
 
 
@@ -214,10 +214,10 @@ class InMemoryProductRepository:
 
     async def add(self, product: Product) -> None:
         if await self.get_by_sku(product.sku):
-            raise ConflictError("SKU ja cadastrado")
+            raise ConflictError("SKU já cadastrado")
         self.items[product.id] = product
 
     async def update(self, product: Product) -> None:
         if product.id not in self.items:
-            raise NotFoundError("produto nao encontrado")
+            raise NotFoundError("produto não encontrado")
         self.items[product.id] = product

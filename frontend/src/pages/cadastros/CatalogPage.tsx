@@ -93,7 +93,7 @@ function CatalogItemForm({
         <FieldError fieldId={nameFieldId} message={nameError} />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${idPrefix}-description`}>Descricao</Label>
+        <Label htmlFor={`${idPrefix}-description`}>Descrição</Label>
         <Input
           id={`${idPrefix}-description`}
           name="description"
@@ -208,9 +208,9 @@ export default function CatalogPage({ title, path }: { title: string; path: Cata
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Descricao</TableHead>
+              <TableHead>Descrição</TableHead>
               <TableHead>Status</TableHead>
-              {podeGerenciar && <TableHead className="w-40 text-right">Acoes</TableHead>}
+              {podeGerenciar && <TableHead className="w-40 text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>

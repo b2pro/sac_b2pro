@@ -58,7 +58,7 @@ class PartlyRaisingStorage:
 
     def presigned_get(self, key: str, ttl_seconds: int) -> str:
         if key == self._bad_key:
-            raise RuntimeError("storage indisponivel")
+            raise RuntimeError("storage indisponível")
         return f"https://signed/{key}"
 
 

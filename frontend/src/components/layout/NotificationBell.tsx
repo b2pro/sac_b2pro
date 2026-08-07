@@ -48,7 +48,7 @@ function errorMessage(error: unknown): string {
 }
 
 function unreadLabel(count: number): string {
-  return count === 1 ? "1 notificacao nao lida" : `${count} notificacoes nao lidas`
+  return count === 1 ? "1 notificação não lida" : `${count} notificações não lidas`
 }
 
 export function NotificationBell() {
@@ -116,7 +116,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Notificacoes" className="relative">
+        <Button variant="ghost" size="icon" aria-label="Notificações" className="relative">
           <Bell size={20} strokeWidth={1.5} />
           <span aria-live="polite" className="pointer-events-none absolute -top-0.5 -right-0.5">
             {unread > 0 ? (
@@ -130,7 +130,7 @@ export function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[22rem] p-0">
         <DropdownMenuLabel className="border-b border-border px-3 py-2">
-          Notificacoes
+          Notificações
         </DropdownMenuLabel>
         {/* max-h e exatamente 4 linhas (75.703125px cada, com todas as
             linhas com a mesma altura agora): a rolagem sempre para numa
@@ -138,18 +138,18 @@ export function NotificationBell() {
             nunca fica encostada numa linha cortada. */}
         <div className="max-h-[303px] overflow-y-auto">
           {isLoading ? (
-            <p className="px-3 py-6 text-sm text-muted-foreground">Carregando notificacoes...</p>
+            <p className="px-3 py-6 text-sm text-muted-foreground">Carregando notificações...</p>
           ) : null}
           {isError ? (
             <p className="px-3 py-6 text-sm text-destructive">
-              Nao foi possivel carregar as notificacoes.
+              Não foi possível carregar as notificações.
             </p>
           ) : null}
           {!isLoading && !isError && items.length === 0 ? (
             <div className="px-3 py-6">
-              <p className="text-sm">Sem notificacoes.</p>
+              <p className="text-sm">Sem notificações.</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Atribuicao, mudanca de status e comentario nos seus tickets aparecem aqui.
+                Atribuição, mudança de status e comentário nos seus tickets aparecem aqui.
               </p>
             </div>
           ) : null}

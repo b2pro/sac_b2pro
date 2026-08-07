@@ -54,22 +54,22 @@ const ROLES: { value: MemberRole; label: string; description: string }[] = [
   {
     value: "admin",
     label: "Administrador",
-    description: "Tudo do supervisor, mais a gestao dos membros deste tenant.",
+    description: "Tudo do supervisor, mais a gestão dos membros deste tenant.",
   },
   {
     value: "supervisor",
     label: "Supervisor",
-    description: "Ve e decide qualquer ticket e gerencia todos os cadastros.",
+    description: "Vê e decide qualquer ticket e gerencia todos os cadastros.",
   },
   {
     value: "atendente",
     label: "Atendente",
-    description: "Cria e atende os proprios tickets; nao decide nem ve os dos outros.",
+    description: "Cria e atende os próprios tickets; não decide nem vê os dos outros.",
   },
   {
     value: "visualizador",
     label: "Visualizador",
-    description: "So consulta: ve todos os tickets, sem alterar nada.",
+    description: "Só consulta: vê todos os tickets, sem alterar nada.",
   },
 ]
 
@@ -90,7 +90,7 @@ function errorMessage(error: unknown): string {
  *  formulario de cadastro, entao a troca aqui e de clareza, nao de conteudo. */
 function createErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.status === 404) {
-    return "Nao foi possivel cadastrar este email neste tenant. Confira o endereco ou peca o vinculo ao administrador da plataforma."
+    return "Não foi possível cadastrar este email neste tenant. Confira o endereço ou peça o vínculo ao administrador da plataforma."
   }
   return errorMessage(error)
 }
@@ -155,7 +155,7 @@ function CreateMemberForm({
     const nextEmailError = !email
       ? "Informe o email"
       : !isValidEmail(email)
-        ? "Informe um email valido, com @ e dominio (ex.: nome@empresa.com)"
+        ? "Informe um email válido, com @ e domínio (ex.: nome@empresa.com)"
         : null
     const nextPasswordError = !password
       ? "Informe a senha"
@@ -412,8 +412,8 @@ export default function MembrosPage() {
               <TableHead className="px-3">Nome</TableHead>
               <TableHead className="px-3">Email</TableHead>
               <TableHead className="px-3">Papel</TableHead>
-              <TableHead className="px-3">Vinculo</TableHead>
-              <TableHead className="w-56 px-3 text-right">Acoes</TableHead>
+              <TableHead className="px-3">Vínculo</TableHead>
+              <TableHead className="w-56 px-3 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -426,7 +426,7 @@ export default function MembrosPage() {
             ) : isLoadingError ? (
               <TableRow>
                 <TableCell colSpan={5} className="px-3 text-center text-muted-foreground">
-                  Nao foi possivel carregar os membros. Recarregue a pagina para tentar de novo.
+                  Não foi possível carregar os membros. Recarregue a página para tentar de novo.
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
@@ -445,7 +445,7 @@ export default function MembrosPage() {
                         {member.name}
                         {isSelf && (
                           <Badge variant="secondary" className="font-normal">
-                            voce
+                            você
                           </Badge>
                         )}
                       </span>
@@ -471,7 +471,7 @@ export default function MembrosPage() {
                         // Espelha a salvaguarda do backend em vez de deixar o
                         // clique cair num conflito garantido: ninguem altera o
                         // proprio vinculo nem a propria senha por aqui.
-                        <span className="text-[12.5px] text-muted-foreground">sem acoes</span>
+                        <span className="text-[12.5px] text-muted-foreground">sem ações</span>
                       ) : (
                         <span className="flex items-center justify-end gap-1">
                           <Button
@@ -504,7 +504,7 @@ export default function MembrosPage() {
       </div>
 
       <p className="text-[12.5px] text-muted-foreground">
-        Voce nao altera o proprio papel, o proprio vinculo nem a propria senha por esta tela. Peca a
+        Você não altera o próprio papel, o próprio vínculo nem a própria senha por esta tela. Peça a
         outro administrador do tenant.
       </p>
 
@@ -522,9 +522,9 @@ export default function MembrosPage() {
               </div>
               <div className="flex items-start justify-between gap-6 rounded-md border border-border px-3 py-3">
                 <div className="min-w-0">
-                  <Label htmlFor="membro-editar-ativo">Vinculo ativo</Label>
+                  <Label htmlFor="membro-editar-ativo">Vínculo ativo</Label>
                   <p className="mt-1 text-[12.5px] text-muted-foreground">
-                    Desativado, o membro deixa de entrar neste tenant e o historico dele continua
+                    Desativado, o membro deixa de entrar neste tenant e o histórico dele continua
                     nos tickets.
                   </p>
                 </div>
@@ -540,7 +540,7 @@ export default function MembrosPage() {
                 disabled={updateMutation.isPending || !editDirty}
                 className="mt-1"
               >
-                Salvar alteracoes
+                Salvar alterações
               </Button>
             </form>
           )}
@@ -552,7 +552,7 @@ export default function MembrosPage() {
           <DialogHeader>
             <DialogTitle>Redefinir senha de {resetTarget?.name}</DialogTitle>
             <DialogDescription>
-              A senha atual para de valer assim que voce salvar. Combine a nova com o membro.
+              A senha atual para de valer assim que você salvar. Combine a nova com o membro.
             </DialogDescription>
           </DialogHeader>
           <ResetPasswordForm

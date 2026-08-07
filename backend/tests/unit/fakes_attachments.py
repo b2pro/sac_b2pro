@@ -56,7 +56,7 @@ class FakeStorage:
 
     def delete(self, key: str) -> None:
         if key in self.fail_delete_for:
-            raise StorageUnavailableError("storage indisponivel (fake)")
+            raise StorageUnavailableError("storage indisponível (fake)")
         self.deleted.append(key)
         self.objects.pop(key, None)
 

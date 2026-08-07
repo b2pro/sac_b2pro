@@ -108,9 +108,9 @@ class JwtTokenService:
         try:
             claims = jwt.decode(token, self._secret, algorithms=[self._algorithm])
         except jwt.PyJWTError as exc:
-            raise AuthError("token invalido ou expirado") from exc
+            raise AuthError("token inválido ou expirado") from exc
         if claims.get("type") != expected_type:
-            raise AuthError("tipo de token invalido")
+            raise AuthError("tipo de token inválido")
         role_value = claims.get("role")
         return TokenPayload(
             user_id=UUID(claims["sub"]),

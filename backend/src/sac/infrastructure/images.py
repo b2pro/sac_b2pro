@@ -58,5 +58,5 @@ def generate_previews(
             original.load()
             rgb = _to_rgb(original)
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
-        raise ValidationError("arquivo nao e uma imagem valida") from exc
+        raise ValidationError("arquivo não é uma imagem válida") from exc
     return _resize(rgb, thumb_px), _resize(rgb, medium_px)

@@ -135,7 +135,7 @@ async def test_falhas_de_login_sao_indistinguiveis(caso: str) -> None:
 
     with pytest.raises(AuthError) as exc:
         await c.login.execute(email, password, slug)
-    assert str(exc.value) == "credenciais invalidas"
+    assert str(exc.value) == "credenciais inválidas"
 
 
 async def test_tenant_em_teste_permite_login() -> None:
@@ -189,7 +189,7 @@ async def test_refresh_falha_se_tenant_suspenso_apos_login() -> None:
 
     with pytest.raises(AuthError) as exc:
         await c.refresh.execute(login.refresh_token)
-    assert str(exc.value) == "sessao invalida"
+    assert str(exc.value) == "sessão inválida"
 
 
 async def test_refresh_falha_depois_que_a_senha_e_trocada() -> None:
@@ -208,7 +208,7 @@ async def test_refresh_falha_depois_que_a_senha_e_trocada() -> None:
 
     with pytest.raises(AuthError) as exc:
         await c.refresh.execute(roubado)
-    assert str(exc.value) == "sessao invalida"
+    assert str(exc.value) == "sessão inválida"
 
 
 async def test_login_depois_da_troca_de_senha_emite_sessao_valida() -> None:
@@ -254,4 +254,4 @@ async def test_refresh_falha_se_vinculo_desativado_apos_login() -> None:
 
     with pytest.raises(AuthError) as exc:
         await c.refresh.execute(login.refresh_token)
-    assert str(exc.value) == "sessao invalida"
+    assert str(exc.value) == "sessão inválida"

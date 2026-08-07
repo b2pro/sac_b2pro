@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sac.application.ports_reporting import ReportExportRow
 
 CSV_HEADER: tuple[str, ...] = (
-    "numero",
+    "número",
     "marca",
     "status",
     "prioridade",
@@ -15,7 +15,7 @@ CSV_HEADER: tuple[str, ...] = (
     "email",
     "produtos",
     "defeitos",
-    "solucao",
+    "solução",
     "canal",
     "atendente",
     "pedido",

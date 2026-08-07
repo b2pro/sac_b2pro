@@ -12,7 +12,7 @@ _MODULE_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 def _validate_modules(modules: dict[str, bool]) -> None:
     for key in modules:
         if not _MODULE_RE.fullmatch(key):
-            raise ValidationError(f"nome de modulo invalido: {key}")
+            raise ValidationError(f"nome de módulo inválido: {key}")
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class CreateTenantUseCase:
         validate_slug(data.slug)
         _validate_modules(data.modules)
         if await self._tenants.get_by_slug(data.slug) is not None:
-            raise ConflictError("slug ja cadastrado")
+            raise ConflictError("slug já cadastrado")
         tenant = Tenant(id=uuid4(), slug=data.slug, name=data.name, modules=dict(data.modules))
         await self._tenants.add(tenant)
         await self._provisioner.provision(tenant.schema_name)
@@ -53,7 +53,7 @@ class SetTenantStatusUseCase:
     async def execute(self, tenant_id: UUID, status: TenantStatus) -> Tenant:
         tenant = await self._tenants.get_by_id(tenant_id)
         if tenant is None:
-            raise NotFoundError("tenant nao encontrado")
+            raise NotFoundError("tenant não encontrado")
         tenant.status = status
         await self._tenants.update(tenant)
         return tenant
@@ -67,7 +67,7 @@ class SetTenantModulesUseCase:
         _validate_modules(modules)
         tenant = await self._tenants.get_by_id(tenant_id)
         if tenant is None:
-            raise NotFoundError("tenant nao encontrado")
+            raise NotFoundError("tenant não encontrado")
         tenant.modules = dict(modules)
         await self._tenants.update(tenant)
         return tenant

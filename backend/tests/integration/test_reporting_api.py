@@ -65,17 +65,10 @@ async def _setup(client: AsyncClient, session: AsyncSession, engine: AsyncEngine
         assert res.status_code == 201, res.text
         return res.json()
 
-    async def get_list(path: str) -> list[dict]:
-        res = await client.get(f"/api{path}", headers=h_admin)
-        assert res.status_code == 200, res.text
-        return res.json()
-
-    # marca e defeito padrao ja vem do provisionamento do tenant
-    # (seed_tenant_defaults); criar de novo violaria a unicidade de nome.
-    marcas = await get_list("/cadastros/marcas")
-    brand = next(m for m in marcas if m["name"] == "KODI")
-    defeitos = await get_list("/cadastros/defeitos")
-    defect = next(d for d in defeitos if d["name"] == "Oxidacao")
+    # marca e defeito nao vem mais do provisionamento (ver tenant_seeds): o
+    # tenant nasce sem nenhum dos dois e quem opera cadastra os seus.
+    brand = await post("/cadastros/marcas", {"name": "KODI"})
+    defect = await post("/cadastros/defeitos", {"name": "Oxidação"})
     product = await post(
         "/cadastros/produtos", {"name": "Alicate", "sku": f"SKU-{uuid4().hex[:6]}"}
     )
@@ -259,7 +252,7 @@ async def test_export_csv_com_bom_e_mesmos_filtros_da_tela(
     assert res.headers["content-type"].startswith("text/csv")
     assert "attachment" in res.headers["content-disposition"]
     text = res.text
-    assert text.startswith("﻿numero,")
+    assert text.startswith("﻿número,")
     linhas = [linha for linha in text.splitlines() if linha.strip()]
     assert len(linhas) == 2  # header + 1 ticket
     assert "Cliente Vis" in linhas[1]

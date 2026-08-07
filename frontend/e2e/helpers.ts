@@ -131,21 +131,103 @@ async function authGet<T>(request: APIRequestContext, who: Who, path: string): P
 
 type Named = { id: string; name: string }
 
-export async function catalogId(
+async function authPost<T>(
   request: APIRequestContext,
-  path: "marcas" | "defeitos" | "solucoes" | "canais",
-  name?: string,
-): Promise<string> {
-  const items = await authGet<Named[]>(request, "admin", `/cadastros/${path}`)
-  const found = name ? items.find((item) => item.name === name) : items[0]
-  expect(found, `catalogo ${path} sem item ${name ?? "[primeiro]"}`).toBeTruthy()
-  return found!.id
+  who: Who,
+  path: string,
+  data: object,
+): Promise<T> {
+  const res = await request.post(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${await token(request, who)}` },
+    data,
+  })
+  expect(res.ok(), `POST ${path} falhou: ${await res.text()}`).toBeTruthy()
+  return (await res.json()) as T
 }
 
-export async function firstProductId(request: APIRequestContext): Promise<string> {
-  const list = await authGet<{ items: Named[] }>(request, "admin", "/cadastros/produtos")
-  expect(list.items.length, "nenhum produto cadastrado no tenant e2e").toBeGreaterThan(0)
-  return list.items[0].id
+type CatalogPath = "marcas" | "defeitos" | "solucoes" | "canais"
+
+/**
+ * Garante o item de catalogo pelo nome e devolve o id.
+ *
+ * O provisionamento de tenant nao semeia catalogo nenhum (ver
+ * backend/src/sac/infrastructure/tenant_seeds.py): marca, defeito, solucao e
+ * canal descrevem a operacao de quem contratou, entao quem monta o cenario do
+ * e2e e esta suite. Idempotente de proposito: o tenant e2e sobrevive entre
+ * execucoes e nao pode ganhar uma duplicata por rodada.
+ */
+export async function catalogId(
+  request: APIRequestContext,
+  path: CatalogPath,
+  name: string,
+): Promise<string> {
+  const items = await authGet<Named[]>(request, "admin", `/cadastros/${path}`)
+  const found = items.find((item) => item.name === name)
+  if (found) return found.id
+  return (await authPost<Named>(request, "admin", `/cadastros/${path}`, { name })).id
+}
+
+/** Id de um item qualquer do catalogo, criando `fallback` se estiver vazio.
+ *  Para quando o teste so precisa de "um defeito", sem depender de qual. */
+export async function anyCatalogId(
+  request: APIRequestContext,
+  path: CatalogPath,
+  fallback: string,
+): Promise<string> {
+  const items = await authGet<Named[]>(request, "admin", `/cadastros/${path}`)
+  if (items.length > 0) return items[0].id
+  return catalogId(request, path, fallback)
+}
+
+/** Produto que casa com `busca`, criado se nenhum casar.
+ *
+ *  A busca (e nao o nome exato) e o criterio porque os specs procuram o produto
+ *  digitando um trecho -- "Alicate", "Tesoura" -- e qualquer produto que case ja
+ *  serve. Assim o fixture nao duplica o que o tenant ja tem, seja qual for o
+ *  nome completo cadastrado la. */
+export async function productId(
+  request: APIRequestContext,
+  busca: string,
+  novo: { name: string; sku: string },
+): Promise<string> {
+  const path = `/cadastros/produtos?search=${encodeURIComponent(busca)}`
+  const list = await authGet<{ items: Named[] }>(request, "admin", path)
+  if (list.items.length > 0) return list.items[0].id
+  return (await apiCreateProduct(request, "admin", novo)).id
+}
+
+/** O produto que o ticket de fixture leva. O spec 01 filtra a fila por
+ *  "Alicate" e espera achar justamente este ticket. */
+const PRODUTO_TICKET = {
+  busca: "Alicate",
+  novo: { name: "Alicate de Cuticula KODI", sku: "E2E-ALICATE" },
+}
+
+/** O produto que o spec 03 adiciona pelo card Itens, conferindo o nome na
+ *  celula depois. */
+const PRODUTO_ITEM = {
+  busca: "Tesoura",
+  novo: { name: "Tesoura Reta STALEKS", sku: "E2E-TESOURA" },
+}
+
+/**
+ * Deixa o tenant e2e com o cenario que os specs esperam encontrar pronto.
+ *
+ * Nem tudo passa por helper: os specs 02 e 03 escolhem a marca ("KODI",
+ * "STALEKS") e o canal ("SAC") pelo nome, direto na UI, e o 03 confere o nome do
+ * produto na celula. Sem catalogo semeado pelo backend, isso precisa existir
+ * antes do primeiro teste -- por isso o globalSetup do Playwright chama esta
+ * funcao. Tudo aqui e idempotente: num tenant que ja tem os registros, a funcao
+ * so le.
+ */
+export async function ensureCatalogoBase(request: APIRequestContext): Promise<void> {
+  for (const marca of ["KODI", "STALEKS"]) {
+    await catalogId(request, "marcas", marca)
+  }
+  await catalogId(request, "canais", "SAC")
+  await anyCatalogId(request, "defeitos", "Danificado")
+  await productId(request, PRODUTO_TICKET.busca, PRODUTO_TICKET.novo)
+  await productId(request, PRODUTO_ITEM.busca, PRODUTO_ITEM.novo)
 }
 
 /** Cria um produto dedicado pela API. Usado quando o teste precisa de um
@@ -273,8 +355,10 @@ export async function apiFullTicket(
     customer: { name: "Cliente E2E", document: randomCpf() },
     items: [
       {
-        product_id: await firstProductId(request),
-        defect_type_id: await catalogId(request, "defeitos"),
+        // produto explicito, nao "o primeiro do tenant": o spec 01 filtra a fila
+        // por "Alicate" e espera este ticket no resultado.
+        product_id: await productId(request, PRODUTO_TICKET.busca, PRODUTO_TICKET.novo),
+        defect_type_id: await anyCatalogId(request, "defeitos", "Danificado"),
         quantity: 1,
       },
     ],
